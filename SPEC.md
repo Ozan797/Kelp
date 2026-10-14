@@ -179,9 +179,10 @@ Object storage has no real folders. A "folder" is a key prefix ending in `/`.
 
 ### 5.7 Saved connections
 
-- Adding a connection: pick the provider, enter a name, keys, region and endpoint (pre-filled per provider), then
-  **Test connection** (`test_connection` lists buckets, or heads the one bucket if listing isn't allowed).
-  **Save** stays available after a failed test, with the error shown, because some keys can't list buckets.
+- Adding a connection: pick the provider, enter a name, keys and location/region/account ID, then
+  **Test connection** or **Save connection**. Both run the same check (`list_buckets`; if the key can't list
+  buckets, it asks for a bucket name and checks that bucket). Save writes only when the check passes, so bad
+  keys are never saved. Details: `docs/superpowers/specs/2026-10-14-kelp-app-m2-design.md` section 5.
 - Saving writes the profile JSON and puts the secret in the Keychain under the profile id. If the Keychain write
   fails, nothing is saved and the error says why.
 - The sidebar lists saved connections. Clicking one reads the secret from the Keychain and opens it; no typing.
