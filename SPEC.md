@@ -46,13 +46,18 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 
 **M2 – Basic app**
 - Tauri shell, connection list, file list with breadcrumbs.
+- Saved connections: add once, then open from the sidebar with one click (see 5.7).
 - Add, edit, delete connection profiles; secrets in Keychain.
+- Test a connection before saving it, so a wrong key shows up at once.
+- Reopen each connection in the bucket and folder you last had open.
 - Download and upload single files with progress.
 
 **M3 – Transfers**
 - Transfer queue with concurrency limit, pause, resume, cancel, retry with backoff.
 - Multipart upload and ranged parallel download for large files.
 - Folder upload and download (recursive).
+
+- Bucket and folder size, counted in the background (see 5.8).
 
 **M4 – Polish**
 - Command palette (⌘K), keyboard navigation, multi-select, context menus.
@@ -128,18 +133,31 @@ ConnectionProfile {
   path_style: bool,
   access_key_id: String,        // stored in profile file
   // secret_access_key         // stored ONLY in Keychain, keyed by profile id
+  last_location: Option<{ bucket: String, prefix: String }>,  // where to reopen
+}
+
+UsageResult {
+  bucket: String,
+  prefix: String,               // "" for the whole bucket
+  bytes: u64,
+  objects: u64,
+  counted_at: DateTime,
+  complete: bool,               // false while counting or if cancelled
+  resume_token: Option<String>, // continuation token, so an interrupted count can resume
 }
 ```
 
-Profiles (without secrets) are stored as JSON in the app data directory.
+Profiles (without secrets) are stored as JSON in the app data directory. Usage results are cached as JSON
+next to them, per connection, bucket and prefix.
 
 ### 5.4 Tauri commands (initial set)
 
 `list_connections`, `save_connection`, `delete_connection`, `test_connection`,
 `list_buckets`, `list_objects`, `delete_objects`, `create_folder`,
-`start_upload`, `start_download`, `pause_transfer`, `resume_transfer`, `cancel_transfer`, `list_transfers`.
+`start_upload`, `start_download`, `pause_transfer`, `resume_transfer`, `cancel_transfer`, `list_transfers`,
+`set_last_location`, `get_usage`, `start_usage_count`, `cancel_usage_count`.
 
-Events: `transfer://progress`, `transfer://state`.
+Events: `transfer://progress`, `transfer://state`, `usage://progress`.
 
 ### 5.5 Transfer engine
 
@@ -155,6 +173,40 @@ Object storage has no real folders. A "folder" is a key prefix ending in `/`.
 - Create folder: put a zero-byte object named `prefix/`.
 - Rename or move folder: copy and delete every key under the prefix, with a confirmation that shows the object count.
 - Delete folder: list and batch-delete (up to 1000 keys per request).
+
+### 5.7 Saved connections
+
+- Adding a connection: pick the provider, enter a name, keys, region and endpoint (pre-filled per provider), then
+  **Test connection** (`test_connection` lists buckets, or heads the one bucket if listing isn't allowed).
+  **Save** stays available after a failed test, with the error shown, because some keys can't list buckets.
+- Saving writes the profile JSON and puts the secret in the Keychain under the profile id. If the Keychain write
+  fails, nothing is saved and the error says why.
+- The sidebar lists saved connections. Clicking one reads the secret from the Keychain and opens it; no typing.
+- Each connection remembers its last bucket and folder (`set_last_location`, debounced) and reopens there. If that
+  bucket or folder is gone, it opens the bucket list instead and says so.
+- Editing can change everything; leaving the secret field empty keeps the stored secret. Deleting a connection
+  asks for confirmation and removes its Keychain item too.
+
+### 5.8 Bucket and folder size
+
+There is no S3 call for "how big is this bucket"; the only universal way is listing every object, 1000 per
+request. A bucket with 10 million objects needs 10,000 requests. Each request is quick, so nothing times out; the
+risk is total time, and blocking the UI while it runs. So:
+
+- **On request only.** A "Calculate size" action on a bucket or folder. Never automatic for a whole bucket.
+- **Background job.** `start_usage_count` runs on tokio like a transfer, emits `usage://progress` about twice a
+  second ("2.4 M files, 812 GB so far"), and can be cancelled. Pages retry with backoff on their own.
+- **Parallel by prefix.** List top-level prefixes first (delimiter `/`), then count up to 4 prefixes at once.
+- **Cached and resumable.** Results are stored as `UsageResult` and shown with their age ("1.2 TB · 3.1 M files ·
+  counted 3 hours ago · Recalculate"). An interrupted count resumes from its saved continuation token.
+- **Show used, not full.** Buckets have no fixed capacity, so the UI shows size and object count, not a fill bar.
+- **Say what's not counted.** A plain listing skips old versions and unfinished multipart uploads, which still use
+  storage. Offer "Include old versions and unfinished uploads" (ListObjectVersions + ListMultipartUploads).
+- **Cost.** About one LIST request per 1000 objects: a few cents for 10 million objects on S3 or R2.
+- **Later, faster where providers allow:** Amazon S3 publishes daily `BucketSizeBytes` / `NumberOfObjects` in
+  CloudWatch (needs a CloudWatch read permission; up to a day old). Cloudflare R2 exposes storage in its GraphQL
+  Analytics API (needs a separate Cloudflare API token). Hetzner: no usage API known; to check. These stay inside
+  `providers/` as an optional capability, with the background count as the fallback.
 
 ## 6. UI and UX
 
