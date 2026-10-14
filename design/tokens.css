@@ -1,0 +1,182 @@
+/*
+ * Kelp design tokens, shared by the app and the website.
+ * Components use the semantic tokens (section 2) only. Never use the raw scales outside this file.
+ * Dark is declared twice (explicit choice and system preference). design/check-contrast.mjs keeps them identical.
+ */
+
+/* 1. Raw scales and unthemed tokens */
+:root {
+  --navy-950: #08111a;
+  --navy-900: #0c1620;
+  --navy-800: #122030;
+  --navy-700: #1d2c3a;
+  --navy-600: #2a4352;
+  --navy-400: #7b8fa0;
+  --navy-200: #dde7ee;
+
+  --teal-900: #0f3a36;
+  --teal-800: #123a3f;
+  --teal-700: #0b5c50;
+  --teal-600: #14806f;
+  --teal-400: #35c2ad;
+  --teal-300: #5fd6c4;
+  --teal-100: #d9efe9;
+  --teal-ink: #04140f;
+
+  --sand-50: #f5f2ea;
+  --sand-100: #ece6d8;
+  --sand-200: #e0d9c9;
+  --ink-900: #0f1d27;
+  --ink-600: #4a5a65;
+  --white: #ffffff;
+
+  --coral-600: #c4373b;
+  --coral-400: #ff7a6e;
+  --amber-900: #2e2410;
+  --amber-700: #8a5a00;
+  --amber-400: #f0b545;
+  --amber-100: #f7ead0;
+
+  /* Unthemed brand surfaces: navy bands look the same in both themes */
+  --band-top: #08111a;
+  --hero-gradient: linear-gradient(180deg, #08111a 0%, #0c1620 65%, #123a3f 100%);
+
+  /* Provider marks (sidebar dots) */
+  --provider-s3: #f2a93b;
+  --provider-r2: #f27d4b;
+  --provider-hetzner: #e2475a;
+
+  /* Type */
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-ui: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: 2.75rem;
+  --text-display: clamp(2.75rem, 7vw, 5rem);
+
+  /* Space (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 400ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 2. Semantic tokens: light (default) */
+:root, .theme-light {
+  color-scheme: light;
+  --bg: var(--sand-50);
+  --surface: var(--sand-100);
+  --surface-raised: var(--white);
+  --border: var(--sand-200);
+  --text: var(--ink-900);
+  --text-muted: var(--ink-600);
+  --accent: var(--teal-600);
+  --accent-hover: var(--teal-700);
+  --on-accent: var(--white);
+  --accent-soft: var(--teal-100);
+  --on-accent-soft: var(--teal-700);
+  --link: var(--teal-700);
+  --focus: var(--teal-600);
+  --danger: var(--coral-600);
+  --warning: var(--amber-700);
+  --warning-soft: var(--amber-100);
+  --shadow-sm: 0 1px 2px rgba(15, 29, 39, 0.08);
+  --shadow-md: 0 6px 20px rgba(15, 29, 39, 0.12);
+  --shadow-lg: 0 30px 70px rgba(8, 17, 26, 0.28);
+  --bubble-border: rgba(53, 194, 173, 0.6);
+  --bubble-fill: rgba(53, 194, 173, 0.13);
+}
+
+/* 3. Semantic tokens: dark, chosen explicitly or forced on a section */
+:root[data-theme="dark"], .theme-dark {
+  color-scheme: dark;
+  --bg: var(--navy-950);
+  --surface: var(--navy-900);
+  --surface-raised: var(--navy-800);
+  --border: var(--navy-700);
+  --text: var(--navy-200);
+  --text-muted: var(--navy-400);
+  --accent: var(--teal-400);
+  --accent-hover: var(--teal-300);
+  --on-accent: var(--teal-ink);
+  --accent-soft: var(--teal-900);
+  --on-accent-soft: var(--teal-400);
+  --link: var(--teal-400);
+  --focus: var(--teal-400);
+  --danger: var(--coral-400);
+  --warning: var(--amber-400);
+  --warning-soft: var(--amber-900);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --bubble-border: rgba(53, 194, 173, 0.6);
+  --bubble-fill: rgba(53, 194, 173, 0.13);
+}
+
+/* 4. Semantic tokens: dark, from the system (keep identical to section 3) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: var(--navy-950);
+    --surface: var(--navy-900);
+    --surface-raised: var(--navy-800);
+    --border: var(--navy-700);
+    --text: var(--navy-200);
+    --text-muted: var(--navy-400);
+    --accent: var(--teal-400);
+    --accent-hover: var(--teal-300);
+    --on-accent: var(--teal-ink);
+    --accent-soft: var(--teal-900);
+    --on-accent-soft: var(--teal-400);
+    --link: var(--teal-400);
+    --focus: var(--teal-400);
+    --danger: var(--coral-400);
+    --warning: var(--amber-400);
+    --warning-soft: var(--amber-900);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
+    --bubble-border: rgba(53, 194, 173, 0.6);
+    --bubble-fill: rgba(53, 194, 173, 0.13);
+  }
+}
+
+/* A themed section must re-resolve its text colour; inherited `color` is already computed. */
+.theme-light,
+.theme-dark {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}
