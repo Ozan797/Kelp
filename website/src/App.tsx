@@ -1,5 +1,5 @@
 import DemoWindow from "./components/DemoWindow";
-import { SITE } from "./config";
+import { DOWNLOAD_URL, SITE } from "./config";
 
 const features = [
   {
@@ -40,7 +40,7 @@ function DownloadButton({ large = false }: { large?: boolean }) {
     );
   }
   return (
-    <a className={cls} href={SITE.downloadUrl}>
+    <a className={cls} href={DOWNLOAD_URL}>
       Download for Mac
     </a>
   );

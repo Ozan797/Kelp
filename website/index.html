@@ -3,22 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bucket Browser – a fast Mac app for S3, R2 and Hetzner</title>
-    <meta
-      name="description"
-      content="Browse and transfer files across Amazon S3, Cloudflare R2 and Hetzner Object Storage from one fast, native-feeling Mac app."
-    />
-    <meta name="theme-color" content="#edf0f5" />
+    <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#08111a" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <script>
+      // Apply a saved theme before the first paint (same key as design/theme.ts).
+      try {
+        var t = localStorage.getItem("kelp-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <!--head-->
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><!--app--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
