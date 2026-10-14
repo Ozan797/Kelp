@@ -184,14 +184,17 @@ kbd {
 }
 
 .steps > li {
-  display: grid;
-  grid-template-columns: 24px 1fr;
-  gap: var(--space-3);
+  position: relative;
+  min-height: 24px;
+  padding-left: 36px;
   counter-increment: step;
 }
 
 .steps > li::before {
   content: counter(step);
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 24px;
   height: 24px;
   border-radius: var(--radius-full);
