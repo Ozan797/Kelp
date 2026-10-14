@@ -12,7 +12,7 @@
       .og { position: relative; width: 1200px; height: 630px; overflow: hidden; background: var(--hero-gradient); }
       .og-copy { position: relative; padding: 96px 96px 0; }
       .og-brand { display: flex; align-items: center; gap: 16px; font: 700 40px / 1 var(--font-display); }
-      .og-brand svg { width: 56px; height: 56px; }
+      .og-brand img { width: 64px; height: 64px; border-radius: 15px; }
       .og h1 { margin: 56px 0 0; font: 800 96px / 1 var(--font-display); letter-spacing: -0.02em; }
       .og p { margin: 24px 0 0; max-width: 30ch; font: 400 30px / 1.4 var(--font-body); color: var(--text-muted); }
       .dot { position: absolute; border-radius: 50%; border: 2px solid var(--bubble-border); background: var(--bubble-fill); }
@@ -28,11 +28,7 @@
       <span class="dot" style="left: 1010px; top: 520px; width: 8px; height: 8px"></span>
       <div class="og-copy">
         <div class="og-brand">
-          <svg viewBox="0 0 64 64" aria-hidden="true">
-            <rect width="64" height="64" rx="15" style="fill: var(--accent)" />
-            <path d="M16 22h32l-4 26a4 4 0 0 1-4 3H24a4 4 0 0 1-4-3z" style="fill: var(--on-accent)" />
-            <ellipse cx="32" cy="22" rx="16" ry="5" style="fill: var(--accent-soft)" />
-          </svg>
+          <img src="../brand/kelp-mark.svg" alt="" width="64" height="64" />
           Kelp
         </div>
         <h1>Every bucket, one window.</h1>

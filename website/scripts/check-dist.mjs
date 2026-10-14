@@ -53,6 +53,10 @@ for (const page of PAGES) {
 }
 if (sitemap.includes(NOT_FOUND.path)) problems.push("sitemap: must not list the 404 page");
 if (!(read(join(dist, "robots.txt")) ?? "").includes("Sitemap:")) problems.push("robots.txt: missing or no Sitemap line");
+for (const file of ["favicon.svg", "favicon.ico", "apple-touch-icon.png", "logo.svg"]) {
+  if (!existsSync(join(dist, file))) problems.push(`${file}: missing from dist (run node design/brand/build.mjs)`);
+}
+if (!home.includes('rel="apple-touch-icon"')) problems.push("/: no apple-touch-icon link");
 if (!existsSync(join(dist, "og.png"))) problems.push("og.png: missing from dist (Task 11)");
 
 if (problems.length) {

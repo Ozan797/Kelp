@@ -200,18 +200,9 @@ a {
 .logo {
   width: 28px;
   height: 28px;
-}
-
-.logo .mark-bg {
-  fill: var(--accent);
-}
-
-.logo .mark-bucket {
-  fill: var(--on-accent);
-}
-
-.logo .mark-rim {
-  fill: var(--accent-soft);
+  border-radius: 7px;
+  /* A hairline ring so the dark tile keeps its edge on the navy header. */
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .header-actions {
