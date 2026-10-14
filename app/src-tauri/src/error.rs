@@ -1,6 +1,7 @@
+use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum AppError {
     #[error("{0}")]
     InvalidSettings(String),
@@ -28,6 +29,26 @@ pub enum AppError {
 
     #[error("The storage provider returned an error: {0}")]
     Provider(String),
+
+    #[error("This key can't list buckets. Enter the bucket you want to open.")]
+    NotListable,
+
+    #[error(
+        "Kelp couldn't use the macOS Keychain: {0}. Try again, and restart your Mac if it keeps happening."
+    )]
+    Keychain(String),
+
+    #[error("Kelp couldn't read or write a file on this Mac: {0}")]
+    Io(String),
+
+    #[error("This file is larger than 5 GB. Uploads this large arrive in a later version of Kelp.")]
+    FileTooLarge,
+
+    #[error("This connection no longer exists. Add it again.")]
+    ConnectionNotFound,
+
+    #[error("A file named \"{0}\" is already in this folder.")]
+    AlreadyExists(String),
 }
 
 impl AppError {
@@ -40,11 +61,38 @@ impl AppError {
             _ => Self::Provider(message.or(code).unwrap_or("unknown error").to_string()),
         }
     }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::InvalidSettings(_) => "invalidSettings",
+            Self::AccessDenied => "accessDenied",
+            Self::BucketNotFound(_) => "bucketNotFound",
+            Self::BadCredentials => "badCredentials",
+            Self::ClockWrong => "clockWrong",
+            Self::Network => "network",
+            Self::Provider(_) => "provider",
+            Self::NotListable => "notListable",
+            Self::Keychain(_) => "keychain",
+            Self::Io(_) => "io",
+            Self::FileTooLarge => "fileTooLarge",
+            Self::ConnectionNotFound => "connectionNotFound",
+            Self::AlreadyExists(_) => "alreadyExists",
+        }
+    }
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error.to_string())
+    }
 }
 
 impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        let mut fields = serializer.serialize_struct("AppError", 2)?;
+        fields.serialize_field("kind", self.kind())?;
+        fields.serialize_field("message", &self.to_string())?;
+        fields.end()
     }
 }
 
@@ -91,8 +139,38 @@ mod tests {
     }
 
     #[test]
-    fn serialises_to_the_readable_message() {
-        let json = serde_json::to_string(&AppError::AccessDenied).unwrap();
-        assert_eq!(json, format!("\"{}\"", AppError::AccessDenied));
+    fn serialises_kind_and_message_for_the_ui() {
+        let value = serde_json::to_value(AppError::BadCredentials).unwrap();
+        assert_eq!(value["kind"], "badCredentials");
+        assert_eq!(value["message"], AppError::BadCredentials.to_string());
+    }
+
+    #[test]
+    fn every_variant_has_a_camel_case_kind() {
+        let cases = [
+            (AppError::InvalidSettings("x".into()), "invalidSettings"),
+            (AppError::AccessDenied, "accessDenied"),
+            (AppError::BucketNotFound("b".into()), "bucketNotFound"),
+            (AppError::BadCredentials, "badCredentials"),
+            (AppError::ClockWrong, "clockWrong"),
+            (AppError::Network, "network"),
+            (AppError::Provider("x".into()), "provider"),
+            (AppError::NotListable, "notListable"),
+            (AppError::Keychain("x".into()), "keychain"),
+            (AppError::Io("x".into()), "io"),
+            (AppError::FileTooLarge, "fileTooLarge"),
+            (AppError::ConnectionNotFound, "connectionNotFound"),
+            (AppError::AlreadyExists("a.txt".into()), "alreadyExists"),
+        ];
+        for (error, kind) in cases {
+            assert_eq!(error.kind(), kind);
+        }
+    }
+
+    #[test]
+    fn io_errors_become_io() {
+        let error: AppError =
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied").into();
+        assert!(matches!(error, AppError::Io(message) if message.contains("denied")));
     }
 }
