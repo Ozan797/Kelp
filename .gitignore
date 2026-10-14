@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+target/
+src-tauri/gen/
+
+# env and secrets
+.env
+.env.*
+*.pem
+*.p12
+*.key
+
+# editor and OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# logs
+*.log
+
+# ts
+*.tsbuildinfo
