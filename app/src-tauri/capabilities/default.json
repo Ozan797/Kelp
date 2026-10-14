@@ -3,5 +3,16 @@
   "identifier": "default",
   "description": "Permissions for the main window. Keep this minimal (CLAUDE.md security rules).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:menu:default",
+    "core:window:allow-start-dragging",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "opener:allow-reveal-item-in-dir",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://kelp.ozanai.dev/*" }]
+    }
+  ]
 }

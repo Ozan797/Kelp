@@ -77,6 +77,16 @@ impl SecretStore for MemoryStore {
 }
 
 #[cfg(test)]
+impl MemoryStore {
+    pub fn count(&self) -> usize {
+        self.secrets
+            .lock()
+            .map(|secrets| secrets.len())
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

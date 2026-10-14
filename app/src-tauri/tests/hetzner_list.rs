@@ -146,6 +146,7 @@ async fn round_trips_a_small_file() {
     assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 15);
 
     let target = scratch.join("downloaded.txt");
+    std::fs::write(&target, b"").unwrap();
     provider
         .get_file(&bucket, &key, &target, std::sync::Arc::new(|_| {}))
         .await
