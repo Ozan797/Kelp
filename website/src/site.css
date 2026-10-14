@@ -1507,3 +1507,137 @@ a:hover > .arrow {
   width: 0.8em;
   height: 0.8em;
 }
+
+/* ---------- privacy ---------- */
+
+.privacy-head {
+  padding-top: var(--space-9);
+  text-align: center;
+}
+
+.privacy-head h1 {
+  font-size: clamp(2.75rem, 7vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.privacy-head p {
+  margin-inline: auto;
+  font-size: var(--text-lg);
+}
+
+.privacy-head .kicker {
+  margin: 0 auto var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.privacy-section {
+  padding-top: 0;
+}
+
+.promise-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.promise {
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+}
+
+.promise-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.promise-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.promise h2 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xl);
+  letter-spacing: -0.01em;
+}
+
+.promise p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.stored-list {
+  max-width: 860px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+}
+
+.stored-list > div {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+}
+
+.stored-list > div + div {
+  border-top: 1px solid var(--border);
+}
+
+.stored-list dt {
+  font-weight: 600;
+}
+
+.stored-list dd {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.connects-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+/* GitHub's mark is black; use the text colour so it shows in both themes. */
+.provider-mark.github {
+  color: var(--text);
+}
+
+.site-note {
+  max-width: 860px;
+  margin: var(--space-5) auto 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .promise-grid,
+  .connects-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stored-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
