@@ -17,6 +17,11 @@ pub fn folder_key(prefix: &str, name: &str) -> Result<String, AppError> {
             "Folder names can't contain a slash (/).".into(),
         ));
     }
+    if name == "." || name == ".." {
+        return Err(AppError::InvalidSettings(
+            "Folder names can't be \".\" or \"..\".".into(),
+        ));
+    }
     Ok(format!("{prefix}{name}/"))
 }
 
@@ -119,8 +124,7 @@ mod tests {
             ProfileStore::new(&dir),
             Box::new(MemoryStore::default()),
             Box::new(move |_, _| Ok(shared.clone())),
-        )
-        .unwrap();
+        );
         let id = Uuid::new_v4();
         state.secrets.set(&id, "s").unwrap();
         state.profiles.lock().await.push(ConnectionProfile {
@@ -163,6 +167,17 @@ mod tests {
                 "{bad:?}"
             );
         }
+    }
+
+    #[test]
+    fn dot_folder_names_are_rejected() {
+        for bad in [".", "..", " .. "] {
+            assert!(
+                matches!(folder_key("vimeo/", bad), Err(AppError::InvalidSettings(_))),
+                "{bad:?}"
+            );
+        }
+        assert_eq!(folder_key("", ".hidden"), Ok(".hidden/".into()));
     }
 
     #[tokio::test]

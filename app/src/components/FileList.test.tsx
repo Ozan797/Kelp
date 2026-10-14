@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -138,5 +138,21 @@ describe("FileList", () => {
     ]);
     await user.keyboard("{Meta>}a{/Meta}");
     expect(screen.getAllByRole("row", { selected: true })).toHaveLength(3);
+  });
+
+  it("fades in only the first rows of the first page", () => {
+    const firstPage = Array.from({ length: 20 }, (_, i) => file(`f${String(i).padStart(2, "0")}.txt`, 1));
+    const { rerender } = render(<Harness rows={firstPage} />);
+    const introduced = () => screen.getAllByRole("row", { selected: false }).filter((row) => row.classList.contains("intro"));
+    expect(introduced().map((row) => row.textContent?.slice(0, 7))).toEqual(firstPage.slice(0, 12).map((r) => r.name));
+    rerender(<Harness rows={[...firstPage, file("a-late.txt", 1)]} />);
+    expect(introduced()).toHaveLength(0);
+  });
+
+  it("stops fading rows in once the list scrolls", () => {
+    render(<Harness rows={[file("a.txt", 1), file("b.txt", 1)]} />);
+    expect(screen.getAllByRole("row", { selected: false })[0].classList.contains("intro")).toBe(true);
+    fireEvent.scroll(screen.getByRole("grid"));
+    expect(document.querySelector(".file-row.intro")).toBeNull();
   });
 });

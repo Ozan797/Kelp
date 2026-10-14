@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionProfile, ListPage, MenuEntry } from "./lib/tauri";
+import type { ConnectionProfile, ListPage, MenuEntry, TransferStateEvent } from "./lib/tauri";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
+  deleteConnection: vi.fn(),
 }));
 
 vi.mock("./lib/tauri", () => ({
@@ -194,5 +195,73 @@ describe("App", () => {
     remove.onSelect();
     await waitFor(() => expect(api.deleteObjects).toHaveBeenCalledWith("c1", "archive", ["a1.txt", "a2.txt"]));
     expect(api.confirm.mock.calls[0][1]).toBe("Delete 2 items");
+  });
+
+  it("shows connection errors from the backend", async () => {
+    api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Kelp couldn't load your connections" })).toBeTruthy();
+    expect(screen.getByText(/connections.json is damaged/)).toBeTruthy();
+  });
+
+  it("keeps transfers and errors reachable when no folder is open", async () => {
+    const cdn: ConnectionProfile = { ...media, id: "c2", name: "cdn", settings: { ...media.settings, kind: "r2" } };
+    api.listConnections.mockResolvedValue([media, cdn]);
+    api.listBuckets.mockImplementation(async (id: string) => (id === "c1" ? ["archive"] : ["a", "b"]));
+    api.deleteConnection.mockRejectedValue({ kind: "io", message: "The connection list couldn't be saved." });
+    api.confirm.mockResolvedValue(true);
+    let emit: (event: TransferStateEvent) => void = () => undefined;
+    api.onTransferState.mockImplementation(async (handler: (event: TransferStateEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    await screen.findByText("This folder is empty");
+    const info = { id: "t1", direction: "download" as const, name: "a.txt", destination: "/Users/me/Downloads/a.txt", total: 10 };
+    act(() => emit({ id: "t1", state: "running", info, error: null, path: null }));
+    act(() => emit({ id: "t1", state: "finished", info: null, error: null, path: info.destination }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Cloudflare · cdn" }));
+    expect(await screen.findByText("Choose a bucket")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "1 finished" }));
+    await user.click(screen.getByRole("button", { name: /^Finished/ }));
+    expect(screen.getByRole("button", { name: "Show a.txt in Finder" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close transfers" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "1 finished" }));
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Cloudflare · cdn" }) });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const remove = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Delete"));
+    if (!remove || remove === "separator") throw new Error("no delete entry");
+    remove.onSelect();
+    expect((await screen.findByRole("alert")).textContent).toContain("The connection list couldn't be saved.");
+  });
+
+  it("reloads the folder even when a delete partly fails", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.confirm.mockResolvedValue(true);
+    api.deleteObjects.mockRejectedValue({ kind: "provider", message: "Some files couldn't be deleted." });
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("a.txt") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const remove = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Delete"));
+    if (!remove || remove === "separator") throw new Error("no delete entry");
+    remove.onSelect();
+    expect((await screen.findByRole("alert")).textContent).toContain("Some files couldn't be deleted.");
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+  });
+
+  it("replays the row intro for each folder it opens", async () => {
+    api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>
+      prefix === "" ? page(["docs/"], []) : page([], ["a.txt"]),
+    );
+    render(<App />);
+    await screen.findByText("docs");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("docs"));
+    await user.keyboard("{Enter}");
+    const row = (await screen.findByText("a.txt")).closest(".file-row");
+    expect(row?.classList.contains("intro")).toBe(true);
   });
 });

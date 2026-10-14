@@ -39,8 +39,9 @@ fn secret_for(state: &AppState, draft: &ConnectionDraft) -> Result<String, AppEr
     }
 }
 
-pub async fn list(state: &AppState) -> Vec<ConnectionProfile> {
-    state.profiles.lock().await.clone()
+pub async fn list(state: &AppState) -> Result<Vec<ConnectionProfile>, AppError> {
+    state.ensure_loaded()?;
+    Ok(state.profiles.lock().await.clone())
 }
 
 pub async fn test(state: &AppState, draft: &ConnectionDraft) -> Result<CheckResult, AppError> {
@@ -52,6 +53,7 @@ pub async fn test(state: &AppState, draft: &ConnectionDraft) -> Result<CheckResu
 }
 
 pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<ConnectionProfile, AppError> {
+    state.ensure_loaded()?;
     let name = required(&draft.name, "Enter a name for this connection.")?;
     let check = test(state, &draft).await?;
     let secret = secret_for(state, &draft)?;
@@ -65,7 +67,7 @@ pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<Connection
     let profile = ConnectionProfile {
         id,
         name,
-        settings: draft.settings,
+        settings: draft.settings.normalised()?,
         bucket: if check.limited_to_bucket {
             check.buckets.first().cloned()
         } else {
@@ -96,6 +98,7 @@ pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<Connection
 }
 
 pub async fn delete(state: &AppState, id: Uuid) -> Result<(), AppError> {
+    state.ensure_loaded()?;
     let mut profiles = state.profiles.lock().await;
     let next: Vec<ConnectionProfile> = profiles
         .iter()
@@ -115,6 +118,7 @@ pub async fn remember_location(
     id: Uuid,
     location: Option<Location>,
 ) -> Result<(), AppError> {
+    state.ensure_loaded()?;
     let mut profiles = state.profiles.lock().await;
     let mut next = profiles.clone();
     let profile = next
@@ -131,7 +135,7 @@ pub async fn remember_location(
 pub async fn list_connections(
     state: State<'_, AppState>,
 ) -> Result<Vec<ConnectionProfile>, AppError> {
-    Ok(list(&state).await)
+    list(&state).await
 }
 
 #[tauri::command]
@@ -198,7 +202,6 @@ mod tests {
             Box::new(MemoryStore::default()),
             connect,
         )
-        .unwrap()
     }
 
     fn working(dir: PathBuf) -> AppState {
@@ -230,9 +233,19 @@ mod tests {
             .unwrap();
         assert_eq!(profile.name, "media");
         assert_eq!(state.secrets.get(&profile.id).unwrap(), "s3cret");
-        assert_eq!(list(&state).await.len(), 1);
+        assert_eq!(list(&state).await.unwrap().len(), 1);
         let json = std::fs::read_to_string(dir.join("connections.json")).unwrap();
         assert!(!json.contains("s3cret"));
+    }
+
+    #[tokio::test]
+    async fn a_pasted_hetzner_endpoint_is_saved_as_its_location() {
+        let state = working(temp_dir());
+        let mut pasted = draft("media", Some("s"));
+        pasted.settings.region = "https://hel1.your-objectstorage.com/".into();
+        let profile = save(&state, pasted).await.unwrap();
+        assert_eq!(profile.settings.region, "hel1");
+        assert_eq!(list(&state).await.unwrap()[0].settings.region, "hel1");
     }
 
     #[tokio::test]
@@ -245,7 +258,7 @@ mod tests {
         );
         let result = save(&state, draft("media", Some("wrong"))).await;
         assert!(matches!(result, Err(AppError::BadCredentials)));
-        assert!(list(&state).await.is_empty());
+        assert!(list(&state).await.unwrap().is_empty());
         assert!(!dir.join("connections.json").exists());
     }
 
@@ -300,8 +313,8 @@ mod tests {
         edit.id = Some(saved.id);
         save(&state, edit).await.unwrap();
         assert_eq!(state.secrets.get(&saved.id).unwrap(), "original");
-        assert_eq!(list(&state).await[0].name, "renamed");
-        assert_eq!(list(&state).await.len(), 1);
+        assert_eq!(list(&state).await.unwrap()[0].name, "renamed");
+        assert_eq!(list(&state).await.unwrap().len(), 1);
     }
 
     struct SharedStore(Arc<MemoryStore>);
@@ -332,14 +345,13 @@ mod tests {
             ProfileStore::new(&blocker.join("inside")),
             Box::new(SharedStore(secrets.clone())),
             connect,
-        )
-        .unwrap();
+        );
         std::fs::write(&blocker, "file in the way").unwrap();
         let error = save(&state, draft("media", Some("s3cret")))
             .await
             .unwrap_err();
         assert!(matches!(error, AppError::Io(_)));
-        assert!(list(&state).await.is_empty());
+        assert!(list(&state).await.unwrap().is_empty());
         assert_eq!(secrets.count(), 0);
     }
 
@@ -357,7 +369,7 @@ mod tests {
         let error = save(&state, edit).await.unwrap_err();
         assert!(matches!(error, AppError::Io(_)));
         assert_eq!(state.secrets.get(&saved.id).unwrap(), "original");
-        assert_eq!(list(&state).await[0].name, "media");
+        assert_eq!(list(&state).await.unwrap()[0].name, "media");
         let after = std::fs::read_to_string(dir.join("connections.json")).unwrap();
         assert_eq!(before, after);
     }
@@ -370,7 +382,7 @@ mod tests {
         edit.id = Some(id);
         let result = save(&state, edit).await;
         assert!(matches!(result, Err(AppError::ConnectionNotFound)));
-        assert!(list(&state).await.is_empty());
+        assert!(list(&state).await.unwrap().is_empty());
         assert!(state.secrets.get(&id).is_err());
     }
 
@@ -379,8 +391,32 @@ mod tests {
         let state = working(temp_dir());
         let saved = save(&state, draft("media", Some("s"))).await.unwrap();
         delete(&state, saved.id).await.unwrap();
-        assert!(list(&state).await.is_empty());
+        assert!(list(&state).await.unwrap().is_empty());
         assert!(state.secrets.get(&saved.id).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_damaged_file_is_reported_and_never_overwritten() {
+        let dir = temp_dir();
+        std::fs::write(dir.join("connections.json"), "{ not json").unwrap();
+        let state = working(dir.clone());
+        let damaged = list(&state).await.unwrap_err();
+        assert!(matches!(&damaged, AppError::Io(message) if message.contains("connections.json")));
+        assert_eq!(
+            save(&state, draft("media", Some("s"))).await.unwrap_err(),
+            damaged
+        );
+        assert_eq!(delete(&state, Uuid::new_v4()).await.unwrap_err(), damaged);
+        assert_eq!(
+            remember_location(&state, Uuid::new_v4(), None)
+                .await
+                .unwrap_err(),
+            damaged
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("connections.json")).unwrap(),
+            "{ not json"
+        );
     }
 
     #[tokio::test]

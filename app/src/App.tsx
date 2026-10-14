@@ -167,9 +167,10 @@ export default function App() {
         rows.map((r) => r.key),
       );
       setSelected(new Set());
-      listing.reload();
     } catch (caught) {
       setActionError(toAppError(caught));
+    } finally {
+      listing.reload();
     }
   };
 
@@ -301,6 +302,7 @@ export default function App() {
     }
     return (
       <FileList
+        key={`${connection.id}/${place.bucket}/${place.prefix}`}
         rows={listing.rows}
         filter={filter}
         sort={sort}
@@ -375,35 +377,37 @@ export default function App() {
               onUpload={upload}
             />
             {content()}
-            {actionError && (
-              <div className="action-error" role="alert">
-                <span>{actionError.message}</span>
-                <button type="button" className="link-button" onClick={() => setActionError(null)}>
-                  Dismiss
-                </button>
-              </div>
-            )}
-            {drawerOpen && (
-              <TransferDrawer
-                transfers={transfers}
-                onCancel={(id) => api.cancelTransfer(id).catch((e) => setActionError(toAppError(e)))}
-                onReveal={(path) => api.revealInFinder(path).catch((e) => setActionError(toAppError(e)))}
-                onClearFinished={clearFinished}
-                onClose={() => {
-                  setDrawerOpen(false);
-                  pill.current?.focus();
-                }}
-              />
-            )}
-            <StatusBar
-              itemCount={listing.rows.length}
-              selectedCount={selectedRows.length}
-              selectedBytes={selectedBytes}
-              transfers={transfers}
-              onOpenTransfers={() => setDrawerOpen(true)}
-              pillRef={pill}
-            />
           </>
+        )}
+        {actionError && (
+          <div className="action-error" role="alert">
+            <span>{actionError.message}</span>
+            <button type="button" className="link-button" onClick={() => setActionError(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        {drawerOpen && (
+          <TransferDrawer
+            transfers={transfers}
+            onCancel={(id) => api.cancelTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onReveal={(path) => api.revealInFinder(path).catch((e) => setActionError(toAppError(e)))}
+            onClearFinished={clearFinished}
+            onClose={() => {
+              setDrawerOpen(false);
+              pill.current?.focus();
+            }}
+          />
+        )}
+        {(connection || transfers.length > 0) && (
+          <StatusBar
+            itemCount={place ? listing.rows.length : null}
+            selectedCount={place ? selectedRows.length : 0}
+            selectedBytes={selectedBytes}
+            transfers={transfers}
+            onOpenTransfers={() => setDrawerOpen(true)}
+            pillRef={pill}
+          />
         )}
       </main>
       {sheet.kind === "connection" && (

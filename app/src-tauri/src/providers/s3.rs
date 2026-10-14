@@ -1,7 +1,9 @@
 use std::path::Path;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::config::timeout::TimeoutConfig;
 use aws_sdk_s3::config::{
     BehaviorVersion, Credentials, Region, RequestChecksumCalculation, ResponseChecksumValidation,
 };
@@ -18,8 +20,27 @@ use crate::error::AppError;
 
 pub const MAX_SINGLE_UPLOAD: u64 = 5 * 1024 * 1024 * 1024;
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+const OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub struct S3Provider {
     client: Client,
+    transfer_client: Client,
+}
+
+fn quick_call_timeouts() -> TimeoutConfig {
+    TimeoutConfig::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .operation_timeout(OPERATION_TIMEOUT)
+        .build()
+}
+
+fn transfer_timeouts() -> TimeoutConfig {
+    TimeoutConfig::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
 }
 
 impl S3Provider {
@@ -44,7 +65,8 @@ impl S3Provider {
             config = config.endpoint_url(url);
         }
         Ok(Self {
-            client: Client::from_conf(config.build()),
+            client: Client::from_conf(config.clone().timeout_config(quick_call_timeouts()).build()),
+            transfer_client: Client::from_conf(config.timeout_config(transfer_timeouts()).build()),
         })
     }
 }
@@ -161,7 +183,7 @@ impl StorageProvider for S3Provider {
             .await
             .map_err(|error| AppError::Io(error.to_string()))?;
         let body = ByteStream::new(with_progress(file.into_inner(), progress));
-        self.client
+        self.transfer_client
             .put_object()
             .bucket(bucket)
             .key(key)
@@ -181,7 +203,7 @@ impl StorageProvider for S3Provider {
         progress: ProgressFn,
     ) -> Result<(), AppError> {
         let mut output = self
-            .client
+            .transfer_client
             .get_object()
             .bucket(bucket)
             .key(key)
@@ -369,6 +391,26 @@ mod tests {
             access_key_id: "AKIDEXAMPLE".into(),
         };
         assert!(S3Provider::new(&settings, "secret").is_ok());
+    }
+
+    #[test]
+    fn quick_calls_time_out_but_transfers_only_limit_connecting() {
+        let settings = ConnectionSettings {
+            kind: crate::connection::ProviderKind::Hetzner,
+            endpoint: None,
+            region: "fsn1".into(),
+            path_style: false,
+            access_key_id: "AKIDEXAMPLE".into(),
+        };
+        let provider = S3Provider::new(&settings, "secret").unwrap();
+        let quick = provider.client.config().timeout_config().unwrap();
+        assert_eq!(quick.connect_timeout(), Some(Duration::from_secs(10)));
+        assert_eq!(quick.read_timeout(), Some(Duration::from_secs(30)));
+        assert_eq!(quick.operation_timeout(), Some(Duration::from_secs(60)));
+        let transfer = provider.transfer_client.config().timeout_config().unwrap();
+        assert_eq!(transfer.connect_timeout(), Some(Duration::from_secs(10)));
+        assert_eq!(transfer.read_timeout(), None);
+        assert_eq!(transfer.operation_timeout(), None);
     }
 
     #[test]

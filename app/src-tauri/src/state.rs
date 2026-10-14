@@ -20,6 +20,7 @@ pub struct AppState {
     pub secrets: Box<dyn SecretStore>,
     pub connect: Connect,
     pub profiles: Mutex<Vec<ConnectionProfile>>,
+    load_error: Option<AppError>,
     providers: Mutex<HashMap<Uuid, Arc<dyn StorageProvider>>>,
 }
 
@@ -28,19 +29,26 @@ pub fn real_connect() -> Connect {
 }
 
 impl AppState {
-    pub fn new(
-        store: ProfileStore,
-        secrets: Box<dyn SecretStore>,
-        connect: Connect,
-    ) -> Result<Self, AppError> {
-        let profiles = store.load()?;
-        Ok(Self {
+    pub fn new(store: ProfileStore, secrets: Box<dyn SecretStore>, connect: Connect) -> Self {
+        let (profiles, load_error) = match store.load() {
+            Ok(profiles) => (profiles, None),
+            Err(error) => (Vec::new(), Some(error)),
+        };
+        Self {
             store,
             secrets,
             connect,
             profiles: Mutex::new(profiles),
+            load_error,
             providers: Mutex::new(HashMap::new()),
-        })
+        }
+    }
+
+    pub fn ensure_loaded(&self) -> Result<(), AppError> {
+        match &self.load_error {
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
+        }
     }
 
     pub async fn profile(&self, id: Uuid) -> Result<ConnectionProfile, AppError> {

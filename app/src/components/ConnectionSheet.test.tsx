@@ -23,7 +23,7 @@ beforeEach(() => {
 async function fillHetzner() {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Name"), "media");
-  await user.type(screen.getByLabelText("Location"), "hel1");
+  await user.type(screen.getByLabelText("Endpoint URL"), "https://hel1.your-objectstorage.com");
   await user.type(screen.getByLabelText("Access key"), "AKID");
   await user.type(screen.getByLabelText("Secret key"), "s3cret");
   return user;
@@ -48,7 +48,12 @@ describe("draftFromForm", () => {
     const draft = draftFromForm(formFromProfile(profile), "c1");
     expect(draft.secret).toBeNull();
     expect(draft.id).toBe("c1");
-    expect(draft.settings.region).toBe("hel1");
+    expect(draft.settings.region).toBe("https://hel1.your-objectstorage.com");
+  });
+
+  it("never sends an endpoint override for Hetzner", () => {
+    const form = { ...formFromProfile(null), hetznerEndpoint: "hel1", endpoint: "https://stale.example.com" };
+    expect(draftFromForm(form, null).settings.endpoint).toBeNull();
   });
 
   it("reads the account ID back out of a saved R2 endpoint", () => {
@@ -68,9 +73,9 @@ describe("draftFromForm", () => {
 describe("ConnectionSheet", () => {
   it("changes fields with the provider", async () => {
     render(<ConnectionSheet initial={null} onSaved={vi.fn()} onCancel={vi.fn()} />);
-    expect(screen.getByLabelText("Location")).toBeTruthy();
+    expect(screen.getByLabelText("Endpoint URL")).toHaveProperty("placeholder", "https://fsn1.your-objectstorage.com");
     await userEvent.click(screen.getByRole("radio", { name: "Cloudflare R2" }));
-    expect(screen.queryByLabelText("Location")).toBeNull();
+    expect(screen.queryByLabelText("Endpoint URL")).toBeNull();
     expect(screen.getByLabelText("Account ID")).toBeTruthy();
   });
 
@@ -84,7 +89,7 @@ describe("ConnectionSheet", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved));
     const draft = api.saveConnection.mock.calls[0][0];
     expect(draft).toMatchObject({ name: "media", secret: "s3cret", bucket: null });
-    expect(draft.settings).toMatchObject({ kind: "hetzner", region: "hel1", endpoint: null, accessKeyId: "AKID" });
+    expect(draft.settings).toMatchObject({ kind: "hetzner", region: "https://hel1.your-objectstorage.com", endpoint: null, accessKeyId: "AKID" });
   });
 
   it("shows wrong keys next to the key fields and saves nothing", async () => {
@@ -112,17 +117,20 @@ describe("ConnectionSheet", () => {
     expect(api.testConnection.mock.calls[1][0].bucket).toBe("media-archive");
   });
 
-  it("shows a bad location under the location field and saves nothing", async () => {
-    api.saveConnection.mockRejectedValue({ kind: "invalidSettings", message: "That location isn't recognised. Use fsn1, nbg1 or hel1." });
+  it("shows a bad endpoint under the endpoint URL field and saves nothing", async () => {
+    api.saveConnection.mockRejectedValue({
+      kind: "invalidSettings",
+      message: "Paste the endpoint URL from the Hetzner Console, such as https://fsn1.your-objectstorage.com.",
+    });
     const onSaved = vi.fn();
     const onCancel = vi.fn();
     render(<ConnectionSheet initial={null} onSaved={onSaved} onCancel={onCancel} />);
     const user = await fillHetzner();
     await user.click(screen.getByRole("button", { name: "Save connection" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("isn't recognised");
+    expect(alert.textContent).toContain("Paste the endpoint URL");
     expect(alert.closest(".field-group.keys")).toBeNull();
-    expect(alert.closest(".fields")?.contains(screen.getByLabelText("Location"))).toBe(true);
+    expect(alert.closest(".fields")?.contains(screen.getByLabelText("Endpoint URL"))).toBe(true);
     expect(onSaved).not.toHaveBeenCalled();
     expect(onCancel).not.toHaveBeenCalled();
   });
@@ -145,7 +153,11 @@ describe("ConnectionSheet", () => {
   it("drops the endpoint override when the provider changes", async () => {
     api.testConnection.mockResolvedValue({ buckets: [], limitedToBucket: false });
     render(<ConnectionSheet initial={null} onSaved={vi.fn()} onCancel={vi.fn()} />);
-    const user = await fillHetzner();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("radio", { name: "AWS S3" }));
+    await user.type(screen.getByLabelText("Name"), "media");
+    await user.type(screen.getByLabelText("Access key"), "AKID");
+    await user.type(screen.getByLabelText("Secret key"), "s3cret");
     await user.click(screen.getByRole("button", { name: "Advanced settings" }));
     await user.type(screen.getByLabelText("Endpoint"), "https://stale.example.com");
     await user.click(screen.getByRole("radio", { name: "Cloudflare R2" }));
@@ -153,6 +165,30 @@ describe("ConnectionSheet", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() => expect(api.testConnection).toHaveBeenCalled());
     expect(api.testConnection.mock.calls[0][0].settings.endpoint).toBe("https://abc123.r2.cloudflarestorage.com");
+  });
+
+  it("fills the endpoint URL when editing a saved Hetzner connection", () => {
+    const profile: ConnectionProfile = {
+      id: "c1",
+      name: "media",
+      settings: { kind: "hetzner", endpoint: null, region: "hel1", pathStyle: false, accessKeyId: "AKID" },
+      bucket: null,
+      lastLocation: null,
+    };
+    render(<ConnectionSheet initial={profile} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText("Endpoint URL")).toHaveProperty("value", "https://hel1.your-objectstorage.com");
+  });
+
+  it("offers the endpoint override for R2 and S3 but not Hetzner", async () => {
+    render(<ConnectionSheet initial={null} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Advanced settings" }));
+    expect(screen.queryByLabelText("Endpoint")).toBeNull();
+    expect(screen.getByLabelText("Path-style addressing")).toBeTruthy();
+    await user.click(screen.getByRole("radio", { name: "Cloudflare R2" }));
+    expect(screen.getByLabelText("Endpoint")).toBeTruthy();
+    await user.click(screen.getByRole("radio", { name: "AWS S3" }));
+    expect(screen.getByLabelText("Endpoint")).toBeTruthy();
   });
 
   it("keeps Tab inside the sheet", async () => {

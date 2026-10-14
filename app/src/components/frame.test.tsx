@@ -46,9 +46,15 @@ function transfer(partial: Partial<Transfer>): Transfer {
 }
 
 describe("transferSummary", () => {
-  it("is empty when nothing is happening", () => {
+  it("is empty only when there are no transfers", () => {
     expect(transferSummary([])).toBeNull();
-    expect(transferSummary([transfer({ status: "finished" })])).toBeNull();
+  });
+
+  it("counts finished and cancelled transfers once nothing is running", () => {
+    expect(transferSummary([transfer({ id: "1", status: "finished" }), transfer({ id: "2", status: "finished" })])).toBe("2 finished");
+    expect(transferSummary([transfer({ id: "1", status: "finished" }), transfer({ id: "2", status: "failed" })])).toBe("1 finished · 1 failed");
+    expect(transferSummary([transfer({ id: "1" }), transfer({ id: "2", status: "finished" })])).toBe("Uploading 1 file · 0%");
+    expect(transferSummary([transfer({ status: "cancelled" })])).toBe("1 cancelled");
   });
 
   it("counts running uploads and downloads with overall progress and failures", () => {

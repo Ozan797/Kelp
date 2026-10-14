@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -22,9 +23,20 @@ struct Running {
     partial: Option<PathBuf>,
 }
 
-#[derive(Default)]
+const MAX_RUNNING_TRANSFERS: usize = 4;
+
 pub struct Transfers {
     running: Mutex<HashMap<Uuid, Running>>,
+    slots: Arc<Semaphore>,
+}
+
+impl Default for Transfers {
+    fn default() -> Self {
+        Self {
+            running: Mutex::default(),
+            slots: Arc::new(Semaphore::new(MAX_RUNNING_TRANSFERS)),
+        }
+    }
 }
 
 impl Transfers {
@@ -36,7 +48,11 @@ impl Transfers {
             .running
             .lock()
             .map_err(|_| AppError::Io("The transfer list is unavailable.".into()))?;
-        let task = tauri::async_runtime::spawn(work);
+        let slots = self.slots.clone();
+        let task = tauri::async_runtime::spawn(async move {
+            let _slot = slots.acquire_owned().await;
+            work.await;
+        });
         map.insert(id, Running { task, partial });
         Ok(())
     }
@@ -236,7 +252,44 @@ pub async fn cancel_transfer(app: AppHandle, transfer: Uuid) -> Result<(), AppEr
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use super::*;
+
+    fn wait_until(check: impl Fn() -> bool) {
+        for _ in 0..200 {
+            if check() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("timed out");
+    }
+
+    #[test]
+    fn only_four_transfers_run_at_once_and_cancelling_frees_a_slot() {
+        let transfers = Transfers::default();
+        let started = Arc::new(AtomicUsize::new(0));
+        let ids: Vec<Uuid> = (0..6).map(|_| Uuid::new_v4()).collect();
+        for id in &ids {
+            let started = started.clone();
+            transfers
+                .spawn(*id, None, async move {
+                    started.fetch_add(1, Ordering::SeqCst);
+                    std::future::pending::<()>().await;
+                })
+                .unwrap();
+        }
+        wait_until(|| started.load(Ordering::SeqCst) == 4);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(started.load(Ordering::SeqCst), 4);
+
+        transfers.take(ids[5]).unwrap().task.abort();
+        transfers.take(ids[0]).unwrap().task.abort();
+        wait_until(|| started.load(Ordering::SeqCst) == 5);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(started.load(Ordering::SeqCst), 5);
+    }
 
     #[test]
     fn only_the_first_taker_owns_a_transfer() {

@@ -20,6 +20,13 @@ pub struct ConnectionSettings {
 }
 
 impl ConnectionSettings {
+    pub fn normalised(self) -> Result<Self, AppError> {
+        Ok(ConnectionSettings {
+            region: self.signing_region()?,
+            ..self
+        })
+    }
+
     pub fn signing_region(&self) -> Result<String, AppError> {
         match self.kind {
             ProviderKind::Hetzner => hetzner_location(&self.region),
@@ -61,7 +68,8 @@ fn hetzner_location(typed: &str) -> Result<String, AppError> {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
     {
         return Err(AppError::InvalidSettings(
-            "Enter the Hetzner location as a plain name, such as fsn1, nbg1 or hel1.".into(),
+            "Paste the endpoint URL from the Hetzner Console, such as https://fsn1.your-objectstorage.com."
+                .into(),
         ));
     }
     Ok(location.to_string())
@@ -151,6 +159,32 @@ mod tests {
             Some("https://x.r2.cloudflarestorage.com"),
         );
         assert_eq!(r2.signing_region(), Ok("auto".into()));
+    }
+
+    #[test]
+    fn normalising_keeps_only_the_hetzner_location() {
+        for typed in [
+            "https://hel1.your-objectstorage.com",
+            "https://hel1.your-objectstorage.com/",
+            "hel1",
+        ] {
+            let clean = settings(ProviderKind::Hetzner, typed, None).normalised();
+            assert_eq!(clean.map(|s| s.region), Ok("hel1".into()), "{typed:?}");
+        }
+    }
+
+    #[test]
+    fn normalising_rejects_a_bad_hetzner_endpoint() {
+        let error = settings(ProviderKind::Hetzner, "https://fsn1.evil.com/", None)
+            .normalised()
+            .unwrap_err();
+        assert!(matches!(error, AppError::InvalidSettings(m) if m.contains("endpoint URL")));
+    }
+
+    #[test]
+    fn normalising_leaves_other_regions_as_entered() {
+        let clean = settings(ProviderKind::S3, " eu-west-2 ", None).normalised();
+        assert_eq!(clean.map(|s| s.region), Ok("eu-west-2".into()));
     }
 
     #[test]

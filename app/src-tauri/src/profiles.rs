@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,9 @@ impl ProfileStore {
         let json =
             serde_json::to_vec_pretty(profiles).map_err(|error| AppError::Io(error.to_string()))?;
         let temporary = self.path.with_extension("json.tmp");
-        std::fs::write(&temporary, json)?;
+        let mut file = std::fs::File::create(&temporary)?;
+        file.write_all(&json)?;
+        file.sync_all()?;
         std::fs::rename(&temporary, &self.path)?;
         Ok(())
     }

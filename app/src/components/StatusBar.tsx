@@ -7,7 +7,9 @@ const plural = (count: number) => `${count} ${count === 1 ? "file" : "files"}`;
 export function transferSummary(transfers: Transfer[]): string | null {
   const running = transfers.filter((t) => t.status === "running");
   const failed = transfers.filter((t) => t.status === "failed").length;
+  const finished = transfers.filter((t) => t.status === "finished").length;
   const parts: string[] = [];
+  if (running.length === 0 && finished > 0) parts.push(`${finished} finished`);
   if (running.length > 0) {
     const uploads = running.every((t) => t.direction === "upload");
     const downloads = running.every((t) => t.direction === "download");
@@ -18,11 +20,12 @@ export function transferSummary(transfers: Transfer[]): string | null {
     parts.push(`${verb} ${plural(running.length)}`, `${percent}%`);
   }
   if (failed > 0) parts.push(`${failed} failed`);
+  if (parts.length === 0 && transfers.length > 0) parts.push(`${transfers.length} cancelled`);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 type StatusBarProps = {
-  itemCount: number;
+  itemCount: number | null;
   selectedCount: number;
   selectedBytes: number;
   transfers: Transfer[];
@@ -38,7 +41,7 @@ export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, 
   return (
     <footer className="statusbar">
       <span>
-        {itemCount} {itemCount === 1 ? "item" : "items"}
+        {itemCount !== null && `${itemCount} ${itemCount === 1 ? "item" : "items"}`}
         {selectedCount > 0 && ` · ${selectedCount} selected · ${formatBytes(selectedBytes)}`}
       </span>
       {summary && (

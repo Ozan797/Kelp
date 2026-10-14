@@ -27,7 +27,7 @@ pub fn run() {
                 ProfileStore::new(&dir),
                 Box::new(KeychainStore),
                 real_connect(),
-            )?;
+            );
             app.manage(state);
             app.manage(transfer_commands::Transfers::default());
             Ok(())

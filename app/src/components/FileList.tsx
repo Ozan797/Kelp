@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import type { Row } from "../hooks/useListing";
 import { fileKind, formatBytes, formatModified, type FileKind } from "../lib/format";
 
@@ -68,6 +68,8 @@ function FileIcon({ kind }: { kind: FileKind }) {
   );
 }
 
+const INTRO_ROWS = 12;
+
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "size", label: "Size" },
@@ -96,6 +98,9 @@ export function FileList(props: FileListProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [firstPage] = useState(visible);
+  const [scrolled, setScrolled] = useState(false);
+  const introducing = !scrolled && visible === firstPage;
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -167,6 +172,7 @@ export function FileList(props: FileListProps) {
         aria-multiselectable="true"
         tabIndex={0}
         onKeyDown={keyDown}
+        onScroll={() => setScrolled(true)}
       >
         <div className="list-canvas" style={{ height: virtualizer.getTotalSize() }}>
           {items.map((item) => {
@@ -182,8 +188,9 @@ export function FileList(props: FileListProps) {
                   "file-row",
                   isSelected ? "selected" : "",
                   item.index === focusIndex ? "focused" : "",
+                  introducing && item.index < INTRO_ROWS ? "intro" : "",
                 ].join(" ")}
-                style={{ height: item.size, transform: `translateY(${item.start}px)` }}
+                style={{ height: item.size, transform: `translateY(${item.start}px)`, "--i": item.index } as CSSProperties}
                 onClick={(event) => click(row, item.index, event)}
                 onDoubleClick={() => onOpen(row)}
                 onContextMenu={(event) => {
