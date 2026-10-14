@@ -1,7 +1,9 @@
 # Kelp design system and website rebuild
 
 Date: 2026-10-14
-Status: draft, awaiting review
+Status: implemented on branch kelp-design-system
+
+Update 2026-10-14: the changelog page was removed at the user's request (release notes live on GitHub Releases). Sections below that mention it are historical.
 
 ## 1. Purpose
 

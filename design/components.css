@@ -1,0 +1,556 @@
+/* Kelp shared components. Semantic tokens only (see tokens.css). */
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Button */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: 600 var(--text-sm) / 1 var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.button:active:not(:disabled, [aria-disabled="true"]) {
+  transform: translateY(1px);
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.button-primary:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--accent-hover);
+}
+
+.button-secondary {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.button-secondary:hover:not(:disabled, [aria-disabled="true"]) {
+  border-color: var(--text-muted);
+}
+
+.button-ghost {
+  background: transparent;
+  color: var(--text);
+}
+
+.button-ghost:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--surface);
+}
+
+.button-lg {
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 500 var(--text-xs) / 1.6 var(--font-body);
+}
+
+.badge-accent {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+/* Callout */
+.callout {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.callout-info {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.callout-warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--text);
+}
+
+/* Card */
+.card {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+
+.card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.card-link:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Code */
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+:not(pre) > code {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+pre {
+  overflow-x: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  line-height: 1.5;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  text-align: center;
+}
+
+/* Steps: use <ol class="steps" role="list"> so VoiceOver still announces a list */
+.steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.steps > li {
+  position: relative;
+  min-height: 24px;
+  padding-left: 36px;
+  counter-increment: step;
+}
+
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 600 var(--text-xs) / 24px var(--font-body);
+  text-align: center;
+}
+
+/* Nav list: mark the current page with aria-current="page" */
+.nav-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-list a {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.nav-list a:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.nav-list a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+  font-weight: 600;
+}
+
+/* Theme switch: System / Light / Dark radio group */
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+}
+
+.theme-switch label {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.theme-switch label:hover {
+  color: var(--text);
+}
+
+.theme-switch label:has(input:checked) {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-switch label:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.theme-switch svg {
+  width: 16px;
+  height: 16px;
+}
+
+/*
+ * Ocean background for navy bands: a moving gradient made of four soft colour blobs, plus rising bubbles.
+ * Markup (see website/src/components/Bubbles.tsx):
+ *   <div class="bubbles" aria-hidden="true">
+ *     <div class="glow glow-a"></div> ... <div class="glow glow-d"></div>
+ *     <span class="bubble" style="--x; --size; --d; --delay; --peak; --sway"><i></i></span> ...
+ *   </div>
+ * Each blob drifts and breathes on its own path and timing, so the gradient never visibly repeats.
+ * The bubble <span> rises and its inner <i> sways, so the two transforms never overwrite each other.
+ */
+.bubbles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bubbles .glow {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  will-change: transform;
+  animation: kelp-drift-a 26s ease-in-out infinite alternate;
+}
+
+.bubbles .glow-a {
+  top: -30%;
+  left: -25%;
+}
+
+.bubbles .glow-b {
+  top: 10%;
+  right: -35%;
+  background: radial-gradient(closest-side, var(--glow-blue), transparent);
+  animation-name: kelp-drift-b;
+  animation-duration: 32s;
+  animation-delay: -12s;
+}
+
+.bubbles .glow-c {
+  bottom: -50%;
+  left: 15%;
+  background: radial-gradient(closest-side, var(--glow-deep), transparent);
+  animation-name: kelp-drift-c;
+  animation-duration: 38s;
+  animation-delay: -20s;
+}
+
+.bubbles .glow-d {
+  top: 20%;
+  left: 30%;
+  width: 45vmax;
+  height: 45vmax;
+  background: radial-gradient(closest-side, var(--glow-mint), transparent);
+  animation-name: kelp-drift-d;
+  animation-duration: 22s;
+  animation-delay: -5s;
+}
+
+/* Optional cursor glow: the page sets --mx/--my (in px) on .bubbles; see website Bubbles.tsx. */
+.bubbles .glow-cursor {
+  top: 0;
+  left: 0;
+  width: 40vmax;
+  height: 40vmax;
+  margin: -20vmax 0 0 -20vmax;
+  background: radial-gradient(closest-side, var(--glow-mint), transparent);
+  opacity: 0;
+  transform: translate(var(--mx, 50vw), var(--my, 30vh));
+  transition: opacity var(--dur-slow) var(--ease-out);
+  animation: none;
+}
+
+.bubbles.tracking .glow-cursor {
+  opacity: 1;
+}
+
+@keyframes kelp-drift-a {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18%, 12%) scale(1.2);
+  }
+  100% {
+    transform: translate(6%, 28%) scale(0.95);
+  }
+}
+
+@keyframes kelp-drift-b {
+  0% {
+    transform: translate(0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate(-22%, 10%) scale(0.9);
+  }
+  100% {
+    transform: translate(-10%, -14%) scale(1.15);
+  }
+}
+
+@keyframes kelp-drift-c {
+  0% {
+    transform: translate(0, 0) scale(0.9);
+  }
+  50% {
+    transform: translate(20%, -18%) scale(1.15);
+  }
+  100% {
+    transform: translate(-12%, -8%) scale(1);
+  }
+}
+
+@keyframes kelp-drift-d {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-25%, 15%) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(15%, -10%) scale(0.85);
+    opacity: 0.7;
+  }
+}
+
+.bubbles .bubble {
+  position: absolute;
+  bottom: -24px;
+  left: var(--x, 50%);
+  width: var(--size, 6px);
+  height: var(--size, 6px);
+  opacity: 0;
+  animation: kelp-rise var(--d, 10s) linear var(--delay, 0s) infinite;
+}
+
+.bubbles .bubble i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--bubble-border);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 30%, var(--bubble-shine) 0 16%, transparent 32%),
+    var(--bubble-fill);
+  animation: kelp-sway calc(var(--d, 10s) / 3) ease-in-out var(--delay, 0s) infinite alternate;
+}
+
+/* Far bubbles are small, soft and faint, which gives the layer depth. */
+.bubbles .bubble.far i {
+  filter: blur(1px);
+}
+
+@keyframes kelp-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10%,
+  80% {
+    opacity: var(--peak, 1);
+  }
+  100% {
+    transform: translateY(-100vh);
+    opacity: 0;
+  }
+}
+
+@keyframes kelp-sway {
+  from {
+    transform: translateX(calc(var(--sway, 8px) * -1));
+  }
+  to {
+    transform: translateX(var(--sway, 8px));
+  }
+}
+
+/* Reduced motion: keep the gradient as a still picture, drop the bubbles and the cursor glow. */
+@media (prefers-reduced-motion: reduce) {
+  .bubbles .glow {
+    animation: none;
+  }
+
+  .bubbles .glow-cursor {
+    display: none;
+  }
+
+  .bubbles .bubble {
+    display: none;
+  }
+}
+
+/* Skeleton: placeholder shape while real content loads. Size it with width/height. */
+.skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--skeleton);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  transform: translateX(-100%);
+  animation: kelp-shimmer 1.4s var(--ease-out) infinite;
+}
+
+@keyframes kelp-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Spinner: for short waits with no known length. Pair it with text such as "Loading files". */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: kelp-spin 0.8s linear infinite;
+}
+
+@keyframes kelp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/*
+ * Motion utilities.
+ * .enter  fades up once on page load. Give siblings --i: 0, 1, 2 ... to stagger them.
+ * .reveal fades up as it scrolls into view. Browsers without scroll-driven animations show it at once.
+ * Neither hides content when CSS animations are off or reduced motion is on.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: kelp-enter var(--dur-reveal) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: kelp-enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
+@keyframes kelp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,22 @@
+/* Kelp fonts. Latin subset, variable weight, licensed under the SIL Open Font License (see OFL-*.txt). */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("./bricolage-grotesque-latin.woff2") format("woff2");
+  font-weight: 500 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("./hanken-grotesk-latin.woff2") format("woff2");
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./jetbrains-mono-latin.woff2") format("woff2");
+  font-weight: 400 500;
+  font-display: swap;
+}

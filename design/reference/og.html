@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kelp share image</title>
+    <!-- Exported to website/public/og.png at 1200×630. See Task 11 in the design system plan. -->
+    <link rel="stylesheet" href="../fonts/fonts.css" />
+    <link rel="stylesheet" href="../tokens.css" />
+    <link rel="stylesheet" href="../components.css" />
+    <style>
+      html, body { margin: 0; }
+      .og { position: relative; width: 1200px; height: 630px; overflow: hidden; background: var(--hero-gradient); }
+      .og-copy { position: relative; padding: 96px 96px 0; }
+      .og-brand { display: flex; align-items: center; gap: 16px; font: 700 40px / 1 var(--font-display); }
+      .og-brand img { width: 64px; height: 64px; border-radius: 15px; }
+      .og h1 { margin: 56px 0 0; font: 800 96px / 1 var(--font-display); letter-spacing: -0.02em; }
+      .og p { margin: 24px 0 0; max-width: 30ch; font: 400 30px / 1.4 var(--font-body); color: var(--text-muted); }
+      .dot { position: absolute; border-radius: 50%; border: 2px solid var(--bubble-border); background: var(--bubble-fill); }
+    </style>
+  </head>
+  <body>
+    <div class="og theme-dark">
+      <!-- Static bubbles: the screenshot must not depend on animation timing -->
+      <span class="dot" style="left: 980px; top: 120px; width: 18px; height: 18px"></span>
+      <span class="dot" style="left: 1060px; top: 260px; width: 10px; height: 10px"></span>
+      <span class="dot" style="left: 910px; top: 330px; width: 26px; height: 26px"></span>
+      <span class="dot" style="left: 1110px; top: 440px; width: 14px; height: 14px"></span>
+      <span class="dot" style="left: 1010px; top: 520px; width: 8px; height: 8px"></span>
+      <div class="og-copy">
+        <div class="og-brand">
+          <img src="../brand/kelp-mark.svg" alt="" width="64" height="64" />
+          Kelp
+        </div>
+        <h1>Every bucket, one window.</h1>
+        <p>A fast Mac app for Amazon S3, Cloudflare R2 and Hetzner Object Storage.</p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { providers, type Entry } from "../data";
+import { BrandLogo } from "./BrandLogo";
 
 function FolderIcon() {
   return (
@@ -37,6 +38,16 @@ export default function DemoWindow() {
   const [path, setPath] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
+  // Real listings take a moment, so the demo shows the app's loading state briefly on every move.
+  const [loading, setLoading] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  const load = () => {
+    window.clearTimeout(timer.current);
+    setLoading(true);
+    timer.current = window.setTimeout(() => setLoading(false), 450);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
   const provider = providers[providerIndex];
   const entries = useMemo(
     () => resolve(provider.root, path),
@@ -47,12 +58,14 @@ export default function DemoWindow() {
     setProviderIndex(index);
     setPath([]);
     setSelected(null);
+    load();
   };
 
   const open = (entry: Entry) => {
     if (entry.kind === "folder") {
       setPath([...path, entry.name]);
       setSelected(null);
+      load();
     } else {
       setSelected(entry.name);
     }
@@ -61,6 +74,7 @@ export default function DemoWindow() {
   const goTo = (depth: number) => {
     setPath(path.slice(0, depth));
     setSelected(null);
+    load();
   };
 
   return (
@@ -73,7 +87,7 @@ export default function DemoWindow() {
       </div>
 
       <div className="window-body">
-        <nav className="sidebar" aria-label="Connections">
+        <div className="sidebar" role="group" aria-label="Connections">
           <p className="side-label">Connections</p>
           {providers.map((p, i) => (
             <button
@@ -83,11 +97,11 @@ export default function DemoWindow() {
               aria-pressed={i === providerIndex}
               onClick={() => choose(i)}
             >
-              <span className={`dot ${p.id}`} aria-hidden="true" />
+              <BrandLogo brand={p.id} className={`side-logo ${p.id}`} />
               {p.label}
             </button>
           ))}
-        </nav>
+        </div>
 
         <div className="pane">
           <div className="toolbar">
@@ -131,8 +145,19 @@ export default function DemoWindow() {
             <span>Modified</span>
           </div>
 
-          <ul className="list">
-            {entries.map((entry) => (
+          <ul className="list" aria-busy={loading}>
+            {loading &&
+              [70, 55, 62, 40].map((width) => (
+                <li key={width} className="row skeleton-row" aria-hidden="true">
+                  <span className="cell name">
+                    <span className="skeleton skeleton-icon" />
+                    <span className="skeleton skeleton-line" style={{ width: `${width}%` }} />
+                  </span>
+                  <span className="skeleton skeleton-line" />
+                  <span className="skeleton skeleton-line" />
+                </li>
+              ))}
+            {!loading && entries.map((entry) => (
               <li key={entry.name}>
                 <button
                   type="button"
@@ -153,10 +178,17 @@ export default function DemoWindow() {
           </ul>
 
           <div className="statusbar">
-            <span>
-              {entries.length} {entries.length === 1 ? "item" : "items"}
-            </span>
-            <span className="transfer" aria-label="Upload in progress">
+            {loading ? (
+              <span className="loading-note">
+                <span className="spinner" aria-hidden="true" />
+                Loading files
+              </span>
+            ) : (
+              <span>
+                {entries.length} {entries.length === 1 ? "item" : "items"}
+              </span>
+            )}
+            <span className="transfer">
               <span className="transfer-name">launch-teaser.mp4</span>
               <span className="bar">
                 <span className="bar-fill" />

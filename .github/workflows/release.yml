@@ -45,7 +45,7 @@ jobs:
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Bucket Browser ${{ github.ref_name }}"
+          releaseName: "Kelp ${{ github.ref_name }}"
           releaseBody: "Download the .dmg below, open it, and drag the app into Applications."
           releaseDraft: true
           prerelease: false
