@@ -1,5 +1,3 @@
-//! The one implementation for Amazon S3, Cloudflare R2 and Hetzner Object Storage (all S3-compatible).
-
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::{
@@ -13,15 +11,12 @@ use super::{ListPage, ObjectMeta, StorageProvider};
 use crate::connection::ConnectionSettings;
 use crate::error::AppError;
 
-/// A connection to one S3-compatible provider.
 pub struct S3Provider {
     client: Client,
 }
 
 impl S3Provider {
-    /// Builds a client from saved settings plus the secret key (read from the Keychain by the caller).
     pub fn new(settings: &ConnectionSettings, secret_access_key: &str) -> Result<Self, AppError> {
-        // `?` returns early with the error if the settings can't work, before any network request.
         let endpoint = settings.endpoint_url()?;
         let credentials = Credentials::new(
             &settings.access_key_id,
@@ -36,8 +31,6 @@ impl S3Provider {
             .region(Region::new(settings.signing_region()?))
             .credentials_provider(credentials)
             .force_path_style(settings.path_style)
-            // Newer AWS SDKs add checksum headers by default that some S3-compatible services
-            // (including R2 and Hetzner at times) reject. Only send or check them when required.
             .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
             .response_checksum_validation(ResponseChecksumValidation::WhenRequired);
         if let Some(url) = endpoint {
@@ -57,8 +50,6 @@ impl StorageProvider for S3Provider {
         prefix: &str,
         token: Option<String>,
     ) -> Result<ListPage, AppError> {
-        // The "/" delimiter makes S3 group deeper keys into folders (common prefixes) instead of
-        // returning every key below this point.
         let output = self
             .client
             .list_objects_v2()
@@ -73,7 +64,6 @@ impl StorageProvider for S3Provider {
     }
 }
 
-/// Turns the SDK's error into one of ours. Network problems have no S3 error code, so check those first.
 fn classify<E: ProvideErrorMetadata, R>(error: SdkError<E, R>, bucket: &str) -> AppError {
     match &error {
         SdkError::DispatchFailure(_) | SdkError::TimeoutError(_) => AppError::Network,
@@ -81,7 +71,6 @@ fn classify<E: ProvideErrorMetadata, R>(error: SdkError<E, R>, bucket: &str) -> 
     }
 }
 
-/// Converts one `ListObjectsV2` response into our `ListPage`.
 fn to_list_page(output: ListObjectsV2Output, prefix: &str) -> ListPage {
     let folders = output
         .common_prefixes()
@@ -92,12 +81,10 @@ fn to_list_page(output: ListObjectsV2Output, prefix: &str) -> ListPage {
     let objects = output
         .contents()
         .iter()
-        // Skip the zero-byte placeholder that stands for the folder itself.
         .filter(|object| object.key() != Some(prefix))
         .filter_map(|object| {
             Some(ObjectMeta {
                 key: object.key()?.to_string(),
-                // S3 sends sizes as i64; anything missing or negative becomes 0.
                 size: object
                     .size()
                     .and_then(|size| u64::try_from(size).ok())
@@ -157,7 +144,6 @@ mod tests {
 
     #[test]
     fn skips_the_folder_placeholder_object() {
-        // "Create folder" makes a zero-byte object named after the folder (SPEC.md 5.6). It isn't a file.
         let output = ListObjectsV2Output::builder()
             .contents(object("photos/", 0))
             .contents(object("photos/beach.jpg", 1))
@@ -178,7 +164,6 @@ mod tests {
             .build();
         assert_eq!(to_list_page(more, "").next_token, Some("page-2".into()));
 
-        // Some providers send a token on the last page too; only trust it when is_truncated is true.
         let last = ListObjectsV2Output::builder()
             .is_truncated(false)
             .next_continuation_token("stale")

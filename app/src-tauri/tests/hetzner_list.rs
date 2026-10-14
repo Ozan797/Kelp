@@ -42,7 +42,6 @@ async fn lists_a_real_hetzner_bucket() {
         .expect("settings are valid");
     let bucket = get("KELP_TEST_BUCKET");
 
-    // `.await` waits for the network request without blocking the thread.
     let page = provider
         .list(&bucket, "", None)
         .await

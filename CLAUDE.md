@@ -9,7 +9,7 @@ A Mac-only (Apple Silicon) desktop app for browsing and transferring files acros
 ## About the developer
 
 Junior frontend developer who knows TypeScript, React, Vite, Python and some backend work, and is **new to Rust**. They like learning.
-- When you introduce a Rust concept (ownership, lifetimes, `async`, traits, `Arc`/`Mutex`), explain it in one or two plain sentences the first time it matters.
+- When you introduce a Rust concept (ownership, lifetimes, `async`, traits, `Arc`/`Mutex`), explain it in one or two plain sentences the first time it matters, in the chat, not in code comments.
 - Prefer clear code over clever code. Say why, not just what.
 - Suggest next steps in small pieces, and do not rewrite large areas unasked.
 
@@ -48,10 +48,12 @@ node design/brand/build.mjs                   # regenerate logo, app icon and fa
 
 ## Code style
 
+**No comments.** Code must explain itself through clear names, small functions and tests. Don't add comments, doc comments or file headers in new or changed code.
+
 **Rust**
 - `cargo fmt` and `cargo clippy -D warnings` must pass.
 - Avoid `unwrap()` and `expect()` outside tests; propagate errors with `?`.
-- Small modules, doc comments on public items, tests next to the code.
+- Small modules, tests next to the code.
 
 **TypeScript / React**
 - Strict TypeScript, no `any`. Function components and hooks.

@@ -154,7 +154,6 @@ mod tests {
 
     #[test]
     fn hetzner_location_must_be_a_plain_name() {
-        // The location becomes part of a host name, so anything but letters and digits is rejected.
         for bad in ["", "fsn1.evil.com/", "FSN 1"] {
             let error = settings(ProviderKind::Hetzner, bad, None)
                 .endpoint_url()

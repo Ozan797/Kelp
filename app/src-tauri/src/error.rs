@@ -37,7 +37,6 @@ impl AppError {
             Some("NoSuchBucket") => Self::BucketNotFound(bucket.to_string()),
             Some("SignatureDoesNotMatch" | "InvalidAccessKeyId") => Self::BadCredentials,
             Some("RequestTimeTooSkewed") => Self::ClockWrong,
-            // `Option::or` keeps the first value that is present: the message, else the code.
             _ => Self::Provider(message.or(code).unwrap_or("unknown error").to_string()),
         }
     }
