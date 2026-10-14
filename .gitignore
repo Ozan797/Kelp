@@ -28,3 +28,4 @@ app/src-tauri/gen/
 *.tsbuildinfo
 
 .superpowers/
+.claude/

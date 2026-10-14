@@ -41,6 +41,7 @@
   --band-top: var(--navy-950);
   --hero-gradient: linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 65%, var(--teal-800) 100%);
   --header-glass: rgba(8, 17, 26, 0.88);
+  --scrim: rgba(0, 0, 0, 0.35);
   --text-gradient: linear-gradient(100deg, var(--teal-300) 0%, var(--teal-400) 45%, var(--teal-100) 100%);
 
   /* Ocean background layers (moving gradient blobs, bubbles) */
