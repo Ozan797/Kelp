@@ -9,10 +9,9 @@ use aws_sdk_s3::error::{ProvideErrorMetadata, SdkError};
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
 use aws_sdk_s3::primitives::{ByteStream, DateTimeFormat};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
-use aws_smithy_types::body::SdkBody;
 use tokio::io::AsyncWriteExt;
 
-use super::progress_body::ProgressBody;
+use super::progress_body::with_progress;
 use super::{KeyPage, ListPage, ObjectMeta, ProgressFn, StorageProvider};
 use crate::connection::ConnectionSettings;
 use crate::error::AppError;
@@ -161,10 +160,7 @@ impl StorageProvider for S3Provider {
         let file = ByteStream::from_path(path)
             .await
             .map_err(|error| AppError::Io(error.to_string()))?;
-        let body = ByteStream::new(SdkBody::from_body_1_x(ProgressBody::new(
-            file.into_inner(),
-            progress,
-        )));
+        let body = ByteStream::new(with_progress(file.into_inner(), progress));
         self.client
             .put_object()
             .bucket(bucket)

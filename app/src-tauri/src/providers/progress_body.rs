@@ -23,6 +23,12 @@ impl ProgressBody {
     }
 }
 
+pub fn with_progress(body: SdkBody, report: ProgressFn) -> SdkBody {
+    body.map_preserve_contents(move |inner| {
+        SdkBody::from_body_1_x(ProgressBody::new(inner, report.clone()))
+    })
+}
+
 impl Body for ProgressBody {
     type Data = Bytes;
     type Error = <SdkBody as Body>::Error;
@@ -74,5 +80,19 @@ mod tests {
             .into_bytes();
         assert_eq!(&bytes[..], b"hello world");
         assert_eq!(seen.lock().unwrap().last(), Some(&11));
+    }
+
+    #[tokio::test]
+    async fn the_wrapped_body_can_be_retried_and_progress_restarts() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let record = seen.clone();
+        let body = with_progress(
+            SdkBody::retryable(|| SdkBody::from("hello world")),
+            Arc::new(move |sent| record.lock().unwrap().push(sent)),
+        );
+        let retry = body.try_clone().expect("body is retryable");
+        let bytes = ByteStream::new(retry).collect().await.unwrap().into_bytes();
+        assert_eq!(&bytes[..], b"hello world");
+        assert_eq!(seen.lock().unwrap().as_slice(), &[11]);
     }
 }
