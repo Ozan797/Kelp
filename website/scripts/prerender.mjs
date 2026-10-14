@@ -20,8 +20,11 @@ const preload = readdirSync(join(dist, "assets"))
 function write(file, path) {
   const { html, head } = render(path);
   // Function replacers, so "$&" or "$1" inside page content are never treated as patterns.
+  // data-page tells the browser which page this HTML is, so hydration matches even when
+  // a host serves this file for another URL (e.g. 404.html for any unknown path).
   const out = template
     .replace("<!--head-->", () => `${head}\n    ${preload}`)
+    .replace('<div id="root">', () => `<div id="root" data-page="${path}">`)
     .replace("<!--app-->", () => html);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, out);

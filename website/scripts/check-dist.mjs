@@ -33,6 +33,7 @@ for (const page of PAGES) {
   if (!html.includes("kelp-theme")) problems.push(`${page.path}: no early theme script`);
   if (!html.includes('rel="preload"')) problems.push(`${page.path}: no font preload`);
   if (/Bucket Browser|OWNER/.test(html)) problems.push(`${page.path}: old name or OWNER placeholder`);
+  if (!html.includes(`<div id="root" data-page="${page.path}">`)) problems.push(`${page.path}: #root must name its prerendered page (hydration)`);
   if (!systemChecked(html)) problems.push(`${page.path}: theme switch must prerender with "system" checked (hydration)`);
 }
 
@@ -42,6 +43,7 @@ if (!home.includes('"@type":"SoftwareApplication"')) problems.push("/: no Softwa
 const notFound = read(join(dist, "404.html")) ?? "";
 if (!notFound.includes('name="robots" content="noindex"')) problems.push("404.html: missing or not noindex");
 if (!notFound.includes("drifted off")) problems.push("404.html: missing its message");
+if (!notFound.includes(`<div id="root" data-page="${NOT_FOUND.path}">`)) problems.push("404.html: #root must name its prerendered page (hydration)");
 if (!systemChecked(notFound)) problems.push('404.html: theme switch must prerender with "system" checked (hydration)');
 
 const sitemap = read(join(dist, "sitemap.xml")) ?? "";
