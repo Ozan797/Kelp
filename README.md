@@ -9,18 +9,18 @@ A fast Mac app for browsing and transferring files across Amazon S3, Cloudflare 
 ## Prerequisites
 
 - macOS on Apple Silicon
-- [Rust](https://rustup.rs) (stable)
+- [Rust](https://rustup.rs) 1.85 or newer
 - Node.js 20 or newer
 - Xcode Command Line Tools: `xcode-select --install`
 
 ## Getting started
 
-The app itself is created with the Tauri generator (it adds `src/` and `src-tauri/` at the repo root):
+The app lives at the repo root (`src/` for the React UI, `src-tauri/` for the Rust core):
 
 ```bash
-npm create tauri-app@latest   # choose TypeScript + React; use this folder
+rustup update stable   # Rust 1.85 or newer (the app uses Rust edition 2024)
 npm install
-npm run tauri dev
+npm run tauri dev      # opens the Kelp window with hot reload
 ```
 
 The landing site is already set up:

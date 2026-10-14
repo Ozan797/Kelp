@@ -1,0 +1,44 @@
+/* Kelp app styles. Tokens and shared components come from design/. Semantic tokens only. */
+@import "../design/fonts/fonts.css";
+@import "../design/tokens.css";
+@import "../design/components.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* The app follows the macOS theme (no data-theme attribute) and uses the system font for UI text. */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px / 1.4 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+.welcome {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  text-align: center;
+}
+
+.welcome img {
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+.welcome h1 {
+  margin: var(--space-3) 0 0;
+  font: 700 var(--text-2xl) / 1.1 var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.welcome p {
+  margin: 0;
+  color: var(--text-muted);
+}

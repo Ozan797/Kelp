@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kelp</title>
+    <style>
+      /* Paint the system theme's background before CSS loads, so the window never flashes white.
+         Values mirror --sand-50 and --navy-950 in design/tokens.css. */
+      html { background: #f5f2ea; }
+      @media (prefers-color-scheme: dark) {
+        html { background: #08111a; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

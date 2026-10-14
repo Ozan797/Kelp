@@ -267,7 +267,7 @@ Everyone who has installed Kelp gets new versions automatically.
 
 ## 12. Open questions
 
-1. **Hetzner:** is it Object Storage (S3) or a Storage Box (SFTP/WebDAV/SMB)? This spec assumes Object Storage.
+1. ~~**Hetzner:** Object Storage or Storage Box?~~ **Decided 2026-10-14: Hetzner Object Storage (S3).** Storage Box over SFTP stays under "Later".
 2. **Name and domain:** final app name and the exact subdomain.
 3. **Open source or closed?** Affects the GitHub Releases plan and the website's source link.
 4. **Apple Developer account:** needed for signing and notarisation before sharing widely.

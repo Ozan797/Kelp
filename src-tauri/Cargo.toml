@@ -1,0 +1,27 @@
+[package]
+name = "kelp"
+version = "0.1.0"
+description = "A fast Mac app for browsing and transferring files across S3, R2 and Hetzner"
+authors = ["Ozan Gokberk"]
+edition = "2024"
+# Edition 2024 needs Rust 1.85 or newer (`rustup update stable`).
+rust-version = "1.85"
+
+[lib]
+# The `_lib` suffix keeps the library name different from the binary name (a Cargo quirk on Windows).
+name = "kelp_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# Smaller, faster release builds: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
