@@ -58,26 +58,14 @@ a {
   }
 }
 
-::view-transition-old(root) {
-  animation: kelp-page-out 160ms var(--ease-out) both;
+/* The browser's default cross-fade blends old and new directly (no dip to the background, so no
+   flash). The docs sidebar gets its own name so it stays perfectly still between docs pages. */
+::view-transition-group(root) {
+  animation-duration: 220ms;
 }
 
-::view-transition-new(root) {
-  animation: kelp-page-in 320ms var(--ease-out) both;
-}
-
-@keyframes kelp-page-out {
-  to {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-@keyframes kelp-page-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
+.docs-nav {
+  view-transition-name: docs-nav;
 }
 
 .container {
@@ -238,28 +226,6 @@ a {
   text-align: center;
 }
 
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-5);
-  padding: 6px var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.eyebrow-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-}
-
 .hero h1 {
   font-size: clamp(3rem, 8.5vw, 6.5rem);
   font-weight: 800;
@@ -268,6 +234,12 @@ a {
 }
 
 .text-gradient {
+  /* background-clip: text cuts off glyphs that overhang their box (the "e" with tight tracking).
+     Padding gives each line its own room; the negative margin keeps the layout unchanged. */
+  margin-right: -0.08em;
+  padding-right: 0.08em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   background: var(--text-gradient);
   -webkit-background-clip: text;
   background-clip: text;
@@ -971,159 +943,6 @@ a:hover > .arrow {
 
   .docs-nav .nav-list a {
     white-space: nowrap;
-  }
-}
-
-/* Changelog timeline: version column on the left (sticky on wide screens), release card on the right. */
-.article-wide {
-  max-width: 1000px;
-}
-
-.timeline {
-  position: relative;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The vertical line the release dots sit on. */
-.timeline::before {
-  content: "";
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 7px;
-  width: 2px;
-  background: var(--border);
-}
-
-.timeline-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: var(--space-6);
-  padding-left: var(--space-7);
-}
-
-.timeline-item + .timeline-item {
-  margin-top: var(--space-8);
-}
-
-.timeline-item::before {
-  content: "";
-  position: absolute;
-  top: 6px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px var(--accent-soft);
-}
-
-.timeline-meta {
-  position: sticky;
-  top: 96px;
-  display: grid;
-  justify-items: start;
-  align-self: start;
-  gap: var(--space-2);
-}
-
-.timeline-meta h2 {
-  font-size: var(--text-xl);
-}
-
-.timeline-meta time {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.release-card {
-  padding: var(--space-6);
-  border-radius: var(--radius-xl);
-}
-
-.release-summary {
-  margin: 0 0 var(--space-5);
-  font-size: var(--text-lg);
-  line-height: 1.5;
-}
-
-.change-group + .change-group {
-  margin-top: var(--space-5);
-}
-
-.change-type {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-3);
-  color: var(--text-muted);
-  font: 600 var(--text-xs) / 1 var(--font-body);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.change-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.change-new {
-  background: var(--accent);
-}
-
-.change-improved {
-  background: var(--warning);
-}
-
-.change-fixed {
-  background: var(--danger);
-}
-
-.change-group ul,
-.planned-grid ul {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding-left: 1.2em;
-}
-
-.planned {
-  margin-top: var(--space-9);
-}
-
-.planned h2 {
-  font-size: var(--text-2xl);
-}
-
-.planned-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--space-4);
-  margin-top: var(--space-5);
-}
-
-.planned-grid h3 {
-  margin-bottom: var(--space-3);
-  font-size: var(--text-lg);
-}
-
-.planned-grid ul {
-  color: var(--text-muted);
-}
-
-@media (max-width: 768px) {
-  .timeline-item {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-3);
-    padding-left: var(--space-6);
-  }
-
-  .timeline-meta {
-    position: static;
   }
 }
 

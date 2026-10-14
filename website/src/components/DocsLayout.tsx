@@ -29,7 +29,7 @@ export function DocsLayout({ path, title, children }: { path: DocsPath; title: s
             ))}
           </ul>
         </nav>
-        <article className="prose enter">
+        <article className="prose">
           <h1>{title}</h1>
           {children}
         </article>

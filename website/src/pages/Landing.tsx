@@ -142,30 +142,26 @@ export default function Landing() {
         <section className="band theme-dark hero" aria-labelledby="hero-title">
           <Bubbles followCursor />
           <div className="container hero-copy">
-            <p className="eyebrow enter" style={stagger(0)}>
-              <span className="eyebrow-dot" aria-hidden="true" />
-              Built for Apple Silicon
-            </p>
-            <h1 id="hero-title" className="enter" style={stagger(1)}>
+            <h1 id="hero-title" className="enter" style={stagger(0)}>
               Every bucket, <span className="text-gradient">one window.</span>
             </h1>
-            <p className="lede enter" style={stagger(2)}>
+            <p className="lede enter" style={stagger(1)}>
               A fast Mac app for browsing and moving files across Amazon S3, Cloudflare R2 and Hetzner Object
               Storage.
             </p>
-            <div className="hero-actions enter" style={stagger(3)}>
+            <div className="hero-actions enter" style={stagger(2)}>
               <DownloadButton large />
               <a className="button button-ghost button-lg" href={hrefFor("/docs")}>
                 Read the setup guide <Arrow />
               </a>
             </div>
-            <p className="hero-note enter" style={stagger(4)}>
+            <p className="hero-note enter" style={stagger(3)}>
               For Apple Silicon Macs, {SITE.minMacOS} or later.
             </p>
           </div>
         </section>
 
-        <div className="hero-demo enter" style={stagger(5)}>
+        <div className="hero-demo enter" style={stagger(4)}>
           <div className="demo-stage">
             <DemoWindow />
           </div>

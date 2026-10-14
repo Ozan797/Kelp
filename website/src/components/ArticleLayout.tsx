@@ -5,16 +5,14 @@ import { Header } from "./Header";
 
 const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 
-/** Page with a navy title band. `wide` drops the 68ch reading width (for layouts like the changelog). */
+/** Page with a navy title band and a reading-width article below it. */
 export function ArticleLayout({
   title,
   intro,
-  wide = false,
   children,
 }: {
   title: string;
   intro: string;
-  wide?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -33,7 +31,7 @@ export function ArticleLayout({
           </div>
         </div>
         <article className="container article enter" style={stagger(2)}>
-          <div className={wide ? "article-wide" : "prose"}>{children}</div>
+          <div className="prose">{children}</div>
         </article>
       </main>
       <Footer />

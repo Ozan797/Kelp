@@ -7,7 +7,6 @@ import Hetzner from "./pages/docs/Hetzner";
 import R2 from "./pages/docs/R2";
 import S3 from "./pages/docs/S3";
 import Troubleshooting from "./pages/docs/Troubleshooting";
-import Changelog from "./pages/Changelog";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 
@@ -19,7 +18,6 @@ const ROUTES: Record<PagePath, ComponentType> = {
   "/docs/r2": R2,
   "/docs/hetzner": Hetzner,
   "/docs/troubleshooting": Troubleshooting,
-  "/changelog": Changelog,
   "/privacy": Privacy,
 };
 

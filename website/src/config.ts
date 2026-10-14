@@ -49,11 +49,6 @@ export const PAGES = [
     description: "Fix common connection errors in Kelp.",
   },
   {
-    path: "/changelog",
-    title: "Changelog – Kelp",
-    description: "What's new in each version of Kelp.",
-  },
-  {
     path: "/privacy",
     title: "Privacy – Kelp",
     description: "How Kelp handles your keys and files: Keychain only, no telemetry, no Kelp servers.",
