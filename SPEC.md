@@ -1,6 +1,6 @@
 # Kelp – Specification
 
-> App name: Kelp. Change it in `website/src/config.ts`, `src-tauri/tauri.conf.json` and `package.json`.
+> App name: Kelp. Change it in `website/src/config.ts`, `app/src-tauri/tauri.conf.json` and `app/package.json`.
 
 ## 1. Overview
 
@@ -92,15 +92,18 @@ React UI  ──invoke / events──▶  Tauri commands  ──▶  providers  
 ```
 kelp/
 ├── SPEC.md  CLAUDE.md  README.md
-├── package.json  vite.config.ts  index.html
-├── src/                  # app UI (React + TS)
-├── src-tauri/            # Rust core
-│   └── src/
-│       ├── commands/     # what the UI can call
-│       ├── providers/    # StorageProvider trait + s3.rs (+ sftp.rs later)
-│       ├── transfers/    # queue.rs, worker.rs
-│       ├── credentials.rs  state.rs  error.rs  lib.rs  main.rs
+├── app/                  # the Mac app (its own npm project)
+│   ├── package.json  vite.config.ts  index.html
+│   ├── src/              # app UI (React + TS)
+│   └── src-tauri/        # Rust core
+│       └── src/
+│           ├── commands/     # what the UI can call
+│           ├── providers/    # StorageProvider trait + s3.rs (+ sftp.rs later)
+│           ├── transfers/    # queue.rs, worker.rs
+│           ├── credentials.rs  state.rs  error.rs  lib.rs  main.rs
 ├── website/              # landing site (separate Vite project)
+├── design/               # shared tokens, components, fonts, brand
+├── docs/                 # design specs and implementation plans
 └── .github/workflows/    # release.yml
 ```
 

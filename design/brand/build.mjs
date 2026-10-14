@@ -4,7 +4,7 @@
 // Writes:
 //   design/brand/kelp-mark.svg       logo tile, full bleed (website header, lockups, share image)
 //   design/brand/kelp-icon.svg       macOS app icon on Apple's grid: 824px tile with shadow on a 1024 canvas
-//   design/brand/kelp-icon-1024.png  source for `npm run tauri icon design/brand/kelp-icon-1024.png`
+//   design/brand/kelp-icon-1024.png  source for `cd app && npm run tauri icon ../design/brand/kelp-icon-1024.png`
 //   website/public/logo.svg          copy of kelp-mark.svg for the site
 //   website/public/favicon.svg       simplified tile (no bubble) for browser tabs
 //   website/public/favicon.ico       16, 32 and 48px, for old browsers

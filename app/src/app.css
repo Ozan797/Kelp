@@ -1,7 +1,7 @@
 /* Kelp app styles. Tokens and shared components come from design/. Semantic tokens only. */
-@import "../design/fonts/fonts.css";
-@import "../design/tokens.css";
-@import "../design/components.css";
+@import "../../design/fonts/fonts.css";
+@import "../../design/tokens.css";
+@import "../../design/components.css";
 
 html,
 body,

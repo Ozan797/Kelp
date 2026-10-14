@@ -15,10 +15,11 @@ A fast Mac app for browsing and transferring files across Amazon S3, Cloudflare 
 
 ## Getting started
 
-The app lives at the repo root (`src/` for the React UI, `src-tauri/` for the Rust core):
+The app lives in `app/` (`src/` for the React UI, `src-tauri/` for the Rust core):
 
 ```bash
 rustup update stable   # Rust 1.90 or newer (needed by Tauri 2.12)
+cd app
 npm install
 npm run tauri dev      # opens the Kelp window with hot reload
 ```
@@ -38,7 +39,7 @@ Build with `npm run build` (it type-checks, prerenders every page and checks the
 
 ## Releasing
 
-1. Bump the version in `package.json` and `src-tauri/tauri.conf.json`.
+1. Bump the version in `app/package.json` and `app/src-tauri/tauri.conf.json`.
 2. Push a tag: `git tag v0.1.0 && git push --tags`.
 3. GitHub Actions builds the `.dmg` and creates a draft release. Publish it.
 4. Set `released: true` in `website/src/config.ts` and redeploy the site.

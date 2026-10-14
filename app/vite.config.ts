@@ -28,5 +28,7 @@ export default defineConfig(() => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // 4. allow importing the shared design system from ../design
+    fs: { allow: [".."] },
   },
 }));

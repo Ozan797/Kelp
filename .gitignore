@@ -3,9 +3,10 @@ node_modules/
 
 # builds
 dist/
+.vite/
 dist-ssr/
 target/
-src-tauri/gen/
+app/src-tauri/gen/
 
 # env and secrets
 .env

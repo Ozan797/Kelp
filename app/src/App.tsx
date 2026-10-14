@@ -1,4 +1,4 @@
-import mark from "../design/brand/kelp-mark.svg";
+import mark from "../../design/brand/kelp-mark.svg";
 
 /** Placeholder window until milestone M2 adds connections, buckets and the file list. */
 export default function App() {
