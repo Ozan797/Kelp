@@ -1,5 +1,6 @@
 import DemoWindow from "./components/DemoWindow";
-import { DOWNLOAD_URL, SITE } from "./config";
+import { SITE } from "./config";
+import { DownloadButton } from "./components/DownloadButton";
 
 const features = [
   {
@@ -29,22 +30,6 @@ const steps = [
   "Open it and drag the app into Applications.",
   "First launch only: right-click the app and choose Open if macOS asks you to confirm.",
 ];
-
-function DownloadButton({ large = false }: { large?: boolean }) {
-  const cls = large ? "button button-large" : "button";
-  if (!SITE.released) {
-    return (
-      <span className={`${cls} button-pending`} role="status">
-        Download coming soon
-      </span>
-    );
-  }
-  return (
-    <a className={cls} href={DOWNLOAD_URL}>
-      Download for Mac
-    </a>
-  );
-}
 
 export default function App() {
   return (

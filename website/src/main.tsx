@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { pageFor } from "./routes";
-import "./styles.css";
+import "./site.css";
 
 const Page = pageFor(window.location.pathname);
 const app = (
