@@ -20,8 +20,10 @@ tauri-build = { version = "2", features = [] }
 async-trait = "0.1.92"
 aws-sdk-s3 = "1.122.0"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 tauri = { version = "2", features = [] }
 thiserror = "2.0.21"
+uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 # Smaller, faster release builds: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
@@ -32,5 +34,4 @@ panic = "abort"
 strip = true
 
 [dev-dependencies]
-serde_json = "1.0.154"
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread"] }

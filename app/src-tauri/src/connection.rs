@@ -10,6 +10,7 @@ pub enum ProviderKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionSettings {
     pub kind: ProviderKind,
     pub endpoint: Option<String>,

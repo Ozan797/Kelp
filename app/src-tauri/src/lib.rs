@@ -1,5 +1,6 @@
 pub mod connection;
 pub mod error;
+pub mod profiles;
 pub mod providers;
 
 pub fn run() {
