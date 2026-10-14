@@ -34,6 +34,7 @@ for (const page of PAGES) {
   if (!html.includes('rel="preload"')) problems.push(`${page.path}: no font preload`);
   if (/Bucket Browser|OWNER/.test(html)) problems.push(`${page.path}: old name or OWNER placeholder`);
   if (!html.includes(`<div id="root" data-page="${page.path}">`)) problems.push(`${page.path}: #root must name its prerendered page (hydration)`);
+  if (/href="\/#download"[^>]*>Download</.test(html)) problems.push(`${page.path}: header link says "Download" but only scrolls to the download section`);
   if (!systemChecked(html)) problems.push(`${page.path}: theme switch must prerender with "system" checked (hydration)`);
 }
 

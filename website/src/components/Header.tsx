@@ -23,8 +23,9 @@ export function Header() {
             </a>
           </nav>
           <ThemeSwitch />
+          {/* Jumps to the "Get Kelp" section; the download itself lives there. */}
           <a className="button button-primary hide-sm" href="/#download">
-            Download
+            Get Kelp
           </a>
         </div>
       </div>

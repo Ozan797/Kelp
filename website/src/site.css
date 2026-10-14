@@ -418,6 +418,8 @@ a {
   .docs-nav {
     position: static;
     overflow-x: auto;
+    /* Room for the 2px focus ring and its 2px offset; overflow would clip it otherwise. */
+    padding: var(--space-1);
   }
 
   .docs-nav .nav-list {
