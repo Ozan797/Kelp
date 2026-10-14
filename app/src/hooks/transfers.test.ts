@@ -51,3 +51,10 @@ describe("transfersReducer duplicates", () => {
     expect(again).toHaveLength(1);
   });
 });
+
+describe("transfersReducer cancelled", () => {
+  it("clears cancelled transfers", () => {
+    const cancelled = transfersReducer(started(), { type: "state", event: { id: "t1", state: "cancelled", info: null, error: null, path: null } });
+    expect(transfersReducer(cancelled, { type: "clearFinished" })).toEqual([]);
+  });
+});
