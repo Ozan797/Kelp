@@ -331,7 +331,8 @@ a {
 /* ---------- articles and docs ---------- */
 
 .band-title {
-  padding-block: var(--space-6) var(--space-8);
+  /* Bottom padding keeps text out of the band's teal bottom third (contrast). */
+  padding-block: var(--space-6) var(--space-9);
 }
 
 .band-title h1 {
