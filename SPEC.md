@@ -1,6 +1,6 @@
-# Bucket Browser – Specification
+# Kelp – Specification
 
-> Working name. Change it in `website/src/config.ts`, `src-tauri/tauri.conf.json` and `package.json`.
+> App name: Kelp. Change it in `website/src/config.ts`, `src-tauri/tauri.conf.json` and `package.json`.
 
 ## 1. Overview
 
@@ -85,7 +85,7 @@ React UI  ──invoke / events──▶  Tauri commands  ──▶  providers  
 ### 5.1 Repository layout
 
 ```
-bucket-browser/
+kelp/
 ├── SPEC.md  CLAUDE.md  README.md
 ├── package.json  vite.config.ts  index.html
 ├── src/                  # app UI (React + TS)
@@ -185,7 +185,7 @@ These are goals to measure against, not promises.
 
 - Build on a `macos-latest` GitHub Actions runner (Apple Silicon) with `tauri-apps/tauri-action` on a `v*` tag.
 - Sign and notarise with an Apple Developer ID (needs a paid Apple Developer account).
-- Publish `Bucket-Browser_aarch64.dmg` to GitHub Releases.
+- Publish `Kelp_<version>_aarch64.dmg` to GitHub Releases.
 - Auto-update with `tauri-plugin-updater` using signed update manifests.
 
 ### 9.1 Auto-update

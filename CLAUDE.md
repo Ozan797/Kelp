@@ -25,6 +25,8 @@ cargo fmt   --manifest-path src-tauri/Cargo.toml
 
 cd website && npm install && npm run dev      # landing site
 cd website && npm run build                   # type-check + production build
+cd website && npm test                        # theme, path and contrast checks
+python3 -m http.server 8000 -d design         # then open http://localhost:8000/reference/
 ```
 
 ## Architecture rules
@@ -53,7 +55,7 @@ cd website && npm run build                   # type-check + production build
 **TypeScript / React**
 - Strict TypeScript, no `any`. Function components and hooks.
 - File lists must be virtualised. Do not render thousands of rows directly.
-- Plain CSS with variables (or CSS modules). Keep the design consistent with the tokens in `src/styles/`.
+- Plain CSS with variables. Use the semantic tokens in `design/tokens.css` only (no raw hex or scale values outside that file). Shared components live in `design/components.css`; the reference sheet is `design/reference/index.html`.
 - Respect `prefers-reduced-motion` and keep visible focus states.
 
 ## UI copy
@@ -64,6 +66,7 @@ Sentence case, active voice, plain words. Buttons say exactly what they do ("Del
 
 - Separate Vite + React + TS project; deployed as static files to a subdomain of `ozanai.dev`.
 - All names, versions and URLs live in `website/src/config.ts`. Change them there only.
+- Pages are prerendered. A new page needs a `PAGES` entry in `config.ts` and a `ROUTES` entry in `routes.tsx`.
 - `SITE.released` must stay `false` until a `.dmg` is attached to a GitHub Release.
 - The hero demo (`components/DemoWindow.tsx`) uses fake data in `src/data.ts`. It must never contain real bucket names or keys.
 

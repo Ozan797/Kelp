@@ -1,4 +1,4 @@
-# Bucket Browser
+# Kelp
 
 A fast Mac app for browsing and transferring files across Amazon S3, Cloudflare R2 and Hetzner Object Storage.
 
@@ -34,7 +34,7 @@ npm run dev
 ## Landing site
 
 Lives in `website/`. Edit names, version and the download link in `website/src/config.ts`.
-Build with `npm run build` and deploy the `dist/` folder to Cloudflare Pages or Netlify, then point a subdomain such as `bucket.ozanai.dev` at it with a CNAME record.
+Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. Deploy to Cloudflare Pages (build command `npm run build`, root `website`, output `dist`) on a subdomain such as `kelp.ozanai.dev`.
 
 ## Releasing
 
