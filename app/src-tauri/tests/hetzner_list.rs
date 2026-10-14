@@ -86,3 +86,85 @@ async fn lists_a_real_hetzner_bucket() {
         );
     }
 }
+
+fn real_provider(env: &HashMap<String, String>) -> S3Provider {
+    let get = |key: &str| {
+        env.get(key)
+            .cloned()
+            .unwrap_or_else(|| panic!("{key} is missing from .env.test"))
+    };
+    let settings = ConnectionSettings {
+        kind: ProviderKind::Hetzner,
+        endpoint: None,
+        region: get("KELP_TEST_REGION"),
+        path_style: false,
+        access_key_id: get("KELP_TEST_ACCESS_KEY_ID"),
+    };
+    S3Provider::new(&settings, &get("KELP_TEST_SECRET_ACCESS_KEY")).expect("settings are valid")
+}
+
+#[tokio::test]
+#[ignore = "needs real Hetzner keys in .env.test"]
+async fn round_trips_a_small_file() {
+    let env = load_env_file();
+    let provider = real_provider(&env);
+    let bucket = env["KELP_TEST_BUCKET"].clone();
+    assert!(
+        provider
+            .list_buckets()
+            .await
+            .expect("list buckets")
+            .contains(&bucket)
+    );
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let folder = format!("kelp-test-{stamp}/");
+    let key = format!("{folder}hello.txt");
+    let scratch = std::env::temp_dir().join(format!("kelp-roundtrip-{stamp}"));
+    std::fs::create_dir_all(&scratch).unwrap();
+    let source = scratch.join("hello.txt");
+    std::fs::write(&source, b"hello from kelp").unwrap();
+
+    provider
+        .create_folder(&bucket, &folder)
+        .await
+        .expect("create folder");
+    let sent = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let sent_seen = sent.clone();
+    provider
+        .put_file(
+            &bucket,
+            &key,
+            &source,
+            std::sync::Arc::new(move |n| sent_seen.store(n, std::sync::atomic::Ordering::SeqCst)),
+        )
+        .await
+        .expect("upload");
+    assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 15);
+
+    let target = scratch.join("downloaded.txt");
+    provider
+        .get_file(&bucket, &key, &target, std::sync::Arc::new(|_| {}))
+        .await
+        .expect("download");
+    assert_eq!(std::fs::read(&target).unwrap(), b"hello from kelp");
+
+    let keys = provider
+        .list_keys(&bucket, &folder, None)
+        .await
+        .expect("list keys")
+        .keys;
+    assert_eq!(keys.len(), 2);
+    provider.delete(&bucket, &keys).await.expect("delete");
+    assert!(
+        provider
+            .list_keys(&bucket, &folder, None)
+            .await
+            .unwrap()
+            .keys
+            .is_empty()
+    );
+}

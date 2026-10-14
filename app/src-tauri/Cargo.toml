@@ -19,11 +19,15 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 async-trait = "0.1.92"
 aws-sdk-s3 = "1.122.0"
+aws-smithy-types = { version = "1.4.3", features = ["http-body-1-x"] }
+bytes = "1"
+http-body = "1"
 keyring = { version = "3", features = ["apple-native"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tauri = { version = "2", features = [] }
 thiserror = "2.0.21"
+tokio = { version = "1.53.3", features = ["fs", "io-util"] }
 uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 # Smaller, faster release builds: https://tauri.app/concept/size/#cargo-configuration
