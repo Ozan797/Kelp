@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 async-trait = "0.1.92"
 aws-sdk-s3 = "1.122.0"
+keyring = { version = "3", features = ["apple-native"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tauri = { version = "2", features = [] }

@@ -2,6 +2,7 @@ pub mod connection;
 pub mod error;
 pub mod profiles;
 pub mod providers;
+pub mod secrets;
 
 pub fn run() {
     if let Err(error) = tauri::Builder::default().run(tauri::generate_context!()) {
