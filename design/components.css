@@ -274,7 +274,16 @@ kbd {
   height: 16px;
 }
 
-/* Bubbles: ambient layer for navy bands. Each <span> sets --x, --size, --d, --delay. */
+/*
+ * Ocean background for navy bands: a moving gradient made of four soft colour blobs, plus rising bubbles.
+ * Markup (see website/src/components/Bubbles.tsx):
+ *   <div class="bubbles" aria-hidden="true">
+ *     <div class="glow glow-a"></div> ... <div class="glow glow-d"></div>
+ *     <span class="bubble" style="--x; --size; --d; --delay; --peak; --sway"><i></i></span> ...
+ *   </div>
+ * Each blob drifts and breathes on its own path and timing, so the gradient never visibly repeats.
+ * The bubble <span> rises and its inner <i> sways, so the two transforms never overwrite each other.
+ */
 .bubbles {
   position: absolute;
   inset: 0;
@@ -282,38 +291,266 @@ kbd {
   pointer-events: none;
 }
 
-.bubbles span {
+.bubbles .glow {
   position: absolute;
-  bottom: -16px;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  will-change: transform;
+  animation: kelp-drift-a 26s ease-in-out infinite alternate;
+}
+
+.bubbles .glow-a {
+  top: -30%;
+  left: -25%;
+}
+
+.bubbles .glow-b {
+  top: 10%;
+  right: -35%;
+  background: radial-gradient(closest-side, var(--glow-blue), transparent);
+  animation-name: kelp-drift-b;
+  animation-duration: 32s;
+  animation-delay: -12s;
+}
+
+.bubbles .glow-c {
+  bottom: -50%;
+  left: 15%;
+  background: radial-gradient(closest-side, var(--glow-deep), transparent);
+  animation-name: kelp-drift-c;
+  animation-duration: 38s;
+  animation-delay: -20s;
+}
+
+.bubbles .glow-d {
+  top: 20%;
+  left: 30%;
+  width: 45vmax;
+  height: 45vmax;
+  background: radial-gradient(closest-side, var(--glow-mint), transparent);
+  animation-name: kelp-drift-d;
+  animation-duration: 22s;
+  animation-delay: -5s;
+}
+
+/* Optional cursor glow: the page sets --mx/--my (in px) on .bubbles; see website Bubbles.tsx. */
+.bubbles .glow-cursor {
+  top: 0;
+  left: 0;
+  width: 40vmax;
+  height: 40vmax;
+  margin: -20vmax 0 0 -20vmax;
+  background: radial-gradient(closest-side, var(--glow-mint), transparent);
+  opacity: 0;
+  transform: translate(var(--mx, 50vw), var(--my, 30vh));
+  transition: opacity var(--dur-slow) var(--ease-out);
+  animation: none;
+}
+
+.bubbles.tracking .glow-cursor {
+  opacity: 1;
+}
+
+@keyframes kelp-drift-a {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18%, 12%) scale(1.2);
+  }
+  100% {
+    transform: translate(6%, 28%) scale(0.95);
+  }
+}
+
+@keyframes kelp-drift-b {
+  0% {
+    transform: translate(0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate(-22%, 10%) scale(0.9);
+  }
+  100% {
+    transform: translate(-10%, -14%) scale(1.15);
+  }
+}
+
+@keyframes kelp-drift-c {
+  0% {
+    transform: translate(0, 0) scale(0.9);
+  }
+  50% {
+    transform: translate(20%, -18%) scale(1.15);
+  }
+  100% {
+    transform: translate(-12%, -8%) scale(1);
+  }
+}
+
+@keyframes kelp-drift-d {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-25%, 15%) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(15%, -10%) scale(0.85);
+    opacity: 0.7;
+  }
+}
+
+.bubbles .bubble {
+  position: absolute;
+  bottom: -24px;
   left: var(--x, 50%);
   width: var(--size, 6px);
   height: var(--size, 6px);
+  opacity: 0;
+  animation: kelp-rise var(--d, 10s) linear var(--delay, 0s) infinite;
+}
+
+.bubbles .bubble i {
+  display: block;
+  width: 100%;
+  height: 100%;
   border: 1px solid var(--bubble-border);
   border-radius: 50%;
-  background: var(--bubble-fill);
-  opacity: 0;
-  animation: kelp-rise var(--d, 9s) linear var(--delay, 0s) infinite;
+  background:
+    radial-gradient(circle at 32% 30%, var(--bubble-shine) 0 16%, transparent 32%),
+    var(--bubble-fill);
+  animation: kelp-sway calc(var(--d, 10s) / 3) ease-in-out var(--delay, 0s) infinite alternate;
+}
+
+/* Far bubbles are small, soft and faint, which gives the layer depth. */
+.bubbles .bubble.far i {
+  filter: blur(1px);
 }
 
 @keyframes kelp-rise {
   0% {
-    transform: translate(0, 0);
+    transform: translateY(0);
     opacity: 0;
   }
-  10% {
-    opacity: 1;
-  }
-  50% {
-    transform: translate(6px, -45vh);
+  10%,
+  80% {
+    opacity: var(--peak, 1);
   }
   100% {
-    transform: translate(-4px, -90vh);
+    transform: translateY(-100vh);
     opacity: 0;
   }
 }
 
+@keyframes kelp-sway {
+  from {
+    transform: translateX(calc(var(--sway, 8px) * -1));
+  }
+  to {
+    transform: translateX(var(--sway, 8px));
+  }
+}
+
+/* Reduced motion: keep the gradient as a still picture, drop the bubbles and the cursor glow. */
 @media (prefers-reduced-motion: reduce) {
-  .bubbles {
+  .bubbles .glow {
+    animation: none;
+  }
+
+  .bubbles .glow-cursor {
     display: none;
+  }
+
+  .bubbles .bubble {
+    display: none;
+  }
+}
+
+/* Skeleton: placeholder shape while real content loads. Size it with width/height. */
+.skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--skeleton);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  transform: translateX(-100%);
+  animation: kelp-shimmer 1.4s var(--ease-out) infinite;
+}
+
+@keyframes kelp-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Spinner: for short waits with no known length. Pair it with text such as "Loading files". */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: kelp-spin 0.8s linear infinite;
+}
+
+@keyframes kelp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/*
+ * Motion utilities.
+ * .enter  fades up once on page load. Give siblings --i: 0, 1, 2 ... to stagger them.
+ * .reveal fades up as it scrolls into view. Browsers without scroll-driven animations show it at once.
+ * Neither hides content when CSS animations are off or reduced motion is on.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: kelp-enter var(--dur-reveal) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: kelp-enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
+@keyframes kelp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }

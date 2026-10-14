@@ -38,8 +38,17 @@
   --amber-100: #f7ead0;
 
   /* Unthemed brand surfaces: navy bands look the same in both themes */
-  --band-top: #08111a;
-  --hero-gradient: linear-gradient(180deg, #08111a 0%, #0c1620 65%, #123a3f 100%);
+  --band-top: var(--navy-950);
+  --hero-gradient: linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 65%, var(--teal-800) 100%);
+  --header-glass: rgba(8, 17, 26, 0.88);
+  --text-gradient: linear-gradient(100deg, var(--teal-300) 0%, var(--teal-400) 45%, var(--teal-100) 100%);
+
+  /* Ocean background layers (moving gradient blobs, bubbles) */
+  --bubble-shine: rgba(255, 255, 255, 0.55);
+  --glow: rgba(53, 194, 173, 0.30);
+  --glow-deep: rgba(20, 128, 111, 0.40);
+  --glow-blue: rgba(46, 108, 170, 0.32);
+  --glow-mint: rgba(95, 214, 196, 0.18);
 
   /* Provider marks (sidebar dots) */
   --provider-s3: #f2a93b;
@@ -84,6 +93,7 @@
   --dur-fast: 120ms;
   --dur: 200ms;
   --dur-slow: 400ms;
+  --dur-reveal: 700ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -111,6 +121,8 @@
   --shadow-lg: 0 30px 70px rgba(8, 17, 26, 0.28);
   --bubble-border: rgba(53, 194, 173, 0.6);
   --bubble-fill: rgba(53, 194, 173, 0.13);
+  --skeleton: var(--sand-100);
+  --skeleton-shine: rgba(255, 255, 255, 0.7);
 }
 
 /* 3. Semantic tokens: dark, chosen explicitly or forced on a section */
@@ -137,6 +149,8 @@
   --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
   --bubble-border: rgba(53, 194, 173, 0.6);
   --bubble-fill: rgba(53, 194, 173, 0.13);
+  --skeleton: var(--navy-800);
+  --skeleton-shine: rgba(255, 255, 255, 0.07);
 }
 
 /* 4. Semantic tokens: dark, from the system (keep identical to section 3) */
@@ -164,6 +178,8 @@
     --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
     --bubble-border: rgba(53, 194, 173, 0.6);
     --bubble-fill: rgba(53, 194, 173, 0.13);
+    --skeleton: var(--navy-800);
+    --skeleton-shine: rgba(255, 255, 255, 0.07);
   }
 }
 
@@ -178,5 +194,6 @@
     --dur-fast: 0ms;
     --dur: 0ms;
     --dur-slow: 0ms;
+    --dur-reveal: 0ms;
   }
 }

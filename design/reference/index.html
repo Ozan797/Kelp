@@ -139,16 +139,26 @@
           <label title="Dark"><input class="visually-hidden" type="radio" name="theme" value="dark" /><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7z" /></svg><span class="visually-hidden">Dark</span></label>
         </fieldset>
 
-        <h2>Bubbles on a navy band</h2>
+        <h2>Loading</h2>
+        <div style="display: grid; gap: var(--space-2); max-width: 320px">
+          <span class="skeleton" style="height: 12px; width: 80%"></span>
+          <span class="skeleton" style="height: 12px; width: 60%"></span>
+          <span class="skeleton" style="height: 12px; width: 70%"></span>
+        </div>
+        <p class="row" style="margin-top: var(--space-4)"><span class="spinner"></span> Loading files</p>
+
+        <h2>Ocean background on a navy band</h2>
         <div class="band-demo theme-dark">
           <div class="bubbles" aria-hidden="true">
-            <span style="--x: 8%; --size: 6px; --d: 9s; --delay: 0s"></span>
-            <span style="--x: 18%; --size: 4px; --d: 7s; --delay: -3s"></span>
-            <span style="--x: 31%; --size: 6px; --d: 11s; --delay: -6s"></span>
-            <span style="--x: 61%; --size: 3px; --d: 6s; --delay: -1s"></span>
-            <span style="--x: 72%; --size: 8px; --d: 9s; --delay: -2s"></span>
-            <span style="--x: 83%; --size: 4px; --d: 8s; --delay: -5s"></span>
-            <span style="--x: 92%; --size: 6px; --d: 12s; --delay: -8s"></span>
+            <div class="glow glow-a"></div>
+            <div class="glow glow-b"></div>
+            <div class="glow glow-c"></div>
+            <div class="glow glow-d"></div>
+            <span class="bubble far" style="--x: 8%; --size: 3px; --d: 14s; --delay: -2s; --peak: 0.45; --sway: 4px"><i></i></span>
+            <span class="bubble" style="--x: 24%; --size: 10px; --d: 8s; --delay: -3s; --peak: 1; --sway: 12px"><i></i></span>
+            <span class="bubble" style="--x: 47%; --size: 6px; --d: 10s; --delay: -6s; --peak: 0.75; --sway: 8px"><i></i></span>
+            <span class="bubble far" style="--x: 66%; --size: 4px; --d: 15s; --delay: -9s; --peak: 0.45; --sway: 4px"><i></i></span>
+            <span class="bubble" style="--x: 85%; --size: 12px; --d: 9s; --delay: -1s; --peak: 1; --sway: 14px"><i></i></span>
           </div>
         </div>
       </div>
