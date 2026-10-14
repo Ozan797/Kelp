@@ -385,6 +385,11 @@ a {
   vertical-align: top;
 }
 
+/* Long endpoints and keys must wrap instead of widening the page on phones. */
+.prose code {
+  overflow-wrap: anywhere;
+}
+
 .prose th {
   color: var(--text-muted);
   font-weight: 600;
@@ -405,7 +410,7 @@ a {
 
 @media (max-width: 768px) {
   .docs {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-5);
   }
 
