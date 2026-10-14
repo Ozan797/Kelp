@@ -59,10 +59,11 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 - Drag and drop from Finder; drag between connections.
 - Quick preview for images, text, video.
 - Tabs for multiple connections or locations.
-- Dark and light themes following the system.
+- Dark and light themes: follow the system by default, with a System / Light / Dark override in settings and ⌘K.
 
 **M5 – Release**
 - Code signing and notarisation, auto-update, landing site live.
+- **No public build without the updater.** A build without it can never update itself, so everyone who downloaded it would be stuck on that version (see 9.1).
 
 **Later**
 - Search across a bucket with a local index.
@@ -186,6 +187,17 @@ These are goals to measure against, not promises.
 - Sign and notarise with an Apple Developer ID (needs a paid Apple Developer account).
 - Publish `Bucket-Browser_aarch64.dmg` to GitHub Releases.
 - Auto-update with `tauri-plugin-updater` using signed update manifests.
+
+### 9.1 Auto-update
+
+Everyone who has installed Kelp gets new versions automatically.
+
+- **Signing key.** Generate it once with `npm run tauri signer generate`. The public key goes in `tauri.conf.json` (`plugins.updater.pubkey`). The private key and its password go in the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. **Back the private key up in a password manager.** If it is lost, existing installs can never accept another update.
+- **Build.** Set `bundle.createUpdaterArtifacts: true`. On a `v*` tag, `tauri-action` (with `includeUpdaterJson: true`) uploads the `.dmg`, a signed `Kelp.app.tar.gz`, and a `latest.json` manifest to the release.
+- **Endpoint.** `https://github.com/Ozan797/Kelp/releases/latest/download/latest.json`. "latest" only covers *published* releases, so users get an update when you click Publish on the draft, not when the tag is pushed. This could move to the R2 download domain later without changing the app's behaviour, as long as the old endpoint keeps working.
+- **In the app.** Check on launch and then every 6 hours. Download the update in the background. Then show a non-blocking banner, "Kelp 0.2.0 is ready. Restart to update", with the release notes and a "Later" option. Never restart while transfers are running: if the user clicks Restart then, ask them first and show how many transfers are in progress. Add a "Check for updates…" menu item.
+- **Capabilities.** Only `updater:default` and `process:allow-restart` (from `tauri-plugin-process`).
+- **First release.** v0.1.0 must include the updater. Before publishing, test it by installing v0.1.0 and then releasing v0.1.1.
 
 ## 10. Landing website
 

@@ -29,6 +29,7 @@ The work is split into three parts. This spec covers parts 1 and 2.
 | Website pages | Vite multi-page (real HTML per page), no router |
 | Rendering | Prerendered to static HTML at build time, hydrated by React |
 | Hosting | Cloudflare Pages on `kelp.ozanai.dev` (domain already on Cloudflare) |
+| Theme | Light and dark on both website and app. Follows the system by default; a System / Light / Dark switch overrides it and is remembered |
 | Linting | `tsc` strict only for now; add `eslint-plugin-react-hooks` when the app UI grows |
 
 ## 3. Foundations (`design/`)
@@ -60,13 +61,26 @@ Tokens: `--bg`, `--surface`, `--surface-raised`, `--border`, `--text`, `--text-m
 
 - **Light** maps to sand, ink text, teal-600 accent, teal-700 links.
 - **Dark** maps to navy, navy-200 text, teal-400 accent (dark text on it), teal-400 links.
-- Selectors: `:root` is light. `@media (prefers-color-scheme: dark)` switches `:root` to dark **only** when it has `data-theme="system"` (the app sets this). `.theme-dark` and `.theme-light` force a theme on any element and its children.
-- The **website** keeps its fixed composition (sand page with navy sections via `.theme-dark`). It does not follow the system theme. The **app** follows the system theme.
+- Selectors:
+  - `:root` is light.
+  - `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` is dark.
+  - `:root[data-theme="dark"]` is dark.
+  - So with no `data-theme` attribute the page follows the system, even with JavaScript off.
+  - `.theme-dark` and `.theme-light` force a theme on one section (and its children) regardless of the page theme.
+- Each theme sets `color-scheme`, so native scrollbars and form controls match.
+- On the **website** in dark mode, the sand page becomes navy-950 with navy-900 surfaces. Navy sections (`.theme-dark`) keep their teal "surface" gradient and get a `--border` edge, so they don't merge into the page. The `DemoWindow` follows the page theme, so it previews the app in both themes.
 
 Contrast (WCAG AA, 4.5:1 for body text):
 - Teal-600 text on sand is about 4.3:1, which fails, so `--link` in light mode is teal-700.
 - White on teal-600 is about 4.8:1, which passes, so primary buttons in light mode use it.
 - Every text and background pair in the reference sheet is checked before part 1 is called done.
+
+### 3.2.1 Theme switching (shared by website and app)
+
+- `design/theme.ts` (about 25 lines, no dependencies) exports `getThemePreference()` and `setThemePreference("system" | "light" | "dark")`. It stores the choice in `localStorage` under `kelp-theme`. It sets `data-theme` on `<html>` for light or dark, and removes the attribute for system. Both the website and the app import it.
+- **No flash of the wrong theme.** Every website HTML page has a short inline script in `<head>` that applies the stored preference before first paint. The app does the same in its `index.html`. In the app, part 3 also calls Tauri's window `setTheme` so the native title bar matches.
+- `<meta name="theme-color">` has two versions, one per `prefers-color-scheme`.
+- **`.theme-switch` component:** a segmented control of three native radio inputs (System, Light, Dark) with icons, visible labels for screen readers, and arrow-key navigation from the radio group. It sits at the right of the website header, and in the app's settings (part 3). The app also gets a ⌘K command, "Change theme".
 
 ### 3.3 Type
 
@@ -102,6 +116,7 @@ Contrast (WCAG AA, 4.5:1 for body text):
 | `code`, `pre`, `kbd` | inline code, code block, key caps |
 | `.steps` | numbered `<ol>` with teal number discs |
 | `.nav-list` | vertical list; `aria-current="page"` styles the active item |
+| `.theme-switch` | System / Light / Dark segmented radio group; checked, focus-visible |
 | `.bubbles` | absolutely positioned ambient layer, `aria-hidden`, about 7 bubbles, low contrast |
 
 Focus: every interactive element gets a 2px `--focus` outline with a 2px offset on `:focus-visible`.
@@ -147,7 +162,7 @@ website/
 
 ### 4.3 Pages
 
-**Shared header and footer.** The header shows the Kelp wordmark, then Docs, Changelog, GitHub, and a small Download button. On navy sections it uses `.theme-dark`. The footer shows Docs, Changelog, Privacy, GitHub and `kelp.ozanai.dev`.
+**Shared header and footer.** The header shows the Kelp wordmark, then Docs, Changelog, GitHub, the theme switch, and a small Download button. On navy sections it uses `.theme-dark`. The footer shows Docs, Changelog, Privacy, GitHub and `kelp.ozanai.dev`.
 
 **Landing** (in order):
 1. Header (on navy).
@@ -186,7 +201,8 @@ website/
 ## 5. Out of scope
 
 - App screens and app-only components (part 3).
-- Auto-update manifests and the R2 download bucket (M5).
+- Auto-update. It is required in the first public release; see `SPEC.md` §9.1. Its "update available" UI is designed in part 3.
+- The R2 download bucket (M5).
 - A markdown or MDX pipeline for docs. Docs stay as TSX until they outgrow it.
 - Analytics.
 
@@ -196,4 +212,5 @@ website/
 - `cd website && npm run build` passes and outputs prerendered HTML for every page (the content is visible with JavaScript disabled), plus `sitemap.xml`.
 - Every page has been checked in a browser: layout at 375px, 768px and 1280px; keyboard focus visible; bubbles stop under reduced motion.
 - Lighthouse scores are 95+ in all four categories on the landing page and one docs page.
+- The theme switch works on every page: it follows the system by default, the choice persists across pages and reloads with no flash, and with JavaScript off the page follows the system.
 - No raw hex values in `website/src` or `components.css` (checked with grep).
