@@ -1,3 +1,5 @@
+import type { Brand } from "./components/BrandLogo";
+
 export type Entry = {
   name: string;
   kind: "folder" | "file";
@@ -7,7 +9,7 @@ export type Entry = {
 };
 
 export type Provider = {
-  id: string;
+  id: Brand;
   label: string;
   endpoint: string;
   root: Entry[];

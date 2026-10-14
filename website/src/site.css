@@ -58,14 +58,65 @@ a {
   }
 }
 
-/* The browser's default cross-fade blends old and new directly (no dip to the background, so no
-   flash). The docs sidebar gets its own name so it stays perfectly still between docs pages. */
+/* The browser's default cross-fade blends old and new directly (no dip to the background, so no flash). */
 ::view-transition-group(root) {
   animation-duration: 220ms;
 }
 
+/* A page reached through a view transition skips its own load-in animation (index.html adds .vt-nav
+   on pagereveal). Otherwise the new page is captured half-invisible and appears to blink. */
+.vt-nav .enter {
+  animation: none;
+}
+
+/* Docs: the sidebar stays still, the article slides, and the highlight pill glides to the new link. */
 .docs-nav {
   view-transition-name: docs-nav;
+}
+
+.docs-article {
+  view-transition-name: docs-article;
+}
+
+.nav-indicator {
+  view-transition-name: docs-active;
+}
+
+/* Named after the indicator, so its layer paints above the gliding pill. */
+.docs-links {
+  view-transition-name: docs-links;
+}
+
+::view-transition-group(docs-article) {
+  animation: none;
+}
+
+/* Out first, then in: overlapping two pages of text reads as a jumble. */
+::view-transition-old(docs-article) {
+  animation: kelp-article-out 120ms var(--ease-out) both;
+}
+
+::view-transition-new(docs-article) {
+  animation: kelp-article-in 320ms var(--ease-out) 110ms both;
+}
+
+::view-transition-group(docs-active) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--ease-out);
+}
+
+@keyframes kelp-article-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes kelp-article-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 }
 
 .container {
@@ -352,17 +403,84 @@ a:hover > .arrow {
   text-transform: uppercase;
 }
 
-.providers ul {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-3) var(--space-7);
-  margin: 0;
+/* Three equal cards: brand-coloured logo tile, name, one line of detail. */
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  max-width: 1000px;
+  margin: 0 auto;
   padding: 0;
   list-style: none;
-  color: var(--text-muted);
-  font: 700 clamp(1.125rem, 2.4vw, 1.5rem) / 1.2 var(--font-display);
+  text-align: left;
+}
+
+.provider-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  transition: translate var(--dur) var(--ease-out);
+}
+
+.provider-card:hover {
+  translate: 0 -2px;
+  box-shadow: var(--shadow-md);
+}
+
+.provider-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.provider-mark .brand-logo {
+  width: 28px;
+  height: 28px;
+}
+
+.provider-mark.s3 {
+  color: var(--provider-s3);
+}
+
+.provider-mark.r2 {
+  color: var(--provider-r2);
+}
+
+.provider-mark.hetzner {
+  color: var(--provider-hetzner);
+}
+
+.provider-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.provider-text strong {
+  font: 700 var(--text-lg) / 1.2 var(--font-display);
   letter-spacing: -0.01em;
+}
+
+.provider-text span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 860px) {
+  .provider-cards {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 440px;
+  }
 }
 
 .section {
@@ -923,6 +1041,33 @@ a:hover > .arrow {
   align-self: start;
 }
 
+.docs-nav .nav-list {
+  position: relative;
+}
+
+.docs-nav .nav-list a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+}
+
+/* On wide screens the current page's background is a separate pill that glides between links.
+   Rows are a fixed 36px plus the list's 2px gap, so the pill's top is index × 38px. */
+.docs-nav .nav-list a[aria-current="page"] {
+  background: transparent;
+}
+
+.nav-indicator {
+  position: absolute;
+  top: calc(var(--index, 0) * 38px);
+  right: 0;
+  left: 0;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
 @media (max-width: 768px) {
   .docs {
     grid-template-columns: minmax(0, 1fr);
@@ -943,6 +1088,15 @@ a:hover > .arrow {
 
   .docs-nav .nav-list a {
     white-space: nowrap;
+  }
+
+  /* Links scroll sideways here and vary in width, so use the plain highlight instead of the pill. */
+  .nav-indicator {
+    display: none;
+  }
+
+  .docs-nav .nav-list a[aria-current="page"] {
+    background: var(--accent-soft);
   }
 }
 
@@ -1056,25 +1210,6 @@ a:hover > .arrow {
   background: var(--accent-soft);
   color: var(--on-accent-soft);
   font-weight: 600;
-}
-
-.dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.dot.s3 {
-  background: var(--provider-s3);
-}
-
-.dot.r2 {
-  background: var(--provider-r2);
-}
-
-.dot.hetzner {
-  background: var(--provider-hetzner);
 }
 
 .pane {
@@ -1336,4 +1471,39 @@ a:hover > .arrow {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* Brand logos (BrandLogo.tsx): sized by font size unless a rule below sets them. */
+.brand-logo {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.side-logo {
+  width: 14px;
+  height: 14px;
+}
+
+.side-logo.s3 {
+  color: var(--provider-s3);
+}
+
+.side-logo.r2 {
+  color: var(--provider-r2);
+}
+
+.side-logo.hetzner {
+  color: var(--provider-hetzner);
+}
+
+.stats strong {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stat-logo {
+  width: 0.8em;
+  height: 0.8em;
 }

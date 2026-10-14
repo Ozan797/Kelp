@@ -50,10 +50,10 @@
   --glow-blue: rgba(46, 108, 170, 0.32);
   --glow-mint: rgba(95, 214, 196, 0.18);
 
-  /* Provider marks (sidebar dots) */
-  --provider-s3: #f2a93b;
-  --provider-r2: #f27d4b;
-  --provider-hetzner: #e2475a;
+  /* Provider brand colours, used only on their logos (Simple Icons values) */
+  --provider-s3: #569a31;
+  --provider-r2: #f38020;
+  --provider-hetzner: #d50c2d;
 
   /* Type */
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;

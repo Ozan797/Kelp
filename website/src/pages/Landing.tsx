@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { BrandLogo, type Brand } from "../components/BrandLogo";
 import { Bubbles } from "../components/Bubbles";
 import DemoWindow from "../components/DemoWindow";
 import { DownloadButton } from "../components/DownloadButton";
@@ -20,13 +21,13 @@ const TILES: Tile[] = [
     visual: (
       <ul className="viz-providers" role="list">
         <li className="active">
-          <span className="dot s3" /> Amazon S3 <code>eu-west-2</code>
+          <BrandLogo brand="s3" className="side-logo s3" /> Amazon S3 <code>eu-west-2</code>
         </li>
         <li>
-          <span className="dot r2" /> Cloudflare R2 <code>auto</code>
+          <BrandLogo brand="r2" className="side-logo r2" /> Cloudflare R2 <code>auto</code>
         </li>
         <li>
-          <span className="dot hetzner" /> Hetzner <code>fsn1</code>
+          <BrandLogo brand="hetzner" className="side-logo hetzner" /> Hetzner <code>fsn1</code>
         </li>
       </ul>
     ),
@@ -114,8 +115,14 @@ const TILES: Tile[] = [
   },
 ];
 
-const STATS = [
-  { value: "Rust", label: "A native core does the heavy lifting, so the window never freezes." },
+const PROVIDERS: { brand: Brand; name: string; detail: string }[] = [
+  { brand: "s3", name: "Amazon S3", detail: "Every AWS region" },
+  { brand: "r2", name: "Cloudflare R2", detail: "Including EU jurisdiction" },
+  { brand: "hetzner", name: "Hetzner", detail: "Object Storage in the EU" },
+];
+
+const STATS: { value: string; label: string; logo?: Brand }[] = [
+  { logo: "rust", value: "Rust", label: "A native core does the heavy lifting, so the window never freezes." },
   { value: "4 at once", label: "Files transfer in parallel, and large ones move in parts." },
   { value: "100,000", label: "files in a folder still scroll smoothly. Only visible rows are drawn." },
 ];
@@ -170,10 +177,18 @@ export default function Landing() {
 
         <section className="container providers reveal" aria-label="Supported providers">
           <p>Works with</p>
-          <ul role="list">
-            <li>Amazon S3</li>
-            <li>Cloudflare R2</li>
-            <li>Hetzner Object Storage</li>
+          <ul className="provider-cards" role="list">
+            {PROVIDERS.map((p) => (
+              <li key={p.brand} className="provider-card">
+                <span className={`provider-mark ${p.brand}`}>
+                  <BrandLogo brand={p.brand} />
+                </span>
+                <span className="provider-text">
+                  <strong>{p.name}</strong>
+                  <span>{p.detail}</span>
+                </span>
+              </li>
+            ))}
           </ul>
         </section>
 
@@ -210,7 +225,10 @@ export default function Landing() {
           <ul className="stats" role="list">
             {STATS.map((stat) => (
               <li key={stat.value} className="reveal">
-                <strong>{stat.value}</strong>
+                <strong>
+                  {stat.logo && <BrandLogo brand={stat.logo} className="stat-logo" />}
+                  {stat.value}
+                </strong>
                 <span>{stat.label}</span>
               </li>
             ))}

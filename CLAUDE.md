@@ -67,6 +67,7 @@ Sentence case, active voice, plain words. Buttons say exactly what they do ("Del
 - Separate Vite + React + TS project; deployed as static files to a subdomain of `ozanai.dev`.
 - All names, versions and URLs live in `website/src/config.ts`. Change them there only.
 - Pages are prerendered. A new page needs a `PAGES` entry in `config.ts` and a `ROUTES` entry in `routes.tsx`.
+- After the first load, internal links navigate in place (`App.tsx`), so layouts stay mounted. Page functions return their layout and must not use hooks; put state in child components.
 - `SITE.released` must stay `false` until a `.dmg` is attached to a GitHub Release.
 - The hero demo (`components/DemoWindow.tsx`) uses fake data in `src/data.ts`. It must never contain real bucket names or keys.
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { providers, type Entry } from "../data";
+import { BrandLogo } from "./BrandLogo";
 
 function FolderIcon() {
   return (
@@ -96,7 +97,7 @@ export default function DemoWindow() {
               aria-pressed={i === providerIndex}
               onClick={() => choose(i)}
             >
-              <span className={`dot ${p.id}`} aria-hidden="true" />
+              <BrandLogo brand={p.id} className={`side-logo ${p.id}`} />
               {p.label}
             </button>
           ))}

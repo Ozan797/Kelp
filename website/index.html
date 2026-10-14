@@ -12,6 +12,10 @@
         var t = localStorage.getItem("kelp-theme");
         if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
       } catch (e) {}
+      // When a view transition is animating this page in, skip the CSS load-in animations (.enter).
+      addEventListener("pagereveal", function (e) {
+        if (e.viewTransition) document.documentElement.classList.add("vt-nav");
+      });
     </script>
     <style>
       /* Paint the theme's page colour before any CSS loads, so navigation never flashes white
