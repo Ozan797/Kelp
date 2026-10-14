@@ -10,6 +10,13 @@ const { PAGES, NOT_FOUND, pageUrl, escapeHtml } = await import(
 );
 
 const problems = [];
+
+/** True when the page has no theme switch, or its "system" radio is prerendered as checked (attribute order varies). */
+function systemChecked(html) {
+  if (!html.includes('class="theme-switch"')) return true;
+  const input = html.match(/<input[^>]*value="system"[^>]*>/)?.[0] ?? "";
+  return /\bchecked(="")?[\s/>]/.test(input);
+}
 const read = (file) => (existsSync(file) ? readFileSync(file, "utf8") : null);
 
 for (const page of PAGES) {
@@ -26,9 +33,7 @@ for (const page of PAGES) {
   if (!html.includes("kelp-theme")) problems.push(`${page.path}: no early theme script`);
   if (!html.includes('rel="preload"')) problems.push(`${page.path}: no font preload`);
   if (/Bucket Browser|OWNER/.test(html)) problems.push(`${page.path}: old name or OWNER placeholder`);
-  if (html.includes('class="theme-switch"') && !/value="system" checked=""/.test(html)) {
-    problems.push(`${page.path}: theme switch must prerender with "system" checked (hydration)`);
-  }
+  if (!systemChecked(html)) problems.push(`${page.path}: theme switch must prerender with "system" checked (hydration)`);
 }
 
 const home = read(join(dist, "index.html")) ?? "";
@@ -37,6 +42,7 @@ if (!home.includes('"@type":"SoftwareApplication"')) problems.push("/: no Softwa
 const notFound = read(join(dist, "404.html")) ?? "";
 if (!notFound.includes('name="robots" content="noindex"')) problems.push("404.html: missing or not noindex");
 if (!notFound.includes("drifted off")) problems.push("404.html: missing its message");
+if (!systemChecked(notFound)) problems.push('404.html: theme switch must prerender with "system" checked (hydration)');
 
 const sitemap = read(join(dist, "sitemap.xml")) ?? "";
 for (const page of PAGES) {
