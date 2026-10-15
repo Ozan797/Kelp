@@ -17,7 +17,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
-    browse, connections, transfers as transfer_commands, usage as usage_commands,
+    browse, connections, transfers as transfer_commands, uploads as upload_commands,
+    usage as usage_commands,
 };
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
@@ -75,10 +76,10 @@ pub fn run() {
             browse::create_folder,
             browse::delete_objects,
             transfer_commands::list_transfers,
-            transfer_commands::start_upload,
             transfer_commands::start_download,
-            transfer_commands::plan_folder_upload,
-            transfer_commands::start_folder_upload,
+            upload_commands::inspect_drop,
+            upload_commands::plan_upload,
+            upload_commands::start_uploads,
             transfer_commands::start_folder_download,
             transfer_commands::pause_transfer,
             transfer_commands::resume_transfer,
