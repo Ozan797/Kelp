@@ -44,6 +44,12 @@ pub struct ObjectInfo {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct ObjectRef<'a> {
+    pub bucket: &'a str,
+    pub key: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct PartTarget<'a> {
     pub bucket: &'a str,
     pub key: &'a str,
@@ -98,6 +104,28 @@ pub trait StorageProvider: Send + Sync {
         parts: &[CompletedPart],
     ) -> Result<(), AppError>;
     async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError>;
+    async fn copy_object(&self, from: &ObjectRef<'_>, to: &ObjectRef<'_>) -> Result<(), AppError>;
+    async fn copy_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        from: &ObjectRef<'_>,
+        range: Range<u64>,
+    ) -> Result<String, AppError>;
+    async fn put_part_bytes(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<String, AppError>;
+    async fn put_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<(), AppError>;
     async fn get_bytes(
         &self,
         bucket: &str,

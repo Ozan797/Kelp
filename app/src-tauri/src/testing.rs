@@ -15,7 +15,7 @@ use crate::connection::{ConnectionSettings, ProviderKind};
 use crate::error::AppError;
 use crate::profiles::{ConnectionProfile, ProfileStore};
 use crate::providers::{
-    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, PartTarget, ProgressFn,
+    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, ObjectRef, PartTarget, ProgressFn,
     StorageProvider,
 };
 use crate::secrets::MemoryStore;
@@ -133,12 +133,7 @@ impl StorageProvider for FakeProvider {
         file.seek(SeekFrom::Start(offset))?;
         file.read_exact(&mut bytes)?;
         progress(len);
-        let mut uploads = lock(&self.uploads);
-        let (_, parts) = uploads
-            .get_mut(target.upload_id)
-            .ok_or(AppError::UploadGone)?;
-        parts.insert(number, bytes);
-        Ok(format!("\"p{number}\""))
+        self.store_part(target, number, bytes)
     }
     async fn complete_multipart(
         &self,
@@ -163,6 +158,54 @@ impl StorageProvider for FakeProvider {
     async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError> {
         self.enter("abort_multipart").await?;
         lock(&self.uploads).remove(target.upload_id);
+        Ok(())
+    }
+    async fn copy_object(&self, from: &ObjectRef<'_>, to: &ObjectRef<'_>) -> Result<(), AppError> {
+        self.enter("copy_object").await?;
+        let bytes = self
+            .object(from.key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        lock(&self.objects).insert(to.key.to_string(), bytes);
+        Ok(())
+    }
+    async fn copy_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        from: &ObjectRef<'_>,
+        range: Range<u64>,
+    ) -> Result<String, AppError> {
+        self.enter("copy_part").await?;
+        let bytes = self
+            .object(from.key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        let slice = bytes
+            .get(range.start as usize..range.end as usize)
+            .ok_or_else(|| AppError::Provider("InvalidRange".into()))?
+            .to_vec();
+        self.store_part(target, number, slice)
+    }
+    async fn put_part_bytes(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<String, AppError> {
+        self.enter("put_part_bytes").await?;
+        progress(bytes.len() as u64);
+        self.store_part(target, number, bytes.to_vec())
+    }
+    async fn put_bytes(
+        &self,
+        _: &str,
+        key: &str,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<(), AppError> {
+        self.enter("put_bytes").await?;
+        progress(bytes.len() as u64);
+        lock(&self.objects).insert(key.to_string(), bytes.to_vec());
         Ok(())
     }
     async fn get_bytes(
@@ -282,6 +325,20 @@ impl FakeProvider {
 
     pub fn calls(&self, name: &str) -> usize {
         lock(&self.calls).get(name).copied().unwrap_or(0)
+    }
+
+    fn store_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: Vec<u8>,
+    ) -> Result<String, AppError> {
+        let mut uploads = lock(&self.uploads);
+        let (_, parts) = uploads
+            .get_mut(target.upload_id)
+            .ok_or(AppError::UploadGone)?;
+        parts.insert(number, bytes);
+        Ok(format!("\"p{number}\""))
     }
 
     pub fn set_etag(&self, key: &str, etag: &str) {
@@ -465,6 +522,81 @@ mod tests {
             .get_range("b", "a.bin", &info.etag, 0..5, &part, no_progress())
             .await;
         assert_eq!(stale, Err(AppError::ObjectChanged));
+    }
+
+    #[tokio::test]
+    async fn server_side_copies_and_part_copies_land_at_the_destination() {
+        let provider = fake().with_objects(vec![("a.bin", b"0123456789".to_vec())]);
+        let from = ObjectRef {
+            bucket: "b",
+            key: "a.bin",
+        };
+        provider
+            .copy_object(
+                &from,
+                &ObjectRef {
+                    bucket: "b",
+                    key: "copy.bin",
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("copy.bin"), Some(b"0123456789".to_vec()));
+        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        let first = provider.copy_part(&target, 1, &from, 0..4).await.unwrap();
+        let second = provider.copy_part(&target, 2, &from, 4..10).await.unwrap();
+        provider
+            .complete_multipart(
+                &target,
+                &[
+                    CompletedPart {
+                        number: 1,
+                        etag: first,
+                    },
+                    CompletedPart {
+                        number: 2,
+                        etag: second,
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("big.bin"), Some(b"0123456789".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn bytes_can_be_put_whole_or_as_parts() {
+        let provider = fake();
+        provider
+            .put_bytes(
+                "b",
+                "small.txt",
+                bytes::Bytes::from_static(b"hi"),
+                no_progress(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("small.txt"), Some(b"hi".to_vec()));
+        let upload_id = provider.start_multipart("b", "two.bin").await.unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "two.bin",
+            upload_id: &upload_id,
+        };
+        let etag = provider
+            .put_part_bytes(&target, 1, bytes::Bytes::from_static(b"xy"), no_progress())
+            .await
+            .unwrap();
+        provider
+            .complete_multipart(&target, &[CompletedPart { number: 1, etag }])
+            .await
+            .unwrap();
+        assert_eq!(provider.object("two.bin"), Some(b"xy".to_vec()));
     }
 
     #[tokio::test]
