@@ -2,6 +2,7 @@ pub mod commands;
 pub mod connection;
 pub mod error;
 pub mod json_file;
+pub mod preview;
 pub mod profiles;
 pub mod providers;
 pub mod secrets;
@@ -53,6 +54,12 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol("kelp-preview", |context, request, responder| {
+            let app = context.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                responder.respond(preview::handle(&app, request).await);
+            });
+        })
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             let state = AppState::new(

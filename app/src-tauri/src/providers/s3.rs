@@ -311,6 +311,27 @@ impl StorageProvider for S3Provider {
         Ok(())
     }
 
+    async fn get_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        etag: &str,
+        range: Range<u64>,
+    ) -> Result<bytes::Bytes, AppError> {
+        let output = self
+            .transfer_client
+            .get_object()
+            .bucket(bucket)
+            .key(key)
+            .range(range_header(&range))
+            .if_match(etag)
+            .send()
+            .await
+            .map_err(|error| classify(error, bucket))?;
+        let body = output.body.collect().await.map_err(|_| AppError::Network)?;
+        Ok(body.into_bytes())
+    }
+
     async fn get_range(
         &self,
         bucket: &str,

@@ -165,6 +165,25 @@ impl StorageProvider for FakeProvider {
         lock(&self.uploads).remove(target.upload_id);
         Ok(())
     }
+    async fn get_bytes(
+        &self,
+        _: &str,
+        key: &str,
+        etag: &str,
+        range: Range<u64>,
+    ) -> Result<bytes::Bytes, AppError> {
+        self.enter("get_bytes").await?;
+        if self.etag(key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
+        let bytes = self
+            .object(key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        let slice = bytes
+            .get(range.start as usize..range.end as usize)
+            .ok_or_else(|| AppError::Provider("InvalidRange".into()))?;
+        Ok(bytes::Bytes::copy_from_slice(slice))
+    }
     async fn get_range(
         &self,
         _: &str,

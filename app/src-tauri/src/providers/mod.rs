@@ -98,6 +98,13 @@ pub trait StorageProvider: Send + Sync {
         parts: &[CompletedPart],
     ) -> Result<(), AppError>;
     async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError>;
+    async fn get_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        etag: &str,
+        range: Range<u64>,
+    ) -> Result<bytes::Bytes, AppError>;
     async fn get_range(
         &self,
         bucket: &str,
