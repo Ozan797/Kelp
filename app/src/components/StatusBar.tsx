@@ -62,6 +62,7 @@ function SizeText({ usage, now, onCalculate, onCancel }: Size) {
   return (
     <>
       <span>{formatBytes(usage.bytes)} counted so far</span>
+      {usage.error && <span className="size-error">{usage.error}</span>}
       {action("Continue", onCalculate)}
     </>
   );

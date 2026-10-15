@@ -87,6 +87,7 @@ export type UsageView = {
   complete: boolean;
   resumeToken: string | null;
   counting: boolean;
+  error: string | null;
 };
 
 export type FolderPlan = { files: number; bytes: number; existing: number; examples: string[] };

@@ -17,6 +17,7 @@ function usage(partial: Partial<UsageView>): UsageView {
     complete: false,
     resumeToken: null,
     counting: false,
+    error: null,
     ...partial,
   };
 }
@@ -47,6 +48,13 @@ describe("StatusBar size", () => {
     expect(screen.getByText("1.2 TB · 3.1 M files · 3 h ago")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Recalculate" }));
     expect(size.onCalculate).toHaveBeenCalled();
+  });
+
+  it("says why a count stopped", () => {
+    renderBar(usage({ bytes: 5_000, objects: 3, error: "Access denied. Check that this key is allowed to read the bucket." }));
+    expect(screen.getByText("5 KB counted so far")).toBeTruthy();
+    expect(screen.getByText("Access denied. Check that this key is allowed to read the bucket.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
   it("offers to continue an interrupted count", async () => {

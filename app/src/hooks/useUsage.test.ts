@@ -13,6 +13,7 @@ const view = (prefix: string, bytes: number): UsageView => ({
   complete: true,
   resumeToken: null,
   counting: false,
+  error: null,
 });
 
 afterEach(() => vi.restoreAllMocks());
