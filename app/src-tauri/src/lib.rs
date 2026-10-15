@@ -9,18 +9,22 @@ pub mod state;
 #[cfg(test)]
 pub mod testing;
 pub mod transfers;
+pub mod usage;
 pub mod validation;
 
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::commands::{browse, connections, transfers as transfer_commands};
+use crate::commands::{
+    browse, connections, transfers as transfer_commands, usage as usage_commands,
+};
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
 use crate::state::{AppState, real_connect};
 use crate::transfers::manager::{Event, ProviderFor, TransferManager};
 use crate::transfers::store::TransferStore;
+use crate::usage::{UsageCounts, UsageStore};
 
 fn transfer_manager(app: &AppHandle, dir: &std::path::Path) -> Arc<TransferManager> {
     let events = app.clone();
@@ -56,6 +60,7 @@ pub fn run() {
             app.manage(state);
             let manager = transfer_manager(app.handle(), &dir);
             app.manage(manager.clone());
+            app.manage(UsageCounts::new(UsageStore::new(&dir)));
             tauri::async_runtime::spawn(async move { manager.start().await });
             Ok(())
         })
@@ -81,6 +86,9 @@ pub fn run() {
             transfer_commands::cancel_transfer,
             transfer_commands::pause_all,
             transfer_commands::resume_all,
+            usage_commands::get_usage,
+            usage_commands::start_usage_count,
+            usage_commands::cancel_usage_count,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = result {

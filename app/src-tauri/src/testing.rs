@@ -34,6 +34,7 @@ pub struct FakeProvider {
     held: watch::Sender<bool>,
     etags: Mutex<HashMap<String, String>>,
     uploads: Mutex<HashMap<String, Upload>>,
+    page_size: usize,
 }
 
 #[async_trait]
@@ -48,21 +49,25 @@ impl StorageProvider for FakeProvider {
         &self,
         _: &str,
         prefix: &str,
-        _: Option<String>,
+        token: Option<String>,
     ) -> Result<KeyPage, AppError> {
+        self.enter("list_keys").await?;
         let stored: Vec<ObjectMeta> = lock(&self.objects)
             .iter()
             .map(|(key, bytes)| meta(key, bytes.len() as u64))
             .collect();
+        let matching: Vec<ObjectMeta> = self
+            .keys
+            .iter()
+            .map(|key| meta(key, 0))
+            .chain(stored)
+            .filter(|object| object.key.starts_with(prefix))
+            .collect();
+        let start = token.and_then(|token| token.parse().ok()).unwrap_or(0);
+        let end = (start + self.page_size).min(matching.len());
         Ok(KeyPage {
-            objects: self
-                .keys
-                .iter()
-                .map(|key| meta(key, 0))
-                .chain(stored)
-                .filter(|object| object.key.starts_with(prefix))
-                .collect(),
-            next_token: None,
+            objects: matching.get(start..end).unwrap_or_default().to_vec(),
+            next_token: (end < matching.len()).then(|| end.to_string()),
         })
     }
     async fn delete(&self, _: &str, keys: &[String]) -> Result<(), AppError> {
@@ -211,6 +216,7 @@ impl FakeProvider {
             held: watch::channel(false).0,
             etags: Mutex::new(HashMap::new()),
             uploads: Mutex::new(HashMap::new()),
+            page_size: 1000,
         }
     }
 
@@ -229,6 +235,11 @@ impl FakeProvider {
                 .into_iter()
                 .map(|(key, bytes)| (key.to_string(), bytes)),
         );
+        self
+    }
+
+    pub fn with_page_size(mut self, page_size: usize) -> Self {
+        self.page_size = page_size;
         self
     }
 
