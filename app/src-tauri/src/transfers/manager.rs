@@ -358,7 +358,7 @@ mod tests {
     use crate::providers::{CompletedPart, PartTarget};
     use crate::testing::FakeProvider;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{Direction, ItemState, Resume, Transfer};
+    use crate::transfers::model::{Direction, ItemState, Resume, Status, Transfer};
     use crate::transfers::paths::part_path;
     use crate::transfers::store::TransferStore;
     use crate::transfers::worker;
@@ -563,6 +563,47 @@ mod tests {
         h.wait_for(id, "finished").await;
         assert_eq!(h.provider.object("2026/big.bin"), Some(bytes));
         assert_eq!(h.provider.calls("start_multipart"), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_paused_big_upload_still_shows_its_saved_parts() {
+        let h = harness();
+        h.manager.start().await;
+        let (mut big, _) = h.upload_with_first_part_sent(true).await;
+        big.status = Status::Paused;
+        h.manager.add(big).await;
+        let views = h.manager.list().await;
+        assert_eq!(
+            (views[0].status, views[0].done),
+            ("paused", 8 * 1024 * 1024)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_failed_download_keeps_its_part_file_so_retry_continues() {
+        let bytes = patterned(BIG);
+        let provider =
+            Arc::new(FakeProvider::empty().with_objects(vec![("2026/big.bin", bytes.clone())]));
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let mut download = h.download_of("2026/big.bin", BIG as u64);
+        let part = part_path(&download.items[0].local);
+        let mut partial = vec![0; BIG];
+        partial[..8 * 1024 * 1024].copy_from_slice(&bytes[..8 * 1024 * 1024]);
+        std::fs::write(&part, &partial).unwrap();
+        download.items[0].resume = Some(Resume::Download {
+            etag: "\"v1\"".into(),
+            part_path: part.clone(),
+            done_ranges: vec![0],
+        });
+        h.provider.fail_next(1, AppError::AccessDenied);
+        let id = h.manager.add(download).await;
+        h.wait_for(id, "failed").await;
+        assert!(part.exists());
+        h.manager.retry(id).await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(std::fs::read(h.dir.join("big.bin")).unwrap(), bytes);
+        assert_eq!(h.provider.calls("get_range"), 2);
     }
 
     #[tokio::test(start_paused = true)]

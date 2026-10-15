@@ -76,7 +76,9 @@ impl Queue {
             .items
             .iter()
             .filter_map(|item| match &item.state {
-                ItemState::Failed { message } => Some(message.as_str()),
+                ItemState::Failed { message } | ItemState::Refused { message } => {
+                    Some(message.as_str())
+                }
                 _ => None,
             })
             .collect();
@@ -188,6 +190,28 @@ mod tests {
         assert_eq!(retried.items[0].state, ItemState::Done);
         assert_eq!(retried.items[1].state, ItemState::Pending);
         assert!(!queue.retry(id));
+    }
+
+    #[test]
+    fn retry_never_sends_refused_items() {
+        let mut queue = Queue::default();
+        let mut folder = transfer(vec![item("a", 1), item("../evil", 1)]);
+        folder.items[0].state = ItemState::Done;
+        folder.items[1].state = ItemState::Refused {
+            message: "This name can't be saved on a Mac.".into(),
+        };
+        let id = folder.id;
+        queue.add(folder);
+        queue.finish(id);
+        assert_eq!(
+            queue.get(id).unwrap().error.as_deref(),
+            Some("1 file failed.")
+        );
+        assert!(queue.retry(id));
+        assert!(matches!(
+            queue.get(id).unwrap().items[1].state,
+            ItemState::Refused { .. }
+        ));
     }
 
     #[test]

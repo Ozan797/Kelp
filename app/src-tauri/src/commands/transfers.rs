@@ -120,19 +120,24 @@ pub async fn folder_download_transfer(
     let name = folder_name(prefix);
     let target = unique_download_path(dir, &name);
     std::fs::create_dir_all(&target)?;
+    let mut taken = HashSet::new();
     let items = objects
         .into_iter()
-        .map(
-            |object| match download_target(prefix, &object.key, &target) {
-                Some(local) => pending_item(local, object.key, object.size),
-                None => Item {
-                    state: ItemState::Failed {
-                        message: UNSAFE_NAME.to_string(),
-                    },
-                    ..pending_item(target.clone(), object.key, object.size)
+        .map(|object| {
+            let refused = |message: &str| Item {
+                state: ItemState::Refused {
+                    message: message.to_string(),
                 },
-            },
-        )
+                ..pending_item(target.clone(), object.key.clone(), object.size)
+            };
+            match download_target(prefix, &object.key, &target) {
+                None => refused(UNSAFE_NAME),
+                Some(local) if !taken.insert(local.to_string_lossy().to_lowercase()) => {
+                    refused(SAME_NAME)
+                }
+                Some(local) => pending_item(local, object.key, object.size),
+            }
+        })
         .collect();
     Ok(Transfer {
         id: Uuid::new_v4(),
@@ -150,6 +155,8 @@ pub async fn folder_download_transfer(
 }
 
 const UNSAFE_NAME: &str = "This name can't be saved on a Mac.";
+const SAME_NAME: &str =
+    "Another file in this folder has the same name with different capital letters.";
 
 pub async fn upload_transfer(
     state: &AppState,
@@ -468,6 +475,26 @@ mod tests {
             transfer.items[2].local,
             dir.join("photos (1)").join("raw").join("b.dng")
         );
+    }
+
+    #[tokio::test]
+    async fn folder_items_are_refused_for_unsafe_names_and_names_that_differ_only_in_capitals() {
+        let fake = FakeProvider::empty().with_objects(vec![
+            ("2026/photos/A.jpg", b"aa".to_vec()),
+            ("2026/photos/a.jpg", b"bb".to_vec()),
+            ("2026/photos/../evil", b"x".to_vec()),
+        ]);
+        let (state, id) = state_with(Arc::new(fake), None).await;
+        let transfer = folder_download_transfer(&state, &temp_dir(), id, "media", "2026/photos/")
+            .await
+            .unwrap();
+        let refused: Vec<&str> = transfer
+            .items
+            .iter()
+            .filter(|item| matches!(item.state, ItemState::Refused { .. }))
+            .map(|item| item.key.as_str())
+            .collect();
+        assert_eq!(refused, vec!["2026/photos/../evil", "2026/photos/a.jpg"]);
     }
 
     #[tokio::test]

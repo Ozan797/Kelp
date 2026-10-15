@@ -220,11 +220,6 @@ impl Job {
 
         let plan = ranges(local_size, size);
         let finished: Vec<u32> = done.iter().map(|part| part.number).collect();
-        for number in &finished {
-            if let Some(range) = plan.get(*number as usize - 1) {
-                read(&self.meters).insert((self.index, *number), range.end - range.start);
-            }
-        }
         let parts = Arc::new(Mutex::new(done));
         let mut sending = JoinSet::new();
         for (offset, range) in plan.into_iter().enumerate() {
@@ -250,6 +245,7 @@ impl Job {
                         )
                     })
                     .await?;
+                read(&job.meters).remove(&(job.index, number));
                 let snapshot = {
                     let mut parts = parts.lock().unwrap_or_else(|p| p.into_inner());
                     parts.push(CompletedPart { number, etag });
@@ -305,10 +301,7 @@ impl Job {
                 .set_resume(self.id, self.index, None, true)
                 .await;
         }
-        if let Err(error) = outcome {
-            std::fs::remove_file(&part).ok();
-            return Err(error);
-        }
+        outcome?;
         let dir = self.item.local.parent().unwrap_or(Path::new("."));
         let name = self
             .item
@@ -346,11 +339,6 @@ impl Job {
             .set_resume(self.id, self.index, Some(resume(done.clone())), true)
             .await;
         let plan = ranges(info.size, PART_SIZE);
-        for index in &done {
-            if let Some(range) = plan.get(*index as usize) {
-                read(&self.meters).insert((self.index, *index + 1), range.end - range.start);
-            }
-        }
         let fetched = Arc::new(Mutex::new(done.clone()));
         let mut fetching = JoinSet::new();
         for (index, range) in plan.into_iter().enumerate() {
@@ -375,6 +363,7 @@ impl Job {
                     )
                 })
                 .await?;
+                read(&job.meters).remove(&(job.index, index + 1));
                 let snapshot = {
                     let mut fetched = fetched.lock().unwrap_or_else(|p| p.into_inner());
                     fetched.push(index);

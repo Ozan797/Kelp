@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 pub use crate::providers::CompletedPart;
 
+use super::plan::PART_SIZE;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Direction {
@@ -37,6 +39,7 @@ pub enum ItemState {
     Pending,
     Done,
     Failed { message: String },
+    Refused { message: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +115,44 @@ pub struct TransferProgress {
     pub files_done: u64,
 }
 
+impl ItemState {
+    pub fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed { .. } | Self::Refused { .. })
+    }
+}
+
+fn piece(size: u64, piece_size: u64, index: u64) -> u64 {
+    let start = index.saturating_mul(piece_size);
+    piece_size.min(size.saturating_sub(start))
+}
+
+impl Item {
+    pub fn done_bytes(&self) -> u64 {
+        if self.state == ItemState::Done {
+            return self.size;
+        }
+        match &self.resume {
+            Some(Resume::Upload {
+                part_size, parts, ..
+            }) => parts
+                .iter()
+                .map(|part| {
+                    piece(
+                        self.size,
+                        *part_size,
+                        u64::from(part.number).saturating_sub(1),
+                    )
+                })
+                .sum(),
+            Some(Resume::Download { done_ranges, .. }) => done_ranges
+                .iter()
+                .map(|index| piece(self.size, PART_SIZE, u64::from(*index)))
+                .sum(),
+            None => 0,
+        }
+    }
+}
+
 impl Status {
     pub fn name(&self) -> &'static str {
         match self {
@@ -159,18 +200,14 @@ impl Transfer {
             done,
             files_total: self.items.len() as u64,
             files_done: count(|state| *state == ItemState::Done),
-            files_failed: count(|state| matches!(state, ItemState::Failed { .. })),
+            files_failed: count(ItemState::is_failed),
             error: self.error.clone(),
             path,
         }
     }
 
     pub fn done_bytes(&self) -> u64 {
-        self.items
-            .iter()
-            .filter(|item| item.state == ItemState::Done)
-            .map(|item| item.size)
-            .sum()
+        self.items.iter().map(Item::done_bytes).sum()
     }
 }
 
@@ -227,6 +264,45 @@ pub mod tests {
         assert_eq!(view.retry_at, Some(5));
         assert_eq!(view.destination, "media/2026/");
         assert_eq!(folder.done_bytes(), 10);
+    }
+
+    #[test]
+    fn refused_items_count_as_failed() {
+        let mut folder = transfer(vec![item("a", 1), item("b", 1)]);
+        folder.items[1].state = ItemState::Refused {
+            message: "x".into(),
+        };
+        assert_eq!(folder.view(0).files_failed, 1);
+    }
+
+    #[test]
+    fn saved_parts_and_ranges_count_as_done() {
+        let mib = 1024 * 1024;
+        let mut upload = transfer(vec![item("a", 20 * mib)]);
+        upload.items[0].resume = Some(Resume::Upload {
+            upload_id: "u".into(),
+            part_size: 8 * mib,
+            parts: vec![
+                CompletedPart {
+                    number: 1,
+                    etag: "e".into(),
+                },
+                CompletedPart {
+                    number: 3,
+                    etag: "e".into(),
+                },
+            ],
+            local_size: 20 * mib,
+            local_modified_ms: 0,
+        });
+        assert_eq!(upload.done_bytes(), 12 * mib);
+        let mut download = transfer(vec![item("b", 20 * mib)]);
+        download.items[0].resume = Some(Resume::Download {
+            etag: "e".into(),
+            part_path: PathBuf::from("/tmp/b.part"),
+            done_ranges: vec![0, 2],
+        });
+        assert_eq!(download.done_bytes(), 12 * mib);
     }
 
     #[test]
