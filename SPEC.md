@@ -61,7 +61,7 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 
 **M4 – Polish**
 - Command palette (⌘K), keyboard navigation, multi-select, context menus.
-- Drag and drop from Finder; drag between connections.
+- Drag and drop from Finder (done: `docs/superpowers/specs/2026-10-15-kelp-m4-drop-design.md`); drag between connections.
 - Quick preview for images, text, video.
 - Tabs for multiple connections or locations.
 - Dark and light themes: follow the system by default, with a System / Light / Dark override in settings and ⌘K.
