@@ -46,6 +46,17 @@ describe("useUsage", () => {
     expect(result.current.usage?.bytes).toBe(42);
   });
 
+  it("keeps a started count when an older load answers late", async () => {
+    let answer: (value: UsageView | null) => void = () => undefined;
+    vi.spyOn(api, "getUsage").mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    vi.spyOn(api, "onUsageProgress").mockResolvedValue(() => undefined);
+    vi.spyOn(api, "startUsageCount").mockResolvedValue({ ...view("2026/", 0), counting: true, complete: false });
+    const { result } = renderHook(() => useUsage("c1", "media", "2026/"));
+    await act(async () => result.current.start());
+    await act(async () => answer(null));
+    expect(result.current.usage?.counting).toBe(true);
+  });
+
   it("starts and cancels counts for its place", async () => {
     vi.spyOn(api, "getUsage").mockResolvedValue(null);
     vi.spyOn(api, "onUsageProgress").mockResolvedValue(() => undefined);
