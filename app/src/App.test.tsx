@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionProfile, ListPage, MenuEntry, TransferStateEvent } from "./lib/tauri";
+import type { ConnectionProfile, ListPage, MenuEntry, TransferView } from "./lib/tauri";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   setLastLocation: vi.fn(),
   onTransferState: vi.fn(),
   onTransferProgress: vi.fn(),
+  listTransfers: vi.fn(),
   confirm: vi.fn(),
   deleteObjects: vi.fn(),
   showContextMenu: vi.fn(),
@@ -63,6 +64,7 @@ beforeEach(() => {
   api.setLastLocation.mockResolvedValue(undefined);
   api.onTransferState.mockResolvedValue(() => undefined);
   api.onTransferProgress.mockResolvedValue(() => undefined);
+  api.listTransfers.mockResolvedValue([]);
   api.deleteObjects.mockResolvedValue(1);
   api.showContextMenu.mockResolvedValue(undefined);
 });
@@ -210,16 +212,19 @@ describe("App", () => {
     api.listBuckets.mockImplementation(async (id: string) => (id === "c1" ? ["archive"] : ["a", "b"]));
     api.deleteConnection.mockRejectedValue({ kind: "io", message: "The connection list couldn't be saved." });
     api.confirm.mockResolvedValue(true);
-    let emit: (event: TransferStateEvent) => void = () => undefined;
-    api.onTransferState.mockImplementation(async (handler: (event: TransferStateEvent) => void) => {
+    let emit: (view: TransferView) => void = () => undefined;
+    api.onTransferState.mockImplementation(async (handler: (view: TransferView) => void) => {
       emit = handler;
       return () => undefined;
     });
     render(<App />);
     await screen.findByText("This folder is empty");
-    const info = { id: "t1", direction: "download" as const, name: "a.txt", destination: "/Users/me/Downloads/a.txt", total: 10 };
-    act(() => emit({ id: "t1", state: "running", info, error: null, path: null }));
-    act(() => emit({ id: "t1", state: "finished", info: null, error: null, path: info.destination }));
+    const running: TransferView = {
+      id: "t1", direction: "download", kind: "file", name: "a.txt", destination: "/Users/me/Downloads/a.txt", status: "running",
+      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
+    };
+    act(() => emit(running));
+    act(() => emit({ ...running, status: "finished", done: 10, filesDone: 1, path: running.destination }));
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Cloudflare · cdn" }));
     expect(await screen.findByText("Choose a bucket")).toBeTruthy();

@@ -390,7 +390,12 @@ export default function App() {
         {drawerOpen && (
           <TransferDrawer
             transfers={transfers}
+            onPause={(id) => api.pauseTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onResume={(id) => api.resumeTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onRetry={(id) => api.retryTransfer(id).catch((e) => setActionError(toAppError(e)))}
             onCancel={(id) => api.cancelTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onPauseAll={() => api.pauseAll().catch((e) => setActionError(toAppError(e)))}
+            onResumeAll={() => api.resumeAll().catch((e) => setActionError(toAppError(e)))}
             onReveal={(path) => api.revealInFinder(path).catch((e) => setActionError(toAppError(e)))}
             onClearFinished={clearFinished}
             onClose={() => {

@@ -40,8 +40,9 @@ describe("crumbsFor", () => {
 
 function transfer(partial: Partial<Transfer>): Transfer {
   return {
-    id: "t", direction: "upload", name: "a", destination: "d", total: 100,
-    status: "running", done: 0, error: null, path: null, ...partial,
+    id: "t", direction: "upload", kind: "file", name: "a", destination: "d", status: "running", retryAt: null,
+    total: 100, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
+    speed: null, sample: null, ...partial,
   };
 }
 
@@ -70,5 +71,16 @@ describe("transferSummary", () => {
       transferSummary([transfer({ id: "1" }), transfer({ id: "2", direction: "download" })]),
     ).toBe("Transferring 2 files · 0%");
     expect(transferSummary([transfer({ status: "failed" })])).toBe("1 failed");
+  });
+
+  it("counts waiting and retrying transfers as in progress and paused ones apart", () => {
+    expect(
+      transferSummary([
+        transfer({ id: "1", status: "waiting" }),
+        transfer({ id: "2", status: "retrying", done: 50 }),
+        transfer({ id: "3", status: "paused" }),
+      ]),
+    ).toBe("Uploading 2 files · 25% · 1 paused");
+    expect(transferSummary([transfer({ status: "paused" })])).toBe("1 paused");
   });
 });

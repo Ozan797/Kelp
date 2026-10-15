@@ -775,8 +775,25 @@ button {
 }
 
 .transfer-status {
+  display: grid;
+  gap: 2px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.transfer-status.warn {
+  color: var(--warning);
+}
+
+.direction.waiting,
+.direction.paused {
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.transfer-bar.paused span {
+  background: var(--text-muted);
 }
 
 .transfer-bar {
@@ -796,6 +813,9 @@ button {
 }
 
 .transfer-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
   justify-self: end;
   opacity: 0;
 }
