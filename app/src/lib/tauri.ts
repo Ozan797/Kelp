@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -90,6 +91,13 @@ export type UsageView = {
   error: string | null;
 };
 
+export type DropSummary = { files: number; folders: number; bytes: number };
+
+export type FileDropEvent =
+  | { type: "enter" | "drop"; paths: string[]; x: number; y: number }
+  | { type: "over"; x: number; y: number }
+  | { type: "leave" };
+
 export type FolderPlan = { files: number; bytes: number; existing: number; examples: string[] };
 
 export type MenuEntry = { label: string; onSelect: () => void } | "separator";
@@ -123,14 +131,25 @@ export const api = {
     call<string>("create_folder", { id, bucket, prefix, name }),
   deleteObjects: (id: string, bucket: string, keys: string[]) =>
     call<number>("delete_objects", { id, bucket, keys }),
-  startUpload: (id: string, bucket: string, prefix: string, path: string, replace: boolean) =>
-    call<string>("start_upload", { id, bucket, prefix, path, replace }),
   startDownload: (id: string, bucket: string, key: string, size: number) =>
     call<string>("start_download", { id, bucket, key, size }),
+  startUpload: (id: string, bucket: string, prefix: string, path: string, replace: boolean) =>
+    call<string>("start_upload", { id, bucket, prefix, path, replace }),
   planFolderUpload: (id: string, bucket: string, prefix: string, path: string) =>
     call<FolderPlan>("plan_folder_upload", { id, bucket, prefix, path }),
   startFolderUpload: (id: string, bucket: string, prefix: string, path: string, skipExisting: boolean) =>
     call<string>("start_folder_upload", { id, bucket, prefix, path, skipExisting }),
+  inspectDrop: (paths: string[]) => call<DropSummary>("inspect_drop", { paths }),
+  planUpload: (id: string, bucket: string, prefix: string, paths: string[]) =>
+    call<FolderPlan>("plan_upload", { id, bucket, prefix, paths }),
+  startUploads: (id: string, bucket: string, prefix: string, paths: string[], skipExisting: boolean) =>
+    call<string[]>("start_uploads", { id, bucket, prefix, paths, skipExisting }),
+  onFileDrop: (handler: (event: FileDropEvent) => void): Promise<UnlistenFn> =>
+    getCurrentWebview().onDragDropEvent(({ payload }) => {
+      if (payload.type === "leave") handler({ type: "leave" });
+      else if (payload.type === "over") handler({ type: "over", x: payload.position.x, y: payload.position.y });
+      else handler({ type: payload.type, paths: payload.paths, x: payload.position.x, y: payload.position.y });
+    }),
   startFolderDownload: (id: string, bucket: string, prefix: string) =>
     call<string>("start_folder_download", { id, bucket, prefix }),
   getUsage: (id: string, bucket: string, prefix: string) => call<UsageView | null>("get_usage", { id, bucket, prefix }),
