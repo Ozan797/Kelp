@@ -232,7 +232,7 @@ export default function App() {
   };
 
   const drag = useFileDrop(place, (paths, target) => {
-    if (sheet.kind === "none") uploadPaths(paths, target);
+    if (sheet.kind === "none" && !checking) uploadPaths(paths, target);
   });
 
   const chooseUpload = () => {

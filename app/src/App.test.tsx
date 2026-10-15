@@ -369,6 +369,24 @@ describe("App", () => {
     expect(screen.queryByRole("region", { name: "Transfers" })).toBeNull();
   });
 
+  it("ignores a second drop while the first one is still being checked", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.planUpload.mockReturnValue(new Promise(() => undefined));
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    const row = await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => row);
+    act(() => emit({ type: "drop", paths: ["/u/slow"], x: 1, y: 1 }));
+    await screen.findByText("Checking what's already in archive…", { selector: ".drop-pill" });
+    act(() => emit({ type: "drop", paths: ["/u/other.txt"], x: 1, y: 1 }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.planUpload).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores a second drop while the first one is still asking", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
     api.planUpload.mockResolvedValue({ files: 1, bytes: 1, existing: 1, examples: ["a.txt"] });
