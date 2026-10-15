@@ -3,7 +3,8 @@ import mark from "../../design/brand/kelp-mark.svg";
 import { BucketColumn } from "./components/BucketColumn";
 import { ConnectionSheet } from "./components/ConnectionSheet";
 import { EmptyState } from "./components/EmptyState";
-import { FileList, filterRows, type Sort } from "./components/FileList";
+import { FileList, filterRows, sortRows, type Sort } from "./components/FileList";
+import { Preview } from "./components/Preview";
 import { NewFolderSheet } from "./components/NewFolderSheet";
 import { Rail } from "./components/Rail";
 import { StatusBar } from "./components/StatusBar";
@@ -32,6 +33,7 @@ type Sheet =
   | { kind: "folder" }
   | { kind: "settings" }
   | { kind: "palette" }
+  | { kind: "preview"; index: number }
   | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
 
 function parentOf(prefix: string): string {
@@ -170,6 +172,8 @@ export default function App() {
 
   const visibleRows = useMemo(() => filterRows(listing.rows, filter), [listing.rows, filter]);
   const selectedRows = useMemo(() => visibleRows.filter((r) => selected.has(r.key)), [visibleRows, selected]);
+  const previewFiles = useMemo(() => sortRows(visibleRows, sort).filter((r) => !r.isFolder), [visibleRows, sort]);
+  const previewStart = previewFiles.findIndex((r) => selected.has(r.key));
   const selectedBytes = selectedRows.reduce((sum, r) => sum + (r.size ?? 0), 0);
 
   const download = async (rows: Row[]) => {
@@ -339,6 +343,7 @@ export default function App() {
       "Mod+,": () => setSheet({ kind: "settings" }),
       "Mod+Shift+N": () => place && setSheet({ kind: "folder" }),
       "Mod+D": () => selectedRows.length > 0 && download(selectedRows),
+      Space: () => previewStart >= 0 && setSheet({ kind: "preview", index: previewStart }),
     },
     sheet.kind === "none",
   );
@@ -371,6 +376,9 @@ export default function App() {
       action("new-folder", "New folder…", () => setSheet({ kind: "folder" }), "⌘⇧N");
       if (selectedRows.length > 0) action("download", downloadLabel(selectedRows), () => download(selectedRows), "⌘D");
       action("size", "Calculate size", () => calculateSize(place));
+      if (previewStart >= 0) {
+        action("preview", `Preview ${previewFiles[previewStart].name}`, () => setSheet({ kind: "preview", index: previewStart }), "Space");
+      }
     }
     if (transfers.some((t) => t.status === "running" || t.status === "waiting" || t.status === "retrying")) {
       action("pause-all", "Pause all transfers", () => api.pauseAll().catch((e) => setActionError(toAppError(e))));
@@ -605,6 +613,17 @@ export default function App() {
             setSheet({ kind: "none" });
             startUploads(sheet.paths, sheet.target, false);
           }}
+        />
+      )}
+      {sheet.kind === "preview" && connection && place && (
+        <Preview
+          connectionId={connection.id}
+          bucket={place.bucket}
+          files={previewFiles}
+          index={sheet.index}
+          onIndex={(index) => setSheet({ kind: "preview", index })}
+          onClose={() => setSheet({ kind: "none" })}
+          onDownload={(row) => download([row])}
         />
       )}
       {sheet.kind === "palette" && <CommandPalette commands={paletteCommands()} onClose={() => setSheet({ kind: "none" })} />}

@@ -268,6 +268,20 @@ describe("App", () => {
     await waitFor(() => expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10));
   });
 
+  it("previews the selected file with Space and steps to the next one", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.jpg", "b.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.jpg"));
+    await user.keyboard(" ");
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+    await user.keyboard("{ArrowRight}");
+    expect(await screen.findByRole("dialog", { name: "b.jpg" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "b.jpg" })).toBeNull();
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);
