@@ -182,6 +182,7 @@ describe("FileList dragging", () => {
     fireEvent.pointerDown(screen.getByText("a.txt"), { button: 0, clientX: 5, clientY: 6 });
     expect(onRowPointerDown).toHaveBeenCalledWith(expect.objectContaining({ key: "a.txt" }), 5, 6);
     fireEvent.pointerDown(screen.getByText("a.txt"), { button: 2, clientX: 5, clientY: 6 });
+    fireEvent.pointerDown(screen.getByText("a.txt"), { button: 0, ctrlKey: true, clientX: 5, clientY: 6 });
     expect(onRowPointerDown).toHaveBeenCalledTimes(1);
   });
 });

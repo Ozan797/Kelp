@@ -26,9 +26,17 @@ export function useRowDrag({ open, connectionId, onDrop }: Options) {
       const { open: place, connectionId: id } = latest.current;
       return place ? rowDropTarget(document.elementFromPoint(x, y), place, keys, id) : null;
     };
+    const stop = () => {
+      pressed.current = null;
+      setDrag(null);
+    };
     const onMove = (event: PointerEvent) => {
       const press = pressed.current;
       if (!press) return;
+      if ((event.buttons & 1) === 0) {
+        stop();
+        return;
+      }
       if (!press.moving && Math.hypot(event.clientX - press.x, event.clientY - press.y) < THRESHOLD) return;
       press.moving = true;
       setDrag({ keys: press.keys, x: event.clientX, y: event.clientY, target: targetAt(event.clientX, event.clientY, press.keys) });
@@ -52,7 +60,11 @@ export function useRowDrag({ open, connectionId, onDrop }: Options) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("pointercancel", stop);
+    window.addEventListener("blur", stop);
     return () => {
+      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("blur", stop);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("keydown", onKey);

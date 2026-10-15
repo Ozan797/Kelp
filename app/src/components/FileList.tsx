@@ -198,7 +198,7 @@ export function FileList(props: FileListProps) {
                 style={{ height: item.size, transform: `translateY(${item.start}px)`, "--i": item.index } as CSSProperties}
                 onClick={(event) => click(row, item.index, event)}
                 onPointerDown={(event) => {
-                  if (event.button === 0 && !event.metaKey && !event.shiftKey) onRowPointerDown?.(row, event.clientX, event.clientY);
+                  if (event.button === 0 && !event.metaKey && !event.shiftKey && !event.ctrlKey) onRowPointerDown?.(row, event.clientX, event.clientY);
                 }}
                 onDoubleClick={() => onOpen(row)}
                 onContextMenu={(event) => {

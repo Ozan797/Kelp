@@ -349,7 +349,7 @@ describe("App", () => {
     document.elementFromPoint = vi.fn(() => drafts);
     const drop = async (altKey: boolean) => {
       fireEvent.pointerDown(row, { button: 0, clientX: 5, clientY: 5 });
-      fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+      fireEvent.pointerMove(window, { clientX: 40, clientY: 40, buttons: 1 });
       fireEvent.pointerUp(window, { clientX: 40, clientY: 40, altKey });
     };
     const request = { from: "c1", fromBucket: "archive", keys: ["a.mp4"], to: "c1", toBucket: "archive", prefix: "drafts/" };
@@ -361,6 +361,30 @@ describe("App", () => {
     await act(async () => drop(true));
     await waitFor(() => expect(api.startCopy).toHaveBeenLastCalledWith(request, false, false));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("drags only the selected rows the filter still shows", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.mp4", "b.mp4"]));
+    render(<App />);
+    await screen.findByText("b.mp4");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.mp4"));
+    await user.keyboard("{Meta>}");
+    await user.click(screen.getByText("b.mp4"));
+    await user.keyboard("{/Meta}");
+    await user.type(screen.getByLabelText("Filter this folder"), "a.mp4");
+    await waitFor(() => expect(screen.queryByText("b.mp4")).toBeNull());
+    await user.clear(screen.getByLabelText("Filter this folder"));
+    await user.type(screen.getByLabelText("Filter this folder"), "a");
+    const row = screen.getByText("a.mp4");
+    document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
+    await act(async () => {
+      fireEvent.pointerDown(row, { button: 0, clientX: 5, clientY: 5 });
+      fireEvent.pointerMove(window, { clientX: 40, clientY: 40, buttons: 1 });
+      fireEvent.pointerUp(window, { clientX: 40, clientY: 40, altKey: true });
+    });
+    await waitFor(() => expect(api.planCopy).toHaveBeenCalled());
+    expect(api.planCopy.mock.calls[0][0].keys).toEqual(["a.mp4"]);
   });
 
   it("shows connection errors from the backend", async () => {

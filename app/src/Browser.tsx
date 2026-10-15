@@ -510,7 +510,7 @@ export function Browser({
         }
         onRowPointerDown={(row, x, y) => {
           if (!active) return;
-          const keys = selected.has(row.key) ? [...selected] : [row.key];
+          const keys = selected.has(row.key) ? selectedRows.map((r) => r.key) : [row.key];
           if (!selected.has(row.key)) setSelected(new Set([row.key]));
           rowDrag.begin(keys, x, y);
         }}
