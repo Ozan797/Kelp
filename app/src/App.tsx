@@ -16,6 +16,10 @@ import { useFileDrop } from "./hooks/useFileDrop";
 import { useSettings } from "./hooks/useSettings";
 import { useUsage } from "./hooks/useUsage";
 import { SettingsSheet } from "./components/SettingsSheet";
+import { CommandPalette } from "./components/CommandPalette";
+import { PROVIDER_NAMES } from "./components/Rail";
+import { useShortcuts } from "./hooks/useShortcuts";
+import type { Command } from "./lib/palette";
 import { DropOverlay } from "./components/DropOverlay";
 import { destinationText, pillText, summaryText } from "./lib/drop";
 import { OverwriteSheet } from "./components/OverwriteSheet";
@@ -27,6 +31,7 @@ type Sheet =
   | { kind: "connection"; initial: ConnectionProfile | null }
   | { kind: "folder" }
   | { kind: "settings" }
+  | { kind: "palette" }
   | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
 
 function parentOf(prefix: string): string {
@@ -154,11 +159,6 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       const typing = event.target instanceof HTMLInputElement;
       if (sheet.kind !== "none" || typing || event.defaultPrevented) return;
-      if (event.metaKey && event.key === ",") {
-        event.preventDefault();
-        setSheet({ kind: "settings" });
-        return;
-      }
       if (event.key === "Backspace" || (event.metaKey && event.key === "ArrowUp")) {
         event.preventDefault();
         up();
@@ -329,6 +329,62 @@ export default function App() {
       {checkingText}
     </div>
   );
+
+  const downloadLabel = (rows: Row[]) =>
+    rows.length === 1 ? `Download ${rows[0].name}` : `Download ${plural(rows.length, rows.every((r) => !r.isFolder) ? "file" : "item")}`;
+
+  useShortcuts(
+    {
+      "Mod+K": () => setSheet({ kind: "palette" }),
+      "Mod+,": () => setSheet({ kind: "settings" }),
+      "Mod+Shift+N": () => place && setSheet({ kind: "folder" }),
+      "Mod+D": () => selectedRows.length > 0 && download(selectedRows),
+    },
+    sheet.kind === "none",
+  );
+
+  const paletteCommands = (): Command[] => {
+    const places: Command[] = [];
+    if (place) {
+      for (const row of listing.rows.filter((r) => r.isFolder)) {
+        places.push({ id: `folder:${row.key}`, label: row.name, detail: `${place.bucket}/${place.prefix}`, group: "places", run: () => go({ bucket: place.bucket, prefix: row.key }) });
+      }
+    }
+    for (const bucket of buckets ?? []) {
+      places.push({ id: `bucket:${bucket}`, label: bucket, detail: "Bucket", group: "places", run: () => go({ bucket, prefix: "" }) });
+    }
+    for (const other of connections ?? []) {
+      if (other.id === connection?.id) continue;
+      places.push({
+        id: `connection:${other.id}`,
+        label: `${PROVIDER_NAMES[other.settings.kind]} · ${other.name}`,
+        detail: "Connection",
+        group: "places",
+        run: () => selectConnection(other.id),
+      });
+    }
+    const actions: Command[] = [];
+    const action = (id: string, label: string, run: () => void, shortcut?: string) => actions.push({ id, label, run, shortcut, group: "actions" });
+    if (place) {
+      action("upload-files", "Upload files…", upload);
+      action("upload-folder", "Upload a folder…", uploadFolder);
+      action("new-folder", "New folder…", () => setSheet({ kind: "folder" }), "⌘⇧N");
+      if (selectedRows.length > 0) action("download", downloadLabel(selectedRows), () => download(selectedRows), "⌘D");
+      action("size", "Calculate size", () => calculateSize(place));
+    }
+    if (transfers.some((t) => t.status === "running" || t.status === "waiting" || t.status === "retrying")) {
+      action("pause-all", "Pause all transfers", () => api.pauseAll().catch((e) => setActionError(toAppError(e))));
+    }
+    if (transfers.some((t) => t.status === "paused")) {
+      action("resume-all", "Resume all transfers", () => api.resumeAll().catch((e) => setActionError(toAppError(e))));
+    }
+    if (transfers.length > 0) action("transfers", "Show transfers", () => setDrawerOpen(true));
+    for (const [theme, label] of [["system", "System"], ["light", "Light"], ["dark", "Dark"]] as const) {
+      if (theme !== settings.theme) action(`theme-${theme}`, `Theme: ${label}`, () => setTheme(theme).catch((e) => setActionError(toAppError(e))));
+    }
+    action("settings", "Settings…", () => setSheet({ kind: "settings" }), "⌘,");
+    return [...actions, ...places];
+  };
 
   if (connections === null && !connectionsError) return <div className="window" />;
   const noConnections = (connections ?? []).length === 0;
@@ -551,6 +607,7 @@ export default function App() {
           }}
         />
       )}
+      {sheet.kind === "palette" && <CommandPalette commands={paletteCommands()} onClose={() => setSheet({ kind: "none" })} />}
       {sheet.kind === "settings" && (
         <SettingsSheet
           theme={settings.theme}

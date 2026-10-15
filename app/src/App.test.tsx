@@ -235,6 +235,39 @@ describe("App", () => {
     delete document.documentElement.dataset.theme;
   });
 
+  it("opens a folder from the command palette", async () => {
+    api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>
+      prefix === "" ? page(["drafts/"], ["a.txt"]) : page([], ["inside.txt"]),
+    );
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.type(screen.getByRole("combobox", { name: "Search commands and places" }), "dra");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("inside.txt")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Search commands and places" })).toBeNull();
+  });
+
+  it("offers Download only with a selection, and ⌘D downloads it but not while typing", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.startDownload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>}k{/Meta}");
+    expect(screen.queryByRole("option", { name: /Download/ })).toBeNull();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByText("a.txt"));
+    await user.click(screen.getByLabelText("Filter this folder"));
+    await user.keyboard("{Meta>}d{/Meta}");
+    expect(api.startDownload).not.toHaveBeenCalled();
+    await user.clear(screen.getByLabelText("Filter this folder"));
+    await user.click(screen.getByText("a.txt"));
+    await user.keyboard("{Meta>}d{/Meta}");
+    await waitFor(() => expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10));
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);

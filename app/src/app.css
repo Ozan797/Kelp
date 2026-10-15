@@ -1070,3 +1070,76 @@ button {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 72px;
+}
+
+.palette {
+  width: min(520px, calc(100vw - 2 * var(--space-6)));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.palette-field {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: 400 15px / 1.4 var(--font-ui);
+  outline: none;
+}
+
+.palette-list {
+  margin: 0;
+  padding: var(--space-1);
+  overflow: auto;
+  list-style: none;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.palette-item.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.palette-detail {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-item.active .palette-detail {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.palette-shortcut {
+  margin-left: auto;
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.palette-empty {
+  padding: var(--space-3);
+  color: var(--text-muted);
+}
