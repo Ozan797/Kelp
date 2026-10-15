@@ -19,6 +19,14 @@ pub struct Settings {
     pub theme: Theme,
 }
 
+pub fn window_theme(theme: Theme) -> Option<tauri::Theme> {
+    match theme {
+        Theme::System => None,
+        Theme::Light => Some(tauri::Theme::Light),
+        Theme::Dark => Some(tauri::Theme::Dark),
+    }
+}
+
 pub struct SettingsStore {
     path: PathBuf,
 }
@@ -72,6 +80,13 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("settings.json"), "{ nope").unwrap();
         assert_eq!(SettingsStore::new(&dir).load(), Settings::default());
+    }
+
+    #[test]
+    fn the_window_follows_the_saved_theme_from_the_start() {
+        assert_eq!(window_theme(Theme::System), None);
+        assert_eq!(window_theme(Theme::Light), Some(tauri::Theme::Light));
+        assert_eq!(window_theme(Theme::Dark), Some(tauri::Theme::Dark));
     }
 
     #[test]

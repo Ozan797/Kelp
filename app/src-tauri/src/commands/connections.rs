@@ -363,10 +363,12 @@ mod tests {
             .await
             .unwrap();
         let before = std::fs::read_to_string(dir.join("connections.json")).unwrap();
-        std::fs::create_dir(dir.join("connections.json.tmp")).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
         let mut edit = draft("renamed", Some("new"));
         edit.id = Some(saved.id);
         let error = save(&state, edit).await.unwrap_err();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(matches!(error, AppError::Io(_)));
         assert_eq!(state.secrets.get(&saved.id).unwrap(), "original");
         assert_eq!(list(&state).await.unwrap()[0].name, "media");

@@ -16,6 +16,16 @@ describe("SettingsSheet", () => {
     expect(onTheme).toHaveBeenCalledWith("dark");
   });
 
+  it("keeps Tab inside the sheet", async () => {
+    render(<SettingsSheet theme="light" onTheme={vi.fn()} onClose={vi.fn()} />);
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(document.activeElement).toBe(done);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Light" }));
+    await userEvent.tab({ shift: true });
+    expect(document.activeElement).toBe(done);
+  });
+
   it("closes with Done or Escape", async () => {
     const onClose = vi.fn();
     render(<SettingsSheet theme="light" onTheme={vi.fn()} onClose={onClose} />);

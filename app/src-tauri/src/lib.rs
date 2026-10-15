@@ -23,7 +23,7 @@ use crate::commands::{
 };
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
-use crate::settings::SettingsStore;
+use crate::settings::{SettingsStore, window_theme};
 use crate::state::{AppState, real_connect};
 use crate::transfers::manager::{Event, ProviderFor, TransferManager};
 use crate::transfers::store::TransferStore;
@@ -64,7 +64,11 @@ pub fn run() {
             let manager = transfer_manager(app.handle(), &dir);
             app.manage(manager.clone());
             app.manage(UsageCounts::new(UsageStore::new(&dir)));
-            app.manage(SettingsStore::new(&dir));
+            let settings = SettingsStore::new(&dir);
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_theme(window_theme(settings.load().theme)).ok();
+            }
+            app.manage(settings);
             tauri::async_runtime::spawn(async move { manager.start().await });
             Ok(())
         })
