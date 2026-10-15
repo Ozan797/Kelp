@@ -9,7 +9,7 @@ use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::model::{ItemState, Resume, Status, Transfer, TransferProgress, TransferView};
+use super::model::{ItemState, Kind, Resume, Status, Transfer, TransferProgress, TransferView};
 use super::paths::Throttle;
 use super::queue::Queue;
 use super::store::TransferStore;
@@ -248,7 +248,7 @@ impl TransferManager {
         let mut inner = self.inner.lock().await;
         inner.in_flight.remove(&(id, index));
         if let Some(transfer) = inner.queue.get_mut(id) {
-            let single = transfer.items.len() == 1;
+            let single = transfer.kind == Kind::File;
             if let Some(item) = transfer.items.get_mut(index) {
                 item.state = ItemState::Done;
                 item.resume = None;
@@ -358,7 +358,7 @@ mod tests {
     use crate::providers::{CompletedPart, PartTarget};
     use crate::testing::FakeProvider;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{Direction, ItemState, Resume, Status, Transfer};
+    use crate::transfers::model::{Direction, ItemState, Kind, Resume, Status, Transfer};
     use crate::transfers::paths::part_path;
     use crate::transfers::store::TransferStore;
     use crate::transfers::worker;
@@ -510,6 +510,34 @@ mod tests {
             download.items[0].local = local;
             download
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_folder_with_one_file_still_shows_the_folder_in_finder() {
+        let provider = Arc::new(
+            FakeProvider::empty().with_objects(vec![("2026/photos/a.jpg", b"aa".to_vec())]),
+        );
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let target = h.dir.join("photos");
+        let mut folder = transfer(vec![item("2026/photos/a.jpg", 2)]);
+        folder.kind = Kind::Folder;
+        folder.direction = Direction::Download;
+        folder.local_root = target.clone();
+        folder.items[0].local = target.join("a.jpg");
+        let id = h.manager.add(folder).await;
+        h.wait_for(id, "finished").await;
+        let finished = h
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                Event::State(view) if view.id == id => view.path.clone(),
+                _ => None,
+            });
+        assert_eq!(finished, Some(target.to_string_lossy().into_owned()));
     }
 
     #[tokio::test(start_paused = true)]
