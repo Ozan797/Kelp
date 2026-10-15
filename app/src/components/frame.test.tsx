@@ -18,12 +18,15 @@ const media: ConnectionProfile = {
 describe("Rail", () => {
   it("names each tile for screen readers and marks the open one", async () => {
     const onSelect = vi.fn();
-    render(<Rail connections={[media]} selectedId="c1" onSelect={onSelect} onAdd={vi.fn()} onContextMenu={vi.fn()} />);
+    const onSettings = vi.fn();
+    render(<Rail connections={[media]} selectedId="c1" onSelect={onSelect} onAdd={vi.fn()} onContextMenu={vi.fn()} onSettings={onSettings} />);
     const tile = screen.getByRole("button", { name: "Hetzner · media" });
     expect(tile.getAttribute("aria-current")).toBe("true");
     await userEvent.click(tile);
     expect(onSelect).toHaveBeenCalledWith("c1");
     expect(screen.getByRole("button", { name: "Add a connection" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(onSettings).toHaveBeenCalled();
   });
 });
 

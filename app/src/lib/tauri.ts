@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -91,6 +92,9 @@ export type UsageView = {
   error: string | null;
 };
 
+export type Theme = "system" | "light" | "dark";
+export type Settings = { theme: Theme };
+
 export type DropSummary = { files: number; folders: number; bytes: number; loose: number };
 
 export type FileDropEvent =
@@ -153,6 +157,9 @@ export const api = {
     call<UsageView | null>("cancel_usage_count", { id, bucket, prefix }),
   onUsageProgress: (handler: (view: UsageView) => void): Promise<UnlistenFn> =>
     listen<UsageView>("usage://progress", (event) => handler(event.payload)),
+  getSettings: () => call<Settings>("get_settings"),
+  setSettings: (settings: Settings) => call<Settings>("set_settings", { settings }),
+  setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
   listTransfers: () => call<TransferView[]>("list_transfers"),
   pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
   resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),

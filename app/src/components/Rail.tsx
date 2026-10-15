@@ -9,9 +9,10 @@ type RailProps = {
   onSelect: (id: string) => void;
   onAdd: () => void;
   onContextMenu: (connection: ConnectionProfile) => void;
+  onSettings: () => void;
 };
 
-export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu }: RailProps) {
+export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu, onSettings }: RailProps) {
   return (
     <nav className="rail" aria-label="Connections" data-tauri-drag-region>
       <ul role="list">
@@ -43,6 +44,9 @@ export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu }
           </button>
         </li>
       </ul>
+      <button type="button" className="rail-settings" title="Settings" aria-label="Settings" onClick={onSettings}>
+        ⚙
+      </button>
     </nav>
   );
 }

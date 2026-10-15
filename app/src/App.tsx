@@ -13,7 +13,9 @@ import { useConnections } from "./hooks/useConnections";
 import { useListing, type Row } from "./hooks/useListing";
 import { useTransfers } from "./hooks/useTransfers";
 import { useFileDrop } from "./hooks/useFileDrop";
+import { useSettings } from "./hooks/useSettings";
 import { useUsage } from "./hooks/useUsage";
+import { SettingsSheet } from "./components/SettingsSheet";
 import { DropOverlay } from "./components/DropOverlay";
 import { destinationText, pillText, summaryText } from "./lib/drop";
 import { OverwriteSheet } from "./components/OverwriteSheet";
@@ -24,6 +26,7 @@ type Sheet =
   | { kind: "none" }
   | { kind: "connection"; initial: ConnectionProfile | null }
   | { kind: "folder" }
+  | { kind: "settings" }
   | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
 
 function parentOf(prefix: string): string {
@@ -38,6 +41,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 export default function App() {
   const { connections, error: connectionsError, reload: reloadConnections } = useConnections();
   const { transfers, clearFinished } = useTransfers();
+  const { settings, setTheme } = useSettings();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [buckets, setBuckets] = useState<string[] | null>(null);
@@ -150,6 +154,11 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       const typing = event.target instanceof HTMLInputElement;
       if (sheet.kind !== "none" || typing || event.defaultPrevented) return;
+      if (event.metaKey && event.key === ",") {
+        event.preventDefault();
+        setSheet({ kind: "settings" });
+        return;
+      }
       if (event.key === "Backspace" || (event.metaKey && event.key === "ArrowUp")) {
         event.preventDefault();
         up();
@@ -399,7 +408,7 @@ export default function App() {
 
   return (
     <div className={noConnections ? "window no-connections" : "window"}>
-      <Rail connections={connections ?? []} selectedId={selectedId} onSelect={selectConnection} onAdd={addConnection} onContextMenu={connectionMenu} />
+      <Rail connections={connections ?? []} selectedId={selectedId} onSelect={selectConnection} onAdd={addConnection} onContextMenu={connectionMenu} onSettings={() => setSheet({ kind: "settings" })} />
       {connection && (
         <BucketColumn
           connection={connection}
@@ -540,6 +549,13 @@ export default function App() {
             setSheet({ kind: "none" });
             startUploads(sheet.paths, sheet.target, false);
           }}
+        />
+      )}
+      {sheet.kind === "settings" && (
+        <SettingsSheet
+          theme={settings.theme}
+          onTheme={(theme) => setTheme(theme).catch((caught) => setActionError(toAppError(caught)))}
+          onClose={() => setSheet({ kind: "none" })}
         />
       )}
       {sheet.kind === "folder" && connection && place && (

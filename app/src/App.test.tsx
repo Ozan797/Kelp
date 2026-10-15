@@ -27,6 +27,9 @@ const api = vi.hoisted(() => ({
   startUploads: vi.fn(),
   inspectDrop: vi.fn(),
   onFileDrop: vi.fn(),
+  getSettings: vi.fn(),
+  setSettings: vi.fn(),
+  setWindowTheme: vi.fn(),
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
@@ -78,6 +81,9 @@ beforeEach(() => {
   api.listTransfers.mockResolvedValue([]);
   api.onFileDrop.mockResolvedValue(() => undefined);
   api.startUploads.mockResolvedValue(["t1"]);
+  api.getSettings.mockResolvedValue({ theme: "system" });
+  api.setSettings.mockImplementation(async (settings: unknown) => settings);
+  api.setWindowTheme.mockResolvedValue(undefined);
   api.getUsage.mockResolvedValue(null);
   api.onUsageProgress.mockResolvedValue(() => undefined);
   api.startUsageCount.mockResolvedValue(null);
@@ -213,6 +219,20 @@ describe("App", () => {
     remove.onSelect();
     await waitFor(() => expect(api.deleteObjects).toHaveBeenCalledWith("c1", "archive", ["a1.txt", "a2.txt"]));
     expect(api.confirm.mock.calls[0][1]).toBe("Delete 2 items");
+  });
+
+  it("applies the saved theme and changes it from Settings", async () => {
+    api.getSettings.mockResolvedValue({ theme: "light" });
+    render(<App />);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>},{/Meta}");
+    await user.click(await screen.findByRole("radio", { name: "Dark" }));
+    expect(api.setSettings).toHaveBeenCalledWith({ theme: "dark" });
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
+    delete document.documentElement.dataset.theme;
   });
 
   it("shows connection errors from the backend", async () => {
