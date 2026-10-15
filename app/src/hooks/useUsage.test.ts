@@ -13,6 +13,7 @@ const view = (prefix: string, bytes: number): UsageView => ({
   complete: true,
   resumeToken: null,
   counting: false,
+  error: null,
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -43,6 +44,17 @@ describe("useUsage", () => {
     expect(result.current.usage).toBeNull();
     act(() => emit(view("2026/", 42)));
     expect(result.current.usage?.bytes).toBe(42);
+  });
+
+  it("keeps a started count when an older load answers late", async () => {
+    let answer: (value: UsageView | null) => void = () => undefined;
+    vi.spyOn(api, "getUsage").mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    vi.spyOn(api, "onUsageProgress").mockResolvedValue(() => undefined);
+    vi.spyOn(api, "startUsageCount").mockResolvedValue({ ...view("2026/", 0), counting: true, complete: false });
+    const { result } = renderHook(() => useUsage("c1", "media", "2026/"));
+    await act(async () => result.current.start());
+    await act(async () => answer(null));
+    expect(result.current.usage?.counting).toBe(true);
   });
 
   it("starts and cancels counts for its place", async () => {

@@ -36,6 +36,7 @@ pub struct UsageView {
     #[serde(flatten)]
     pub result: UsageResult,
     pub counting: bool,
+    pub error: Option<String>,
 }
 
 pub type EmitUsage = Arc<dyn Fn(UsageView) + Send + Sync>;
@@ -132,6 +133,7 @@ impl UsageStore {
 pub struct UsageCounts {
     store: UsageStore,
     results: Mutex<HashMap<String, UsageResult>>,
+    errors: Mutex<HashMap<String, String>>,
     tasks: Mutex<HashMap<String, JoinHandle<()>>>,
 }
 
@@ -146,6 +148,7 @@ impl UsageCounts {
         Arc::new(Self {
             results: Mutex::new(store.load()),
             store,
+            errors: Mutex::new(HashMap::new()),
             tasks: Mutex::new(HashMap::new()),
         })
     }
@@ -156,7 +159,12 @@ impl UsageCounts {
         let counting = lock(&self.tasks)
             .get(&key)
             .is_some_and(|task| !task.is_finished());
-        Some(UsageView { result, counting })
+        let error = lock(&self.errors).get(&key).cloned();
+        Some(UsageView {
+            result,
+            counting,
+            error,
+        })
     }
 
     pub fn start(
@@ -172,6 +180,7 @@ impl UsageCounts {
         if tasks.get(&key).is_some_and(|task| !task.is_finished()) {
             return false;
         }
+        lock(&self.errors).remove(&key);
         let start = lock(&self.results)
             .entry(key.clone())
             .or_insert_with(|| UsageResult::new(connection_id, bucket, prefix))
@@ -186,6 +195,7 @@ impl UsageCounts {
                     emit(UsageView {
                         result: result.clone(),
                         counting: !result.complete,
+                        error: None,
                     });
                 }
                 if saving.ready(Instant::now(), result.complete) {
@@ -194,13 +204,15 @@ impl UsageCounts {
             })
             .await;
             counts.save();
-            if counted.is_err()
-                && let Some(result) = lock(&counts.results).get(&key).cloned()
-            {
-                emit(UsageView {
-                    result,
-                    counting: false,
-                });
+            if let Err(error) = counted {
+                lock(&counts.errors).insert(key.clone(), error.to_string());
+                if let Some(result) = lock(&counts.results).get(&key).cloned() {
+                    emit(UsageView {
+                        result,
+                        counting: false,
+                        error: Some(error.to_string()),
+                    });
+                }
             }
         });
         tasks.insert(usage_key(connection_id, bucket, prefix), task);
@@ -311,6 +323,29 @@ mod tests {
         results.insert(result.key(), result.clone());
         store.save(&results).unwrap();
         assert_eq!(store.load().get(&result.key()), Some(&result));
+    }
+
+    #[tokio::test]
+    async fn a_count_that_fails_says_why_and_a_new_count_clears_it() {
+        let provider = Arc::new(five_objects());
+        provider.fail_next(1, AppError::AccessDenied);
+        let counts = UsageCounts::new(UsageStore::new(&temp_dir()));
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let captured = seen.clone();
+        let emit: EmitUsage = Arc::new(move |view| captured.lock().unwrap().push(view));
+        let id = Uuid::new_v4();
+        counts.start(provider.clone(), id, "media", "2026/", emit.clone());
+        for _ in 0..200 {
+            if !seen.lock().unwrap().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let failed = counts.get(id, "media", "2026/").unwrap();
+        assert_eq!(failed.error, Some(AppError::AccessDenied.to_string()));
+        assert_eq!(seen.lock().unwrap()[0].error, failed.error);
+        counts.start(provider, id, "media", "2026/", emit);
+        assert_eq!(counts.get(id, "media", "2026/").unwrap().error, None);
     }
 
     #[tokio::test]

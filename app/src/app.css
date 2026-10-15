@@ -274,6 +274,13 @@ button {
   height: 10px;
 }
 
+.size-error {
+  overflow: hidden;
+  color: var(--danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .statusbar .link-button {
   font-size: 11px;
 }

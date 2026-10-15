@@ -28,22 +28,23 @@ struct Job {
     meters: Meters,
     slots: Arc<Semaphore>,
     id: Uuid,
+    run: u64,
     index: usize,
     direction: Direction,
     bucket: String,
     item: Item,
 }
 
-pub async fn run(manager: Arc<TransferManager>, transfer: Transfer) {
+pub async fn run(manager: Arc<TransferManager>, transfer: Transfer, run: u64) {
     match (manager.provider_for)(transfer.connection_id).await {
-        Ok(provider) => run_items(&manager, &transfer, provider).await,
+        Ok(provider) => run_items(&manager, &transfer, provider, run).await,
         Err(error) => {
             for index in pending(&transfer) {
-                manager.item_failed(transfer.id, index, &error).await;
+                manager.item_failed(transfer.id, index, &error, run).await;
             }
         }
     }
-    manager.worker_finished(transfer.id).await;
+    manager.worker_finished(transfer.id, run).await;
 }
 
 pub async fn clean_up(transfer: &Transfer, provider: Option<Arc<dyn StorageProvider>>) {
@@ -104,6 +105,7 @@ async fn run_items(
     manager: &Arc<TransferManager>,
     transfer: &Transfer,
     provider: Arc<dyn StorageProvider>,
+    run: u64,
 ) {
     let meters: Meters = Arc::default();
     let slots = Arc::new(Semaphore::new(REQUESTS_PER_TRANSFER));
@@ -115,6 +117,7 @@ async fn run_items(
             meters: meters.clone(),
             slots: slots.clone(),
             id: transfer.id,
+            run,
             index,
             direction: transfer.direction,
             bucket: transfer.bucket.clone(),
@@ -126,7 +129,7 @@ async fn run_items(
     loop {
         tokio::select! {
             joined = jobs.join_next() => if joined.is_none() { break },
-            _ = ticker.tick() => manager.progress(transfer.id, per_item(&meters)).await,
+            _ = ticker.tick() => manager.progress(transfer.id, per_item(&meters), run).await,
         }
     }
 }
@@ -139,8 +142,16 @@ impl Job {
         };
         read(&self.meters).retain(|(index, _), _| *index != self.index);
         match outcome {
-            Ok(saved_as) => self.manager.item_done(self.id, self.index, saved_as).await,
-            Err(error) => self.manager.item_failed(self.id, self.index, &error).await,
+            Ok(saved_as) => {
+                self.manager
+                    .item_done(self.id, self.index, saved_as, self.run)
+                    .await
+            }
+            Err(error) => {
+                self.manager
+                    .item_failed(self.id, self.index, &error, self.run)
+                    .await
+            }
         }
     }
 
@@ -170,7 +181,7 @@ impl Job {
             match self.clone().multipart(resume.take()).await {
                 Err(AppError::UploadGone) => {
                     self.manager
-                        .set_resume(self.id, self.index, None, true)
+                        .set_resume(self.id, self.index, None, true, self.run)
                         .await;
                 }
                 other => return other,
@@ -196,12 +207,14 @@ impl Job {
                 if let Some(Resume::Upload { upload_id, .. }) = other {
                     self.abort(&upload_id).await;
                 }
-                let upload_id = self
-                    .with_retries(0, || {
-                        self.provider.start_multipart(&self.bucket, &self.item.key)
-                    })
-                    .await?;
-                (upload_id, part_size(local_size), Vec::new())
+                let size = part_size(local_size);
+                let started = self
+                    .clone()
+                    .start_and_save(size, local_size, local_modified_ms);
+                let upload_id = tokio::spawn(started)
+                    .await
+                    .map_err(|_| AppError::UploadGone)??;
+                (upload_id, size, Vec::new())
             }
         };
         let resume = {
@@ -215,7 +228,13 @@ impl Job {
             }
         };
         self.manager
-            .set_resume(self.id, self.index, Some(resume(done.clone())), true)
+            .set_resume(
+                self.id,
+                self.index,
+                Some(resume(done.clone())),
+                true,
+                self.run,
+            )
             .await;
 
         let plan = ranges(local_size, size);
@@ -252,7 +271,7 @@ impl Job {
                     parts.clone()
                 };
                 job.manager
-                    .set_resume(job.id, job.index, Some(resume(snapshot)), false)
+                    .set_resume(job.id, job.index, Some(resume(snapshot)), false, job.run)
                     .await;
                 Ok::<(), AppError>(())
             });
@@ -264,6 +283,36 @@ impl Job {
         let target = self.target(&upload_id);
         self.with_retries(0, || self.provider.complete_multipart(&target, &parts))
             .await
+    }
+
+    async fn start_and_save(
+        self: Arc<Self>,
+        part_size: u64,
+        local_size: u64,
+        local_modified_ms: u64,
+    ) -> Result<String, AppError> {
+        let upload_id = self
+            .with_retries(0, || {
+                self.provider.start_multipart(&self.bucket, &self.item.key)
+            })
+            .await?;
+        let resume = Resume::Upload {
+            upload_id: upload_id.clone(),
+            part_size,
+            parts: Vec::new(),
+            local_size,
+            local_modified_ms,
+        };
+        let kept = self
+            .manager
+            .set_resume(self.id, self.index, Some(resume), true, self.run)
+            .await;
+        if kept {
+            Ok(upload_id)
+        } else {
+            self.abort(&upload_id).await;
+            Err(AppError::UploadGone)
+        }
     }
 
     fn target<'a>(&'a self, upload_id: &'a str) -> PartTarget<'a> {
@@ -298,7 +347,7 @@ impl Job {
                 break;
             }
             self.manager
-                .set_resume(self.id, self.index, None, true)
+                .set_resume(self.id, self.index, None, true, self.run)
                 .await;
         }
         outcome?;
@@ -316,7 +365,9 @@ impl Job {
         let info = self
             .with_retries(0, || self.provider.head(&self.bucket, &self.item.key))
             .await?;
-        self.manager.set_size(self.id, self.index, info.size).await;
+        self.manager
+            .set_size(self.id, self.index, info.size, self.run)
+            .await;
         let done = match saved {
             Some(Resume::Download {
                 etag, done_ranges, ..
@@ -336,7 +387,13 @@ impl Job {
             }
         };
         self.manager
-            .set_resume(self.id, self.index, Some(resume(done.clone())), true)
+            .set_resume(
+                self.id,
+                self.index,
+                Some(resume(done.clone())),
+                true,
+                self.run,
+            )
             .await;
         let plan = ranges(info.size, PART_SIZE);
         let fetched = Arc::new(Mutex::new(done.clone()));
@@ -370,7 +427,7 @@ impl Job {
                     fetched.clone()
                 };
                 job.manager
-                    .set_resume(job.id, job.index, Some(resume(snapshot)), false)
+                    .set_resume(job.id, job.index, Some(resume(snapshot)), false, job.run)
                     .await;
                 Ok::<(), AppError>(())
             });
@@ -397,9 +454,9 @@ impl Job {
             match result {
                 Err(error) if is_retryable(&error) && tries < MAX_ATTEMPTS => {
                     let wait = backoff(tries, jitter());
-                    self.manager.retrying(self.id, wait).await;
+                    self.manager.retrying(self.id, wait, self.run).await;
                     tokio::time::sleep(wait).await;
-                    self.manager.running(self.id).await;
+                    self.manager.running(self.id, self.run).await;
                     tries += 1;
                 }
                 other => return other,

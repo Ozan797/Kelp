@@ -106,10 +106,16 @@ impl StorageProvider for FakeProvider {
         })
     }
     async fn start_multipart(&self, _: &str, key: &str) -> Result<String, AppError> {
-        self.enter("start_multipart").await?;
-        let mut uploads = lock(&self.uploads);
-        let upload_id = format!("up-{}", uploads.len() + 1);
-        uploads.insert(upload_id.clone(), (key.to_string(), BTreeMap::new()));
+        let upload_id = {
+            let mut uploads = lock(&self.uploads);
+            let upload_id = format!("up-{}", self.calls("start_multipart") + 1);
+            uploads.insert(upload_id.clone(), (key.to_string(), BTreeMap::new()));
+            upload_id
+        };
+        if let Err(error) = self.enter("start_multipart").await {
+            lock(&self.uploads).remove(&upload_id);
+            return Err(error);
+        }
         Ok(upload_id)
     }
     async fn put_part(

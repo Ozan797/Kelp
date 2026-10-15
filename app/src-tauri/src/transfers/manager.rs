@@ -9,7 +9,7 @@ use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::model::{ItemState, Resume, Status, Transfer, TransferProgress, TransferView};
+use super::model::{ItemState, Kind, Resume, Status, Transfer, TransferProgress, TransferView};
 use super::paths::Throttle;
 use super::queue::Queue;
 use super::store::TransferStore;
@@ -36,6 +36,8 @@ struct Inner {
     in_flight: HashMap<(Uuid, usize), u64>,
     reported: HashMap<Uuid, u64>,
     save_throttle: Throttle,
+    runs: HashMap<Uuid, u64>,
+    next_run: u64,
 }
 
 pub struct TransferManager {
@@ -62,6 +64,10 @@ impl Inner {
         Some(transfer.view(self.done(transfer)))
     }
 
+    fn is_current(&self, id: Uuid, run: u64) -> bool {
+        self.runs.get(&id) == Some(&run)
+    }
+
     fn forget_progress(&mut self, id: Uuid) {
         self.in_flight.retain(|(transfer, _), _| *transfer != id);
         self.reported.remove(&id);
@@ -79,6 +85,8 @@ impl TransferManager {
                 in_flight: HashMap::new(),
                 reported: HashMap::new(),
                 save_throttle: Throttle::new(Duration::from_secs(1)),
+                runs: HashMap::new(),
+                next_run: 0,
             }),
             requests: Arc::new(Semaphore::new(MAX_REQUESTS)),
             store,
@@ -119,6 +127,7 @@ impl TransferManager {
         if let Some(task) = inner.tasks.remove(&id) {
             task.abort();
         }
+        inner.runs.remove(&id);
         inner.forget_progress(id);
         self.changed(&mut inner, id);
         self.pump(&mut inner);
@@ -156,6 +165,7 @@ impl TransferManager {
         let (task, removed) = {
             let mut inner = self.inner.lock().await;
             let task = inner.tasks.remove(&id);
+            inner.runs.remove(&id);
             let removed = inner.queue.remove(id);
             inner.forget_progress(id);
             (task, removed)
@@ -176,30 +186,39 @@ impl TransferManager {
         self.pump(&mut inner);
     }
 
-    pub(super) async fn running(&self, id: Uuid) {
+    pub(super) async fn running(&self, id: Uuid, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         if let Some(transfer) = inner.queue.get_mut(id)
             && matches!(transfer.status, Status::Retrying { .. })
         {
             transfer.status = Status::Running;
-            self.changed(&mut inner, id);
+            self.notify(&inner, id);
         }
     }
 
-    pub(super) async fn retrying(&self, id: Uuid, wait: Duration) {
+    pub(super) async fn retrying(&self, id: Uuid, wait: Duration, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         if let Some(transfer) = inner.queue.get_mut(id)
             && transfer.status.is_active()
         {
             transfer.status = Status::Retrying {
                 at_ms: now_ms() + wait.as_millis() as u64,
             };
-            self.changed(&mut inner, id);
+            self.notify(&inner, id);
         }
     }
 
-    pub(super) async fn progress(&self, id: Uuid, in_flight: HashMap<usize, u64>) {
+    pub(super) async fn progress(&self, id: Uuid, in_flight: HashMap<usize, u64>, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         inner.in_flight.retain(|(transfer, _), _| *transfer != id);
         inner.in_flight.extend(
             in_flight
@@ -225,8 +244,12 @@ impl TransferManager {
         index: usize,
         resume: Option<Resume>,
         urgent: bool,
-    ) {
+        run: u64,
+    ) -> bool {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return false;
+        }
         if let Some(item) = inner.queue.get_mut(id).and_then(|t| t.items.get_mut(index)) {
             item.resume = resume;
         }
@@ -235,20 +258,33 @@ impl TransferManager {
         } else {
             self.save_soon(&mut inner);
         }
+        true
     }
 
-    pub(super) async fn set_size(&self, id: Uuid, index: usize, size: u64) {
+    pub(super) async fn set_size(&self, id: Uuid, index: usize, size: u64, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         if let Some(item) = inner.queue.get_mut(id).and_then(|t| t.items.get_mut(index)) {
             item.size = size;
         }
     }
 
-    pub(super) async fn item_done(&self, id: Uuid, index: usize, saved_as: Option<PathBuf>) {
+    pub(super) async fn item_done(
+        &self,
+        id: Uuid,
+        index: usize,
+        saved_as: Option<PathBuf>,
+        run: u64,
+    ) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         inner.in_flight.remove(&(id, index));
         if let Some(transfer) = inner.queue.get_mut(id) {
-            let single = transfer.items.len() == 1;
+            let single = transfer.kind == Kind::File;
             if let Some(item) = transfer.items.get_mut(index) {
                 item.state = ItemState::Done;
                 item.resume = None;
@@ -263,8 +299,11 @@ impl TransferManager {
         self.save_soon(&mut inner);
     }
 
-    pub(super) async fn item_failed(&self, id: Uuid, index: usize, error: &AppError) {
+    pub(super) async fn item_failed(&self, id: Uuid, index: usize, error: &AppError, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         inner.in_flight.remove(&(id, index));
         if let Some(item) = inner.queue.get_mut(id).and_then(|t| t.items.get_mut(index)) {
             item.state = ItemState::Failed {
@@ -274,9 +313,13 @@ impl TransferManager {
         self.save_soon(&mut inner);
     }
 
-    pub(super) async fn worker_finished(self: &Arc<Self>, id: Uuid) {
+    pub(super) async fn worker_finished(self: &Arc<Self>, id: Uuid, run: u64) {
         let mut inner = self.inner.lock().await;
+        if !inner.is_current(id, run) {
+            return;
+        }
         inner.tasks.remove(&id);
+        inner.runs.remove(&id);
         let active = inner
             .queue
             .get(id)
@@ -292,6 +335,11 @@ impl TransferManager {
             self.save(&mut inner);
         }
         self.pump(&mut inner);
+    }
+
+    #[cfg(test)]
+    pub(super) async fn run_of(&self, id: Uuid) -> Option<u64> {
+        self.inner.lock().await.runs.get(&id).copied()
     }
 
     async fn ids(&self) -> Vec<Uuid> {
@@ -312,17 +360,24 @@ impl TransferManager {
             transfer.status = Status::Running;
             let snapshot = transfer.clone();
             let manager = self.clone();
-            let task = tokio::spawn(async move { worker::run(manager, snapshot).await });
+            inner.next_run += 1;
+            let run = inner.next_run;
+            inner.runs.insert(id, run);
+            let task = tokio::spawn(async move { worker::run(manager, snapshot, run).await });
             inner.tasks.insert(id, task);
             self.changed(inner, id);
         }
     }
 
     fn changed(&self, inner: &mut Inner, id: Uuid) {
+        self.notify(inner, id);
+        self.save(inner);
+    }
+
+    fn notify(&self, inner: &Inner, id: Uuid) {
         if let Some(view) = inner.view(id) {
             (self.emit)(Event::State(view));
         }
-        self.save(inner);
     }
 
     fn save(&self, inner: &mut Inner) {
@@ -358,7 +413,7 @@ mod tests {
     use crate::providers::{CompletedPart, PartTarget};
     use crate::testing::FakeProvider;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{Direction, ItemState, Resume, Status, Transfer};
+    use crate::transfers::model::{Direction, ItemState, Kind, Resume, Status, Transfer};
     use crate::transfers::paths::part_path;
     use crate::transfers::store::TransferStore;
     use crate::transfers::worker;
@@ -513,6 +568,34 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn a_folder_with_one_file_still_shows_the_folder_in_finder() {
+        let provider = Arc::new(
+            FakeProvider::empty().with_objects(vec![("2026/photos/a.jpg", b"aa".to_vec())]),
+        );
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let target = h.dir.join("photos");
+        let mut folder = transfer(vec![item("2026/photos/a.jpg", 2)]);
+        folder.kind = Kind::Folder;
+        folder.direction = Direction::Download;
+        folder.local_root = target.clone();
+        folder.items[0].local = target.join("a.jpg");
+        let id = h.manager.add(folder).await;
+        h.wait_for(id, "finished").await;
+        let finished = h
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                Event::State(view) if view.id == id => view.path.clone(),
+                _ => None,
+            });
+        assert_eq!(finished, Some(target.to_string_lossy().into_owned()));
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn a_big_upload_goes_in_parts() {
         let h = harness();
         h.manager.start().await;
@@ -604,6 +687,24 @@ mod tests {
         h.wait_for(id, "finished").await;
         assert_eq!(std::fs::read(h.dir.join("big.bin")).unwrap(), bytes);
         assert_eq!(h.provider.calls("get_range"), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_while_an_upload_is_being_created_leaves_nothing_behind() {
+        let h = harness();
+        h.provider.hold();
+        h.manager.start().await;
+        let (big, _) = h.big_upload();
+        let id = h.manager.add(big).await;
+        h.settle().await;
+        assert_eq!(h.provider.calls("start_multipart"), 1);
+        h.manager.cancel(id).await;
+        h.provider.release();
+        for _ in 0..50 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(h.provider.open_uploads(), 0);
+        assert_eq!(h.provider.calls("put_part"), 0);
     }
 
     #[tokio::test(start_paused = true)]
@@ -809,6 +910,19 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn waiting_to_retry_does_not_rewrite_the_saved_queue() {
+        let h = harness();
+        h.provider.fail_next(1, AppError::Network);
+        h.manager.start().await;
+        let id = h.manager.add(h.upload("a.txt", b"x")).await;
+        h.wait_for(id, "retrying").await;
+        let saved = std::fs::read_to_string(h.dir.join("transfers.json")).unwrap();
+        assert!(saved.contains("\"running\""), "{saved}");
+        assert!(!saved.contains("retrying"), "{saved}");
+        assert!(!saved.contains("\n  "), "saved file should be compact");
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn five_network_errors_fail_the_transfer() {
         let h = harness();
         h.provider.fail_next(5, AppError::Network);
@@ -852,6 +966,28 @@ mod tests {
         h.wait_for(ids[4], "finished").await;
         h.manager.resume(ids[0]).await;
         h.wait_for(ids[0], "finished").await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_old_worker_cannot_change_a_transfer_after_pause_and_resume() {
+        let h = harness();
+        h.provider.hold();
+        h.manager.start().await;
+        let id = h.manager.add(h.upload("a.txt", b"x")).await;
+        h.settle().await;
+        let old = h.manager.run_of(id).await.unwrap();
+        h.manager.pause(id).await;
+        h.manager.resume(id).await;
+        h.settle().await;
+        assert_ne!(h.manager.run_of(id).await, Some(old));
+        let accepted = h.manager.set_resume(id, 0, None, true, old).await;
+        assert!(!accepted);
+        h.manager.item_done(id, 0, None, old).await;
+        h.manager.worker_finished(id, old).await;
+        let views = h.manager.list().await;
+        assert_eq!((views[0].status, views[0].files_done), ("running", 0));
+        h.provider.release();
+        h.wait_for(id, "finished").await;
     }
 
     #[tokio::test(start_paused = true)]

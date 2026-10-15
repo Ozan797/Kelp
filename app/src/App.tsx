@@ -45,6 +45,7 @@ export default function App() {
   const [sheet, setSheet] = useState<Sheet>({ kind: "none" });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionError, setActionError] = useState<AppError | null>(null);
+  const [countOnOpen, setCountOnOpen] = useState<Place | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
   const lastPlaces = useRef<Record<string, Place>>({});
 
@@ -52,6 +53,13 @@ export default function App() {
   const place = position >= 0 ? history[position] : null;
   const listing = useListing(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
   const size = useUsage(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
+  const startSize = size.start;
+
+  useEffect(() => {
+    if (!countOnOpen || countOnOpen.bucket !== place?.bucket || countOnOpen.prefix !== place.prefix) return;
+    setCountOnOpen(null);
+    startSize().catch((caught) => setActionError(toAppError(caught)));
+  }, [countOnOpen, place?.bucket, place?.prefix, startSize]);
 
   const selectConnection = (id: string) => {
     if (id === selectedId) return;
@@ -239,9 +247,9 @@ export default function App() {
       .catch(() => undefined);
   };
 
-  const calculateSize = (bucket: string, prefix: string) => {
-    if (!connection) return;
-    api.startUsageCount(connection.id, bucket, prefix).catch((e) => setActionError(toAppError(e)));
+  const calculateSize = (target: Place) => {
+    go(target);
+    setCountOnOpen(target);
   };
 
   const bucketMenu = (bucket: string) => {
@@ -249,10 +257,7 @@ export default function App() {
       .showContextMenu([
         {
           label: "Calculate size",
-          onSelect: () => {
-            go({ bucket, prefix: "" });
-            calculateSize(bucket, "");
-          },
+          onSelect: () => calculateSize({ bucket, prefix: "" }),
         },
       ])
       .catch(() => undefined);
@@ -271,8 +276,7 @@ export default function App() {
       entries.push({
         label: "Calculate size",
         onSelect: () => {
-          openRow(row);
-          if (place) calculateSize(place.bucket, row.key);
+          if (place) calculateSize({ bucket: place.bucket, prefix: row.key });
         },
       });
     }
