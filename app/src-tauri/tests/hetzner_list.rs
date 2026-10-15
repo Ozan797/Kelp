@@ -204,7 +204,7 @@ async fn round_trips_a_multipart_file_in_ranges() {
     let key = format!("kelp-test/{stamp}.bin");
 
     let upload_id = provider
-        .start_multipart(&bucket, &key)
+        .start_multipart(&bucket, &key, None)
         .await
         .expect("start multipart");
     let target = PartTarget {

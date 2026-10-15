@@ -218,15 +218,22 @@ impl StorageProvider for S3Provider {
                 .and_then(|size| u64::try_from(size).ok())
                 .unwrap_or(0),
             etag: output.e_tag().unwrap_or_default().to_string(),
+            content_type: output.content_type().map(str::to_string),
         })
     }
 
-    async fn start_multipart(&self, bucket: &str, key: &str) -> Result<String, AppError> {
+    async fn start_multipart(
+        &self,
+        bucket: &str,
+        key: &str,
+        content_type: Option<&str>,
+    ) -> Result<String, AppError> {
         let output = self
             .client
             .create_multipart_upload()
             .bucket(bucket)
             .key(key)
+            .set_content_type(content_type.map(str::to_string))
             .send()
             .await
             .map_err(|error| classify(error, bucket))?;
@@ -312,12 +319,18 @@ impl StorageProvider for S3Provider {
         Ok(())
     }
 
-    async fn copy_object(&self, from: &ObjectRef<'_>, to: &ObjectRef<'_>) -> Result<(), AppError> {
+    async fn copy_object(
+        &self,
+        from: &ObjectRef<'_>,
+        to: &ObjectRef<'_>,
+        etag: &str,
+    ) -> Result<(), AppError> {
         self.transfer_client
             .copy_object()
             .bucket(to.bucket)
             .key(to.key)
             .copy_source(copy_source(from.bucket, from.key))
+            .copy_source_if_match(etag)
             .send()
             .await
             .map_err(|error| classify(error, to.bucket))?;
@@ -330,6 +343,7 @@ impl StorageProvider for S3Provider {
         number: u32,
         from: &ObjectRef<'_>,
         range: Range<u64>,
+        etag: &str,
     ) -> Result<String, AppError> {
         let output = self
             .transfer_client
@@ -340,6 +354,7 @@ impl StorageProvider for S3Provider {
             .part_number(part_number(number)?)
             .copy_source(copy_source(from.bucket, from.key))
             .copy_source_range(range_header(&range))
+            .copy_source_if_match(etag)
             .send()
             .await
             .map_err(|error| classify(error, target.bucket))?;
@@ -379,6 +394,7 @@ impl StorageProvider for S3Provider {
         bucket: &str,
         key: &str,
         bytes: bytes::Bytes,
+        content_type: Option<&str>,
         progress: ProgressFn,
     ) -> Result<(), AppError> {
         let len = i64::try_from(bytes.len()).map_err(|_| AppError::FileTooLarge)?;
@@ -387,6 +403,7 @@ impl StorageProvider for S3Provider {
             .put_object()
             .bucket(bucket)
             .key(key)
+            .set_content_type(content_type.map(str::to_string))
             .content_length(len)
             .body(body)
             .send()

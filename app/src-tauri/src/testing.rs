@@ -36,6 +36,7 @@ pub struct FakeProvider {
     uploads: Mutex<HashMap<String, Upload>>,
     page_size: usize,
     fail_on: Mutex<HashMap<&'static str, AppError>>,
+    content_types: Mutex<HashMap<String, String>>,
 }
 
 #[async_trait]
@@ -105,9 +106,16 @@ impl StorageProvider for FakeProvider {
         Ok(ObjectInfo {
             size,
             etag: self.etag(key),
+            content_type: self.content_type_of(key),
         })
     }
-    async fn start_multipart(&self, _: &str, key: &str) -> Result<String, AppError> {
+    async fn start_multipart(
+        &self,
+        _: &str,
+        key: &str,
+        content_type: Option<&str>,
+    ) -> Result<String, AppError> {
+        self.remember_type(key, content_type);
         let upload_id = {
             let mut uploads = lock(&self.uploads);
             let upload_id = format!("up-{}", self.calls("start_multipart") + 1);
@@ -162,8 +170,16 @@ impl StorageProvider for FakeProvider {
         lock(&self.uploads).remove(target.upload_id);
         Ok(())
     }
-    async fn copy_object(&self, from: &ObjectRef<'_>, to: &ObjectRef<'_>) -> Result<(), AppError> {
+    async fn copy_object(
+        &self,
+        from: &ObjectRef<'_>,
+        to: &ObjectRef<'_>,
+        etag: &str,
+    ) -> Result<(), AppError> {
         self.enter("copy_object").await?;
+        if self.etag(from.key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
         let bytes = self
             .object(from.key)
             .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
@@ -176,8 +192,12 @@ impl StorageProvider for FakeProvider {
         number: u32,
         from: &ObjectRef<'_>,
         range: Range<u64>,
+        etag: &str,
     ) -> Result<String, AppError> {
         self.enter("copy_part").await?;
+        if self.etag(from.key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
         let bytes = self
             .object(from.key)
             .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
@@ -203,9 +223,11 @@ impl StorageProvider for FakeProvider {
         _: &str,
         key: &str,
         bytes: bytes::Bytes,
+        content_type: Option<&str>,
         progress: ProgressFn,
     ) -> Result<(), AppError> {
         self.enter("put_bytes").await?;
+        self.remember_type(key, content_type);
         progress(bytes.len() as u64);
         lock(&self.objects).insert(key.to_string(), bytes.to_vec());
         Ok(())
@@ -288,6 +310,7 @@ impl FakeProvider {
             uploads: Mutex::new(HashMap::new()),
             page_size: 1000,
             fail_on: Mutex::new(HashMap::new()),
+            content_types: Mutex::new(HashMap::new()),
         }
     }
 
@@ -346,6 +369,21 @@ impl FakeProvider {
             .ok_or(AppError::UploadGone)?;
         parts.insert(number, bytes);
         Ok(format!("\"p{number}\""))
+    }
+
+    pub fn with_content_type(self, key: &str, content_type: &str) -> Self {
+        self.remember_type(key, Some(content_type));
+        self
+    }
+
+    pub fn content_type_of(&self, key: &str) -> Option<String> {
+        lock(&self.content_types).get(key).cloned()
+    }
+
+    fn remember_type(&self, key: &str, content_type: Option<&str>) {
+        if let Some(kind) = content_type {
+            lock(&self.content_types).insert(key.to_string(), kind.to_string());
+        }
     }
 
     pub fn set_etag(&self, key: &str, etag: &str) {
@@ -517,7 +555,10 @@ mod tests {
     async fn multipart_parts_join_in_number_order() {
         let provider = fake();
         let source = part_file(b"aaabbbcc");
-        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "big.bin",
@@ -539,7 +580,10 @@ mod tests {
     #[tokio::test]
     async fn an_aborted_upload_is_gone() {
         let provider = fake();
-        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "big.bin",
@@ -587,18 +631,28 @@ mod tests {
                     bucket: "b",
                     key: "copy.bin",
                 },
+                "\"v1\"",
             )
             .await
             .unwrap();
         assert_eq!(provider.object("copy.bin"), Some(b"0123456789".to_vec()));
-        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "big.bin",
             upload_id: &upload_id,
         };
-        let first = provider.copy_part(&target, 1, &from, 0..4).await.unwrap();
-        let second = provider.copy_part(&target, 2, &from, 4..10).await.unwrap();
+        let first = provider
+            .copy_part(&target, 1, &from, 0..4, "\"v1\"")
+            .await
+            .unwrap();
+        let second = provider
+            .copy_part(&target, 2, &from, 4..10, "\"v1\"")
+            .await
+            .unwrap();
         provider
             .complete_multipart(
                 &target,
@@ -619,6 +673,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn server_side_copies_refuse_a_source_that_changed() {
+        let provider = fake().with_objects(vec![("a.bin", b"0123456789".to_vec())]);
+        let from = ObjectRef {
+            bucket: "b",
+            key: "a.bin",
+        };
+        let to = ObjectRef {
+            bucket: "b",
+            key: "c.bin",
+        };
+        assert_eq!(
+            provider.copy_object(&from, &to, "\"old\"").await,
+            Err(AppError::ObjectChanged)
+        );
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        assert_eq!(
+            provider.copy_part(&target, 1, &from, 0..4, "\"old\"").await,
+            Err(AppError::ObjectChanged)
+        );
+    }
+
+    #[tokio::test]
+    async fn content_types_travel_with_new_objects() {
+        let provider = fake()
+            .with_objects(vec![("a.jpg", b"x".to_vec())])
+            .with_content_type("a.jpg", "image/jpeg");
+        assert_eq!(
+            provider
+                .head("b", "a.jpg")
+                .await
+                .unwrap()
+                .content_type
+                .as_deref(),
+            Some("image/jpeg")
+        );
+        provider
+            .put_bytes(
+                "b",
+                "c.jpg",
+                bytes::Bytes::from_static(b"x"),
+                Some("image/jpeg"),
+                no_progress(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            provider.content_type_of("c.jpg").as_deref(),
+            Some("image/jpeg")
+        );
+    }
+
+    #[tokio::test]
     async fn bytes_can_be_put_whole_or_as_parts() {
         let provider = fake();
         provider
@@ -626,12 +740,16 @@ mod tests {
                 "b",
                 "small.txt",
                 bytes::Bytes::from_static(b"hi"),
+                None,
                 no_progress(),
             )
             .await
             .unwrap();
         assert_eq!(provider.object("small.txt"), Some(b"hi".to_vec()));
-        let upload_id = provider.start_multipart("b", "two.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "two.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "two.bin",

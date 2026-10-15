@@ -43,6 +43,7 @@ struct Inner {
 pub struct TransferManager {
     inner: Mutex<Inner>,
     pub(super) requests: Arc<Semaphore>,
+    pub(super) relay_budget: Arc<Semaphore>,
     store: TransferStore,
     emit: Emit,
     pub(super) provider_for: ProviderFor,
@@ -89,6 +90,7 @@ impl TransferManager {
                 next_run: 0,
             }),
             requests: Arc::new(Semaphore::new(MAX_REQUESTS)),
+            relay_budget: Arc::new(Semaphore::new(worker::RELAY_BUDGET_MIB as usize)),
             store,
             emit,
             provider_for,
@@ -259,6 +261,11 @@ impl TransferManager {
             self.save_soon(&mut inner);
         }
         true
+    }
+
+    pub(super) async fn resume_of(&self, id: Uuid, index: usize) -> Option<Resume> {
+        let inner = self.inner.lock().await;
+        inner.queue.get(id)?.items.get(index)?.resume.clone()
     }
 
     pub(super) async fn set_size(&self, id: Uuid, index: usize, size: u64, run: u64) {
@@ -571,7 +578,7 @@ mod tests {
             let (mut big, bytes) = self.big_upload();
             let upload_id = self
                 .provider
-                .start_multipart("media", "2026/big.bin")
+                .start_multipart("media", "2026/big.bin", None)
                 .await
                 .unwrap();
             let target = PartTarget {
@@ -980,7 +987,7 @@ mod tests {
             h.manager.start().await;
             let upload_id = h
                 .provider
-                .start_multipart("media", "cdn/big.bin")
+                .start_multipart("media", "cdn/big.bin", None)
                 .await
                 .unwrap();
             let target = PartTarget {
@@ -1019,6 +1026,84 @@ mod tests {
                 "stamp matches: {stamp_matches}"
             );
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_move_onto_the_same_bucket_and_key_never_deletes_it() {
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/a.jpg", b"aa".to_vec())]));
+        let (h, source_id) = two_connections(source.clone(), source.clone());
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of("v/a.jpg", "v/a.jpg", 2, source_id, true))
+            .await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(source.object("v/a.jpg"), Some(b"aa".to_vec()));
+        assert!(source.deleted().is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_copy_restarted_because_the_source_changed_leaves_no_upload_behind() {
+        let bytes = patterned(BIG);
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/big.bin", bytes.clone())]));
+        source.fail_on("get_bytes", AppError::ObjectChanged);
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source);
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of(
+                "v/big.bin",
+                "cdn/big.bin",
+                BIG as u64,
+                source_id,
+                false,
+            ))
+            .await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("cdn/big.bin"), Some(bytes));
+        assert_eq!(h.provider.open_uploads(), 0);
+        assert_eq!(h.provider.calls("abort_multipart"), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn copies_between_connections_keep_the_content_type() {
+        let source = Arc::new(
+            FakeProvider::empty()
+                .with_objects(vec![
+                    ("v/a.jpg", b"aa".to_vec()),
+                    ("v/big.mov", patterned(BIG)),
+                ])
+                .with_content_type("v/a.jpg", "image/jpeg")
+                .with_content_type("v/big.mov", "video/quicktime"),
+        );
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source);
+        h.manager.start().await;
+        let small = h
+            .manager
+            .add(copy_of("v/a.jpg", "cdn/a.jpg", 2, source_id, false))
+            .await;
+        let big = h
+            .manager
+            .add(copy_of(
+                "v/big.mov",
+                "cdn/big.mov",
+                BIG as u64,
+                source_id,
+                false,
+            ))
+            .await;
+        h.wait_for(small, "finished").await;
+        h.wait_for(big, "finished").await;
+        assert_eq!(
+            h.provider.content_type_of("cdn/a.jpg").as_deref(),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            h.provider.content_type_of("cdn/big.mov").as_deref(),
+            Some("video/quicktime")
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -1069,7 +1154,7 @@ mod tests {
         h.manager.start().await;
         let upload_id = h
             .provider
-            .start_multipart("media", "cdn/big.bin")
+            .start_multipart("media", "cdn/big.bin", None)
             .await
             .unwrap();
         let mut copy = copy_of("v/big.bin", "cdn/big.bin", BIG as u64, source_id, false);

@@ -19,6 +19,12 @@ use crate::error::AppError;
 use crate::providers::{ObjectRef, PartTarget, ProgressFn, StorageProvider};
 
 const REQUESTS_PER_TRANSFER: usize = 4;
+pub const RELAY_BUDGET_MIB: u32 = 256;
+
+pub fn relay_permits(bytes: u64) -> u32 {
+    let mib = bytes.div_ceil(1024 * 1024).max(1);
+    u32::try_from(mib).unwrap_or(u32::MAX).min(RELAY_BUDGET_MIB)
+}
 const MAX_ATTEMPTS: u32 = 5;
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
@@ -213,6 +219,11 @@ impl Job {
                 .await;
             match copied {
                 Err(AppError::ObjectChanged) if attempt == 0 => {
+                    if let Some(Resume::Upload { upload_id, .. }) =
+                        self.manager.resume_of(self.id, self.index).await
+                    {
+                        self.abort(&upload_id).await;
+                    }
                     self.manager
                         .set_resume(self.id, self.index, None, true, self.run)
                         .await;
@@ -223,7 +234,8 @@ impl Job {
                 }
             }
         }
-        if source.move_after {
+        let same_object = source.bucket == self.bucket && from_key == self.item.key;
+        if source.move_after && !same_object {
             let keys = [from_key.clone()];
             self.with_retries(0, || source.provider.delete(&source.bucket, &keys))
                 .await?;
@@ -255,25 +267,34 @@ impl Job {
                     bucket: &self.bucket,
                     key: &self.item.key,
                 };
+                let etag = info.etag.clone();
                 return self
-                    .with_retries(0, || self.provider.copy_object(&from, &to))
+                    .with_retries(0, || self.provider.copy_object(&from, &to, &etag))
                     .await;
             }
+            let etag = info.etag.clone();
             let send: SendPart = Arc::new(move |job, upload_id, number, range| {
-                let (bucket, key) = (bucket.clone(), key.clone());
+                let (bucket, key, etag) = (bucket.clone(), key.clone(), etag.clone());
                 Box::pin(async move {
                     let from = ObjectRef {
                         bucket: &bucket,
                         key: &key,
                     };
                     job.provider
-                        .copy_part(&job.target(&upload_id), number, &from, range)
+                        .copy_part(&job.target(&upload_id), number, &from, range, &etag)
                         .await
                 })
             });
             let part = COPY_PART_SIZE.max(part_size(info.size));
             return self
-                .in_parts(saved, info.size, fingerprint, part, send)
+                .in_parts(
+                    saved,
+                    info.size,
+                    fingerprint,
+                    part,
+                    info.content_type.clone(),
+                    send,
+                )
                 .await;
         }
         let from = source.provider.clone();
@@ -287,7 +308,13 @@ impl Job {
                         from.get_bytes(&bucket, &key, &etag, 0..info.size).await?
                     };
                     self.provider
-                        .put_bytes(&self.bucket, &self.item.key, bytes, self.meter(0))
+                        .put_bytes(
+                            &self.bucket,
+                            &self.item.key,
+                            bytes,
+                            info.content_type.as_deref(),
+                            self.meter(0),
+                        )
                         .await
                 })
                 .await;
@@ -297,14 +324,23 @@ impl Job {
             let (from, bucket, key, etag) =
                 (from.clone(), bucket.clone(), key.clone(), etag.clone());
             Box::pin(async move {
+                let permits = relay_permits(range.end - range.start);
+                let _budget = job.manager.relay_budget.acquire_many(permits).await;
                 let bytes = from.get_bytes(&bucket, &key, &etag, range).await?;
                 job.provider
                     .put_part_bytes(&job.target(&upload_id), number, bytes, job.meter(number))
                     .await
             })
         });
-        self.in_parts(saved, info.size, fingerprint, part_size(info.size), send)
-            .await
+        self.in_parts(
+            saved,
+            info.size,
+            fingerprint,
+            part_size(info.size),
+            info.content_type.clone(),
+            send,
+        )
+        .await
     }
 
     async fn upload(self: Arc<Self>) -> Result<(), AppError> {
@@ -337,7 +373,7 @@ impl Job {
             })
         });
         let saved = self.item.resume.clone();
-        self.in_parts(saved, size, fingerprint, part_size(size), send)
+        self.in_parts(saved, size, fingerprint, part_size(size), None, send)
             .await
     }
 
@@ -347,13 +383,21 @@ impl Job {
         size: u64,
         fingerprint: u64,
         part: u64,
+        content_type: Option<String>,
         send: SendPart,
     ) -> Result<(), AppError> {
         let mut resume = saved;
         for _ in 0..2 {
             let sent = self
                 .clone()
-                .multipart(resume.take(), size, fingerprint, part, send.clone())
+                .multipart(
+                    resume.take(),
+                    size,
+                    fingerprint,
+                    part,
+                    content_type.clone(),
+                    send.clone(),
+                )
                 .await;
             match sent {
                 Err(AppError::UploadGone) => {
@@ -373,6 +417,7 @@ impl Job {
         local_size: u64,
         local_modified_ms: u64,
         part: u64,
+        content_type: Option<String>,
         send: SendPart,
     ) -> Result<(), AppError> {
         let (upload_id, size, done) = match saved {
@@ -389,9 +434,9 @@ impl Job {
                 if let Some(Resume::Upload { upload_id, .. }) = other {
                     self.abort(&upload_id).await;
                 }
-                let started = self
-                    .clone()
-                    .start_and_save(part, local_size, local_modified_ms);
+                let started =
+                    self.clone()
+                        .start_and_save(part, local_size, local_modified_ms, content_type);
                 let upload_id = tokio::spawn(started)
                     .await
                     .map_err(|_| AppError::UploadGone)??;
@@ -464,10 +509,12 @@ impl Job {
         part_size: u64,
         local_size: u64,
         local_modified_ms: u64,
+        content_type: Option<String>,
     ) -> Result<String, AppError> {
         let upload_id = self
             .with_retries(0, || {
-                self.provider.start_multipart(&self.bucket, &self.item.key)
+                self.provider
+                    .start_multipart(&self.bucket, &self.item.key, content_type.as_deref())
             })
             .await?;
         let resume = Resume::Upload {
@@ -636,5 +683,17 @@ impl Job {
                 other => return other,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relays_hold_at_most_a_shared_budget_of_memory() {
+        assert_eq!(relay_permits(8 * 1024 * 1024), 8);
+        assert_eq!(relay_permits(1), 1);
+        assert_eq!(relay_permits(525 * 1024 * 1024), RELAY_BUDGET_MIB);
     }
 }
