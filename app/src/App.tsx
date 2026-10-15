@@ -33,7 +33,7 @@ type Sheet =
   | { kind: "folder" }
   | { kind: "settings" }
   | { kind: "palette" }
-  | { kind: "preview"; index: number }
+  | { kind: "preview"; key: string }
   | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
 
 function parentOf(prefix: string): string {
@@ -174,6 +174,10 @@ export default function App() {
   const selectedRows = useMemo(() => visibleRows.filter((r) => selected.has(r.key)), [visibleRows, selected]);
   const previewFiles = useMemo(() => sortRows(visibleRows, sort).filter((r) => !r.isFolder), [visibleRows, sort]);
   const previewStart = previewFiles.findIndex((r) => selected.has(r.key));
+  const previewIndex = sheet.kind === "preview" ? previewFiles.findIndex((r) => r.key === sheet.key) : -1;
+  useEffect(() => {
+    if (sheet.kind === "preview" && previewIndex < 0 && !listing.loading) setSheet({ kind: "none" });
+  }, [sheet.kind, previewIndex, listing.loading]);
   const selectedBytes = selectedRows.reduce((sum, r) => sum + (r.size ?? 0), 0);
 
   const download = async (rows: Row[]) => {
@@ -343,7 +347,7 @@ export default function App() {
       "Mod+,": () => setSheet({ kind: "settings" }),
       "Mod+Shift+N": () => place && setSheet({ kind: "folder" }),
       "Mod+D": () => selectedRows.length > 0 && download(selectedRows),
-      Space: () => previewStart >= 0 && setSheet({ kind: "preview", index: previewStart }),
+      Space: () => previewStart >= 0 && setSheet({ kind: "preview", key: previewFiles[previewStart].key }),
     },
     sheet.kind === "none",
   );
@@ -377,7 +381,7 @@ export default function App() {
       if (selectedRows.length > 0) action("download", downloadLabel(selectedRows), () => download(selectedRows), "⌘D");
       action("size", "Calculate size", () => calculateSize(place));
       if (previewStart >= 0) {
-        action("preview", `Preview ${previewFiles[previewStart].name}`, () => setSheet({ kind: "preview", index: previewStart }), "Space");
+        action("preview", `Preview ${previewFiles[previewStart].name}`, () => setSheet({ kind: "preview", key: previewFiles[previewStart].key }), "Space");
       }
     }
     if (transfers.some((t) => t.status === "running" || t.status === "waiting" || t.status === "retrying")) {
@@ -615,13 +619,13 @@ export default function App() {
           }}
         />
       )}
-      {sheet.kind === "preview" && connection && place && (
+      {sheet.kind === "preview" && previewIndex >= 0 && connection && place && (
         <Preview
           connectionId={connection.id}
           bucket={place.bucket}
           files={previewFiles}
-          index={sheet.index}
-          onIndex={(index) => setSheet({ kind: "preview", index })}
+          index={previewIndex}
+          onIndex={(index) => setSheet({ kind: "preview", key: previewFiles[index].key })}
           onClose={() => setSheet({ kind: "none" })}
           onDownload={(row) => download([row])}
         />

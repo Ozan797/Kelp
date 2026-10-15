@@ -7,8 +7,7 @@ const LARGEST_IMAGE = 50_000_000;
 export const TEXT_LIMIT = 1024 * 1024;
 
 export function previewUrl(connectionId: string, bucket: string, key: string): string {
-  const path = key.split("/").map(encodeURIComponent).join("/");
-  return `kelp-preview://localhost/${encodeURIComponent(connectionId)}/${encodeURIComponent(bucket)}/${path}`;
+  return `kelp-preview://localhost/${encodeURIComponent(connectionId)}?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(key)}`;
 }
 
 export function previewKind(row: Row): PreviewKind {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Row } from "../hooks/useListing";
@@ -20,12 +20,12 @@ describe("Preview", () => {
     renderPreview(3);
     expect(screen.getByRole("dialog", { name: "thumb.jpg" })).toBeTruthy();
     expect(screen.getByText("92 KB · 3 Oct · 4 of 5")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "thumb.jpg" }).getAttribute("src")).toBe("kelp-preview://localhost/c1/archive/v/thumb.jpg");
+    expect(screen.getByRole("img", { name: "thumb.jpg" }).getAttribute("src")).toBe("kelp-preview://localhost/c1?bucket=archive&key=v%2Fthumb.jpg");
   });
 
   it("plays video", () => {
     const { container } = render(<Preview connectionId="c1" bucket="archive" files={files} index={2} onIndex={vi.fn()} onClose={vi.fn()} onDownload={vi.fn()} />);
-    expect(container.querySelector("video")?.getAttribute("src")).toBe("kelp-preview://localhost/c1/archive/v/c.mp4");
+    expect(container.querySelector("video")?.getAttribute("src")).toBe("kelp-preview://localhost/c1?bucket=archive&key=v%2Fc.mp4");
   });
 
   it("shows the first megabyte of text and says so", async () => {
@@ -34,7 +34,7 @@ describe("Preview", () => {
     renderPreview(1);
     expect(await screen.findByText("hello")).toBeTruthy();
     expect(screen.getByText("Showing the first 1 MB.")).toBeTruthy();
-    expect(fetcher).toHaveBeenCalledWith("kelp-preview://localhost/c1/archive/v/b.txt", { headers: { Range: "bytes=0-1048575" } });
+    expect(fetcher).toHaveBeenCalledWith("kelp-preview://localhost/c1?bucket=archive&key=v%2Fb.txt", { headers: { Range: "bytes=0-1048575" } });
   });
 
   it("offers Download for files it can't show", async () => {
@@ -53,6 +53,21 @@ describe("Preview", () => {
     await userEvent.keyboard(" ");
     await userEvent.keyboard("{Escape}");
     expect(props.onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("still listens for keys when focus has fallen out of the preview", async () => {
+    const props = renderPreview(4);
+    (document.activeElement as HTMLElement | null)?.blur();
+    await userEvent.keyboard("{Escape}");
+    expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it("says when an image can't load and tries again", async () => {
+    renderPreview(3);
+    fireEvent.error(screen.getByRole("img", { name: "thumb.jpg" }));
+    expect(screen.getByText("Kelp couldn't load this preview.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getByRole("img", { name: "thumb.jpg" })).toBeTruthy();
   });
 
   it("stops at the ends", async () => {

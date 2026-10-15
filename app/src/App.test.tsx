@@ -282,6 +282,30 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "b.jpg" })).toBeNull();
   });
 
+  it("keeps previewing the same file when the folder reloads", async () => {
+    api.listObjects.mockResolvedValue(page([], ["b.jpg", "c.jpg"]));
+    let emit: (view: TransferView) => void = () => undefined;
+    api.onTransferState.mockImplementation(async (handler: (view: TransferView) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    await screen.findByText("b.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("b.jpg"));
+    await user.keyboard(" ");
+    await screen.findByRole("dialog", { name: "b.jpg" });
+    api.listObjects.mockResolvedValue(page([], ["a.jpg", "b.jpg", "c.jpg"]));
+    const upload: TransferView = {
+      id: "t9", direction: "upload", kind: "file", name: "a.jpg", destination: "archive/", status: "finished",
+      retryAt: null, total: 1, done: 1, filesTotal: 1, filesDone: 1, filesFailed: 0, error: null, path: null,
+    };
+    act(() => emit(upload));
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+    await act(async () => undefined);
+    expect(screen.getByRole("dialog", { name: "b.jpg" })).toBeTruthy();
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);

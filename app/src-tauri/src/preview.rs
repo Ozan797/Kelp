@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use tauri::http::{Request, Response, StatusCode, header};
+use tauri::http::{Method, Request, Response, StatusCode, header};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
@@ -35,20 +35,27 @@ fn decode(segment: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-pub fn parse_preview_path(path: &str) -> Option<(Uuid, String, String)> {
-    let mut parts = path.trim_start_matches('/').splitn(3, '/');
-    let id = Uuid::parse_str(parts.next()?).ok()?;
-    let bucket = decode(parts.next()?)?;
-    let key = parts
-        .next()?
-        .split('/')
-        .map(decode)
-        .collect::<Option<Vec<_>>>()?
-        .join("/");
-    if bucket.is_empty() || key.is_empty() {
-        return None;
+pub fn parse_preview_address(path: &str, query: Option<&str>) -> Option<(Uuid, String, String)> {
+    let id = Uuid::parse_str(path.trim_start_matches('/')).ok()?;
+    let (mut bucket, mut key) = (None, None);
+    for pair in query?.split('&') {
+        let (name, value) = pair.split_once('=')?;
+        match name {
+            "bucket" => bucket = Some(decode(value)?),
+            "key" => key = Some(decode(value)?),
+            _ => {}
+        }
     }
-    Some((id, bucket, key))
+    let (bucket, key) = (bucket?, key?);
+    (!bucket.is_empty() && !key.is_empty()).then_some((id, bucket, key))
+}
+
+pub fn allowed_origin(origin: Option<&str>) -> Option<&str> {
+    let origin = origin?;
+    let ours = origin == "tauri://localhost"
+        || origin == "http://tauri.localhost"
+        || origin.starts_with("http://localhost:");
+    ours.then_some(origin)
 }
 
 pub fn parse_range(header: &str, size: u64) -> Option<Range<u64>> {
@@ -101,6 +108,15 @@ pub async fn respond(
 ) -> Result<Answer, AppError> {
     let info = provider.head(bucket, key).await?;
     let content_type = content_type(key);
+    if info.size == 0 {
+        return Ok(Answer {
+            status: 200,
+            content_type,
+            content_range: None,
+            body: Vec::new(),
+        });
+    }
+    let range = range.or((info.size > PIECE).then_some("bytes=0-"));
     let Some(header) = range else {
         let body = if info.size == 0 {
             Vec::new()
@@ -143,21 +159,48 @@ pub async fn respond(
     })
 }
 
-fn plain(status: StatusCode, message: String) -> Response<Vec<u8>> {
-    Response::builder()
+fn reply(origin: Option<&str>, status: StatusCode) -> tauri::http::response::Builder {
+    let builder = Response::builder()
         .status(status)
+        .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "Range")
+        .header(header::ACCESS_CONTROL_ALLOW_METHODS, "GET")
+        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Range");
+    match allowed_origin(origin) {
+        Some(origin) => builder.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin),
+        None => builder,
+    }
+}
+
+fn plain(origin: Option<&str>, status: StatusCode, message: String) -> Response<Vec<u8>> {
+    reply(origin, status)
         .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
         .body(message.into_bytes())
         .unwrap_or_default()
 }
 
 pub async fn handle(app: &AppHandle, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
-    let Some((id, bucket, key)) = parse_preview_path(request.uri().path()) else {
-        return plain(StatusCode::NOT_FOUND, "Not found".into());
+    let origin = request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    let origin = origin.as_deref();
+    if request.method() == Method::OPTIONS {
+        return reply(origin, StatusCode::NO_CONTENT)
+            .body(Vec::new())
+            .unwrap_or_default();
+    }
+    if request.method() != Method::GET {
+        return plain(origin, StatusCode::METHOD_NOT_ALLOWED, "Only GET".into());
+    }
+    let Some((id, bucket, key)) =
+        parse_preview_address(request.uri().path(), request.uri().query())
+    else {
+        return plain(origin, StatusCode::NOT_FOUND, "Not found".into());
     };
     let provider = match app.state::<AppState>().provider(id).await {
         Ok(provider) => provider,
-        Err(error) => return plain(StatusCode::NOT_FOUND, error.to_string()),
+        Err(error) => return plain(origin, StatusCode::NOT_FOUND, error.to_string()),
     };
     let range = request
         .headers()
@@ -165,16 +208,18 @@ pub async fn handle(app: &AppHandle, request: Request<Vec<u8>>) -> Response<Vec<
         .and_then(|value| value.to_str().ok());
     match respond(provider.as_ref(), &bucket, &key, range).await {
         Ok(answer) => {
-            let mut response = Response::builder()
-                .status(answer.status)
-                .header(header::CONTENT_TYPE, answer.content_type)
-                .header(header::ACCEPT_RANGES, "bytes");
+            let mut response = reply(
+                origin,
+                StatusCode::from_u16(answer.status).unwrap_or(StatusCode::OK),
+            )
+            .header(header::CONTENT_TYPE, answer.content_type)
+            .header(header::ACCEPT_RANGES, "bytes");
             if let Some(content_range) = answer.content_range {
                 response = response.header(header::CONTENT_RANGE, content_range);
             }
             response.body(answer.body).unwrap_or_default()
         }
-        Err(error) => plain(StatusCode::BAD_GATEWAY, error.to_string()),
+        Err(error) => plain(origin, StatusCode::BAD_GATEWAY, error.to_string()),
     }
 }
 
@@ -188,16 +233,42 @@ mod tests {
     use crate::testing::FakeProvider;
 
     #[test]
-    fn preview_paths_round_trip_awkward_keys() {
+    fn preview_addresses_round_trip_awkward_keys() {
         let id = Uuid::new_v4();
-        let path = format!("/{id}/media%20archive/a%20b%23c%3Fd/%C3%BC.txt");
+        let path = format!("/{id}");
+        let query = "bucket=media%20archive&key=a%20b%23c%3Fd%2F..%2F%C3%BC%2B.txt";
         assert_eq!(
-            parse_preview_path(&path),
-            Some((id, "media archive".to_string(), "a b#c?d/ü.txt".to_string()))
+            parse_preview_address(&path, Some(query)),
+            Some((
+                id,
+                "media archive".to_string(),
+                "a b#c?d/../ü+.txt".to_string()
+            ))
         );
-        assert_eq!(parse_preview_path("/not-a-uuid/b/k"), None);
-        assert_eq!(parse_preview_path(&format!("/{id}/bucket")), None);
-        assert_eq!(parse_preview_path(&format!("/{id}/b/bad%zz")), None);
+        assert_eq!(
+            parse_preview_address("/not-a-uuid", Some("bucket=b&key=k")),
+            None
+        );
+        assert_eq!(parse_preview_address(&path, Some("bucket=b")), None);
+        assert_eq!(
+            parse_preview_address(&path, Some("bucket=b&key=bad%zz")),
+            None
+        );
+        assert_eq!(parse_preview_address(&path, None), None);
+    }
+
+    #[test]
+    fn only_the_app_itself_may_read_previews() {
+        assert_eq!(
+            allowed_origin(Some("tauri://localhost")),
+            Some("tauri://localhost")
+        );
+        assert_eq!(
+            allowed_origin(Some("http://localhost:1420")),
+            Some("http://localhost:1420")
+        );
+        assert_eq!(allowed_origin(Some("https://evil.example")), None);
+        assert_eq!(allowed_origin(None), None);
     }
 
     #[test]
@@ -271,6 +342,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(later.body, (10..20).map(|n| n as u8).collect::<Vec<u8>>());
+    }
+
+    #[tokio::test]
+    async fn a_big_file_without_a_range_still_comes_in_pieces() {
+        let answer = respond(fake().as_ref(), "b", "v/clip.mp4", None)
+            .await
+            .unwrap();
+        assert_eq!(answer.status, 206);
+        assert_eq!(answer.body.len(), 8 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn an_empty_file_is_an_empty_answer_even_with_a_range() {
+        let provider = Arc::new(FakeProvider::empty().with_objects(vec![("e.txt", Vec::new())]));
+        let answer = respond(provider.as_ref(), "b", "e.txt", Some("bytes=0-1048575"))
+            .await
+            .unwrap();
+        assert_eq!((answer.status, answer.body.len()), (200, 0));
     }
 
     #[tokio::test]

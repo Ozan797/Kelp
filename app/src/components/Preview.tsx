@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Row } from "../hooks/useListing";
 import { formatBytes, formatModified } from "../lib/format";
 import { TEXT_LIMIT, previewKind, previewUrl } from "../lib/preview";
@@ -26,9 +26,9 @@ function TextPreview({ url, size }: { url: string; size: number }) {
       .then(async (response) => {
         const body = await response.text();
         if (!live) return;
-        setText(response.ok ? { state: "ready", body } : { state: "failed", message: body || "Kelp couldn't load this preview." });
+        setText(response.ok ? { state: "ready", body } : { state: "failed", message: body || COULD_NOT_LOAD });
       })
-      .catch(() => live && setText({ state: "failed", message: "Kelp couldn't load this preview." }));
+      .catch(() => live && setText({ state: "failed", message: COULD_NOT_LOAD }));
     return () => {
       live = false;
     };
@@ -53,9 +53,65 @@ function TextPreview({ url, size }: { url: string; size: number }) {
   );
 }
 
+const COULD_NOT_LOAD = "Kelp couldn't load this preview.";
+
+function MediaPreview({ kind, url, name }: { kind: "image" | "video"; url: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  if (failed) {
+    return (
+      <div className="preview-empty">
+        <p>{COULD_NOT_LOAD}</p>
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={() => {
+            setFailed(false);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+  return kind === "image" ? (
+    <img key={attempt} src={url} alt={name} onError={() => setFailed(true)} />
+  ) : (
+    <video key={attempt} src={url} controls onError={() => setFailed(true)} />
+  );
+}
+
 export function Preview({ connectionId, bucket, files, index, onIndex, onClose, onDownload }: PreviewProps) {
   const dialog = useRef<HTMLDivElement>(null);
   const file = files[index];
+  const latest = useRef({ index, count: files.length, onIndex, onClose });
+  latest.current = { index, count: files.length, onIndex, onClose };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const { index: at, count, onIndex: move, onClose: close } = latest.current;
+      if (event.key === "Escape" || event.key === " ") {
+        event.preventDefault();
+        close();
+      } else if (event.key === "ArrowRight" && at < count - 1) {
+        event.preventDefault();
+        move(at + 1);
+      } else if (event.key === "ArrowLeft" && at > 0) {
+        event.preventDefault();
+        move(at - 1);
+      } else if (event.key === "Tab") {
+        const stops = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled), video") ?? []);
+        if (stops.length === 0) return;
+        const position = stops.indexOf(document.activeElement as HTMLElement);
+        const next = event.shiftKey ? (position <= 0 ? stops.length - 1 : position - 1) : (position + 1) % stops.length;
+        event.preventDefault();
+        stops[next].focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -68,22 +124,9 @@ export function Preview({ connectionId, bucket, files, index, onIndex, onClose, 
   const kind = previewKind(file);
   const download = `Download ${file.name}`;
 
-  const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape" || event.key === " ") {
-      event.preventDefault();
-      onClose();
-    } else if (event.key === "ArrowRight" && index < files.length - 1) {
-      event.preventDefault();
-      onIndex(index + 1);
-    } else if (event.key === "ArrowLeft" && index > 0) {
-      event.preventDefault();
-      onIndex(index - 1);
-    }
-  };
-
   return (
     <div className="sheet-backdrop preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div ref={dialog} className="preview" role="dialog" aria-modal="true" aria-label={file.name} tabIndex={-1} onKeyDown={keyDown}>
+      <div ref={dialog} className="preview" role="dialog" aria-modal="true" aria-label={file.name} tabIndex={-1}>
         <header className="preview-head">
           <strong>{file.name}</strong>
           <span className="preview-meta">
@@ -103,8 +146,7 @@ export function Preview({ connectionId, bucket, files, index, onIndex, onClose, 
           </button>
         </header>
         <div className="preview-body">
-          {kind === "image" && <img src={url} alt={file.name} />}
-          {kind === "video" && <video src={url} controls />}
+          {(kind === "image" || kind === "video") && <MediaPreview key={url} kind={kind} url={url} name={file.name} />}
           {kind === "text" && <TextPreview key={url} url={url} size={file.size ?? 0} />}
           {kind === "none" && (
             <div className="preview-empty">

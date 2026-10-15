@@ -4,9 +4,9 @@ import { previewKind, previewUrl } from "./preview";
 const row = (name: string, size: number) => ({ key: `v/${name}`, name, isFolder: false, size, lastModified: null });
 
 describe("previewUrl", () => {
-  it("encodes every part but keeps the key's slashes", () => {
-    expect(previewUrl("c1", "media archive", "a b#c?d/ü.txt")).toBe(
-      "kelp-preview://localhost/c1/media%20archive/a%20b%23c%3Fd/%C3%BC.txt",
+  it("puts bucket and key in the query so dots and slashes reach Rust untouched", () => {
+    expect(previewUrl("c1", "media archive", "a/../b#?ü.txt")).toBe(
+      "kelp-preview://localhost/c1?bucket=media%20archive&key=a%2F..%2Fb%23%3F%C3%BC.txt",
     );
   });
 });
