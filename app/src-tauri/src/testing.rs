@@ -5,8 +5,16 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use tokio::sync::watch;
 
+use std::sync::Arc;
+
+use uuid::Uuid;
+
+use crate::connection::{ConnectionSettings, ProviderKind};
 use crate::error::AppError;
+use crate::profiles::{ConnectionProfile, ProfileStore};
 use crate::providers::{KeyPage, ListPage, ProgressFn, StorageProvider};
+use crate::secrets::MemoryStore;
+use crate::state::AppState;
 
 pub struct FakeProvider {
     buckets: Result<Vec<String>, AppError>,
@@ -166,10 +174,34 @@ impl FakeProvider {
     }
 }
 
+pub async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppState, Uuid) {
+    let dir = std::env::temp_dir().join(format!("kelp-state-{}", Uuid::new_v4()));
+    let shared = fake.clone();
+    let state = AppState::new(
+        ProfileStore::new(&dir),
+        Box::new(MemoryStore::default()),
+        Box::new(move |_, _| Ok(shared.clone())),
+    );
+    let id = Uuid::new_v4();
+    state.secrets.set(&id, "s").unwrap();
+    state.profiles.lock().await.push(ConnectionProfile {
+        id,
+        name: "media".into(),
+        settings: ConnectionSettings {
+            kind: ProviderKind::Hetzner,
+            endpoint: None,
+            region: "hel1".into(),
+            path_style: false,
+            access_key_id: "AKIDEXAMPLE".into(),
+        },
+        bucket: bucket.map(String::from),
+        last_location: None,
+    });
+    (state, id)
+}
+
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
 
     fn fake() -> FakeProvider {

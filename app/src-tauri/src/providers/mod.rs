@@ -9,6 +9,8 @@ use serde::Serialize;
 
 use crate::error::AppError;
 
+pub const MAX_OBJECT_SIZE: u64 = 5 * 1024 * 1024 * 1024 * 1024;
+
 pub type ProgressFn = Arc<dyn Fn(u64) + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

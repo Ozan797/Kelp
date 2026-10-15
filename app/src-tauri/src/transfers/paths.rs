@@ -3,55 +3,6 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
-use uuid::Uuid;
-
-use crate::error::AppError;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Direction {
-    Upload,
-    Download,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransferInfo {
-    pub id: Uuid,
-    pub direction: Direction,
-    pub name: String,
-    pub destination: String,
-    pub total: u64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransferProgress {
-    pub id: Uuid,
-    pub done: u64,
-    pub total: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TransferStatus {
-    Running,
-    Finished,
-    Failed,
-    Cancelled,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransferStateEvent {
-    pub id: Uuid,
-    pub state: TransferStatus,
-    pub info: Option<TransferInfo>,
-    pub error: Option<AppError>,
-    pub path: Option<String>,
-}
-
 pub struct Throttle {
     every: Duration,
     last: Option<Instant>,
@@ -153,6 +104,8 @@ pub fn finish_download(
 
 #[cfg(test)]
 mod tests {
+    use uuid::Uuid;
+
     use super::*;
 
     #[test]

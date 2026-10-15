@@ -9,7 +9,7 @@ use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::model::{ItemState, Status, Transfer, TransferView};
+use super::model::{ItemState, Status, Transfer, TransferProgress, TransferView};
 use super::paths::Throttle;
 use super::queue::Queue;
 use super::store::TransferStore;
@@ -22,12 +22,7 @@ pub const MAX_REQUESTS: usize = 16;
 #[derive(Debug, Clone)]
 pub enum Event {
     State(TransferView),
-    Progress {
-        id: Uuid,
-        done: u64,
-        total: u64,
-        files_done: u64,
-    },
+    Progress(TransferProgress),
 }
 
 pub type Emit = Arc<dyn Fn(Event) + Send + Sync>;
@@ -215,12 +210,12 @@ impl TransferManager {
             return;
         };
         if inner.reported.insert(id, view.done) != Some(view.done) {
-            (self.emit)(Event::Progress {
+            (self.emit)(Event::Progress(TransferProgress {
                 id,
                 done: view.done,
                 total: view.total,
                 files_done: view.files_done,
-            });
+            }));
         }
     }
 

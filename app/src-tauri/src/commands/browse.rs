@@ -112,36 +112,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::connection::{ConnectionSettings, ProviderKind};
-    use crate::profiles::{ConnectionProfile, ProfileStore};
-    use crate::secrets::MemoryStore;
-    use crate::testing::FakeProvider;
-
-    async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppState, Uuid) {
-        let dir = std::env::temp_dir().join(format!("kelp-browse-{}", Uuid::new_v4()));
-        let shared = fake.clone();
-        let state = AppState::new(
-            ProfileStore::new(&dir),
-            Box::new(MemoryStore::default()),
-            Box::new(move |_, _| Ok(shared.clone())),
-        );
-        let id = Uuid::new_v4();
-        state.secrets.set(&id, "s").unwrap();
-        state.profiles.lock().await.push(ConnectionProfile {
-            id,
-            name: "media".into(),
-            settings: ConnectionSettings {
-                kind: ProviderKind::Hetzner,
-                endpoint: None,
-                region: "hel1".into(),
-                path_style: false,
-                access_key_id: "AKIDEXAMPLE".into(),
-            },
-            bucket: bucket.map(String::from),
-            last_location: None,
-        });
-        (state, id)
-    }
+    use crate::testing::{FakeProvider, state_with};
 
     #[test]
     fn folder_names_are_trimmed() {

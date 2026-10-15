@@ -108,6 +108,15 @@ pub struct TransferView {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferProgress {
+    pub id: Uuid,
+    pub done: u64,
+    pub total: u64,
+    pub files_done: u64,
+}
+
 impl Status {
     pub fn name(&self) -> &'static str {
         match self {
