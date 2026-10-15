@@ -5,6 +5,7 @@ pub mod json_file;
 pub mod profiles;
 pub mod providers;
 pub mod secrets;
+pub mod settings;
 pub mod state;
 #[cfg(test)]
 pub mod testing;
@@ -17,11 +18,12 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
-    browse, connections, transfers as transfer_commands, uploads as upload_commands,
-    usage as usage_commands,
+    browse, connections, settings as settings_commands, transfers as transfer_commands,
+    uploads as upload_commands, usage as usage_commands,
 };
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
+use crate::settings::SettingsStore;
 use crate::state::{AppState, real_connect};
 use crate::transfers::manager::{Event, ProviderFor, TransferManager};
 use crate::transfers::store::TransferStore;
@@ -62,6 +64,7 @@ pub fn run() {
             let manager = transfer_manager(app.handle(), &dir);
             app.manage(manager.clone());
             app.manage(UsageCounts::new(UsageStore::new(&dir)));
+            app.manage(SettingsStore::new(&dir));
             tauri::async_runtime::spawn(async move { manager.start().await });
             Ok(())
         })
@@ -87,6 +90,8 @@ pub fn run() {
             transfer_commands::cancel_transfer,
             transfer_commands::pause_all,
             transfer_commands::resume_all,
+            settings_commands::get_settings,
+            settings_commands::set_settings,
             usage_commands::get_usage,
             usage_commands::start_usage_count,
             usage_commands::cancel_usage_count,
