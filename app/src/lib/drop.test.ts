@@ -36,11 +36,12 @@ describe("dropTarget", () => {
 
 describe("drop text", () => {
   it("counts what is dropped", () => {
-    expect(summaryText({ files: 3, folders: 0, bytes: 412_000_000 }, 3)).toBe("3 files · 412 MB");
-    expect(summaryText({ files: 1, folders: 0, bytes: 5 }, 1)).toBe("1 file · 5 B");
-    expect(summaryText({ files: 1204, folders: 1, bytes: 9_800_000_000 }, 1)).toBe("1 folder · 9.8 GB");
-    expect(summaryText({ files: 1206, folders: 1, bytes: 9_800_000_000 }, 3)).toBe("1 folder and 2 files · 9.8 GB");
-    expect(summaryText({ files: 9, folders: 2, bytes: 1000 }, 2)).toBe("2 folders · 1 KB");
+    expect(summaryText({ files: 3, folders: 0, bytes: 412_000_000, loose: 3 }, 3)).toBe("3 files · 412 MB");
+    expect(summaryText({ files: 1, folders: 0, bytes: 5, loose: 1 }, 1)).toBe("1 file · 5 B");
+    expect(summaryText({ files: 1204, folders: 1, bytes: 9_800_000_000, loose: 0 }, 1)).toBe("1 folder · 9.8 GB");
+    expect(summaryText({ files: 1206, folders: 1, bytes: 9_800_000_000, loose: 2 }, 3)).toBe("1 folder and 2 files · 9.8 GB");
+    expect(summaryText({ files: 9, folders: 2, bytes: 1000, loose: 0 }, 2)).toBe("2 folders · 1 KB");
+    expect(summaryText({ files: 3, folders: 1, bytes: 10, loose: 1 }, 4)).toBe("1 folder and 1 file · 10 B");
     expect(summaryText(null, 3)).toBe("3 items");
     expect(summaryText(null, 1)).toBe("1 item");
   });

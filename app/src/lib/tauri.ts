@@ -91,7 +91,7 @@ export type UsageView = {
   error: string | null;
 };
 
-export type DropSummary = { files: number; folders: number; bytes: number };
+export type DropSummary = { files: number; folders: number; bytes: number; loose: number };
 
 export type FileDropEvent =
   | { type: "enter" | "drop"; paths: string[]; x: number; y: number }

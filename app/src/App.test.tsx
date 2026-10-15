@@ -293,7 +293,7 @@ describe("App", () => {
 
   it("uploads what is dropped onto a folder row into that folder", async () => {
     api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5, loose: 1 });
     api.planUpload.mockResolvedValue({ files: 1, bytes: 5, existing: 0, examples: [] });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
@@ -313,7 +313,7 @@ describe("App", () => {
 
   it("aims a drop at the point the pointer is at, even on a Retina screen", async () => {
     api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5, loose: 1 });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
       emit = handler;
@@ -351,7 +351,7 @@ describe("App", () => {
 
   it("asks once when a drop would replace files", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5, loose: 5 });
     api.planUpload.mockResolvedValue({ files: 5, bytes: 5, existing: 2, examples: ["a.txt", "b.txt"] });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {

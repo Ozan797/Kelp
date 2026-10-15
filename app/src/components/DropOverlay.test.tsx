@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DropOverlay } from "./DropOverlay";
 
 const open = { bucket: "media", prefix: "vimeo/" };
-const summary = { files: 3, folders: 0, bytes: 412_000_000 };
+const summary = { files: 3, folders: 0, bytes: 412_000_000, loose: 3 };
 const paths = ["/u/a", "/u/b", "/u/c"];
 
 describe("DropOverlay", () => {

@@ -25,10 +25,9 @@ const count = (n: number, word: string) => `${n.toLocaleString("en-GB")} ${word}
 
 export function summaryText(summary: DropSummary | null, items: number): string {
   if (!summary) return count(items, "item");
-  const looseFiles = summary.folders === 0 ? summary.files : items - summary.folders;
   const parts = [
     summary.folders > 0 ? count(summary.folders, "folder") : null,
-    looseFiles > 0 ? count(looseFiles, "file") : null,
+    summary.loose > 0 ? count(summary.loose, "file") : null,
   ].filter(Boolean);
   return `${parts.join(" and ")} · ${formatBytes(summary.bytes)}`;
 }

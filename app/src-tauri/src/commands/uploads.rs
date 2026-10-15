@@ -22,6 +22,7 @@ pub struct DropSummary {
     pub files: u64,
     pub folders: u64,
     pub bytes: u64,
+    pub loose: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -53,6 +54,7 @@ pub fn summarize(paths: &[PathBuf]) -> DropSummary {
         files: 0,
         folders: 0,
         bytes: 0,
+        loose: 0,
     };
     for path in unique(paths) {
         let Ok(metadata) = std::fs::metadata(&path) else {
@@ -66,6 +68,7 @@ pub fn summarize(paths: &[PathBuf]) -> DropSummary {
             }
         } else {
             summary.files += 1;
+            summary.loose += 1;
             summary.bytes += metadata.len();
         }
     }
@@ -282,6 +285,7 @@ mod tests {
                 files: 4,
                 folders: 1,
                 bytes: 10,
+                loose: 2,
             }
         );
     }
@@ -342,6 +346,7 @@ mod tests {
         let dir = drop_folder();
         let twice = vec![dir.join("a.txt"), dir.join("a.txt")];
         assert_eq!(summarize(&twice).files, 1);
+        assert_eq!(summarize(&twice).loose, 1);
         let transfers = upload_transfers(&state, id, "media", "", &twice, false)
             .await
             .unwrap();
