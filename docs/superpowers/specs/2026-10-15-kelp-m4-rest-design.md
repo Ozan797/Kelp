@@ -92,8 +92,8 @@ Builds on M3 (transfer engine, `transfers/`) and M4 part 1 (`2026-10-15-kelp-m4-
 
 - `App` keeps the rail, sheets, drawer, palette and settings; a new `Browser` component holds everything that
   is per tab today (bucket column contents, toolbar, listing, filter, sort, selection, history, size, drop target).
-  `App` renders the strip and the active tab's `Browser`; inactive tabs are not mounted (their state lives in the
-  tabs list).
+  `App` renders the strip and one `Browser` per tab; inactive tabs stay mounted but hidden, so each keeps its own
+  filter, sort, selection, history and listing (only the active tab responds to keys and drops).
 - Tab state: `{ id, connectionId, history: Place[], position, filter, sort, selected: string[] }`.
 - The strip shows only with 2+ tabs. Tab label: connection logo + `bucket / last folder` (or the connection name
   with no bucket open); full path in the tooltip. ✕ on hover and on the active tab.

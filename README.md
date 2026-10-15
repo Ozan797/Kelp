@@ -32,6 +32,20 @@ npm install
 npm run dev
 ```
 
+## Keyboard shortcuts
+
+| Keys | Does |
+|---|---|
+| ⌘K | Command palette (places and actions) |
+| Space | Preview the selected file |
+| ⌘D | Download the selection |
+| ⌘⇧N | New folder |
+| ⌘T / ⌘W | New tab / close tab |
+| ⌘⇧] / ⌘⇧[ | Next / previous tab |
+| ⌘, | Settings |
+| ⌫ or ⌘↑ | Up one folder |
+| ⌥ while dropping rows | Copy instead of move |
+
 ## Landing site
 
 Lives in `website/`. Edit names, version and the download link in `website/src/config.ts`.
