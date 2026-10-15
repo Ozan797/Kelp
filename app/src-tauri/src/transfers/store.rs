@@ -31,7 +31,7 @@ impl TransferStore {
             .iter()
             .filter(|transfer| !matches!(transfer.status, Status::Finished | Status::Cancelled))
             .collect();
-        crate::json_file::write(&self.path, &unfinished)
+        crate::json_file::write_compact(&self.path, &unfinished)
     }
 }
 

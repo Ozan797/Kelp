@@ -182,7 +182,7 @@ impl TransferManager {
             && matches!(transfer.status, Status::Retrying { .. })
         {
             transfer.status = Status::Running;
-            self.changed(&mut inner, id);
+            self.notify(&inner, id);
         }
     }
 
@@ -194,7 +194,7 @@ impl TransferManager {
             transfer.status = Status::Retrying {
                 at_ms: now_ms() + wait.as_millis() as u64,
             };
-            self.changed(&mut inner, id);
+            self.notify(&inner, id);
         }
     }
 
@@ -319,10 +319,14 @@ impl TransferManager {
     }
 
     fn changed(&self, inner: &mut Inner, id: Uuid) {
+        self.notify(inner, id);
+        self.save(inner);
+    }
+
+    fn notify(&self, inner: &Inner, id: Uuid) {
         if let Some(view) = inner.view(id) {
             (self.emit)(Event::State(view));
         }
-        self.save(inner);
     }
 
     fn save(&self, inner: &mut Inner) {
@@ -834,6 +838,19 @@ mod tests {
         h.wait_for(id, "finished").await;
         assert!(h.statuses(id).contains(&"retrying"));
         assert_eq!(h.provider.calls("put_file"), 3);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn waiting_to_retry_does_not_rewrite_the_saved_queue() {
+        let h = harness();
+        h.provider.fail_next(1, AppError::Network);
+        h.manager.start().await;
+        let id = h.manager.add(h.upload("a.txt", b"x")).await;
+        h.wait_for(id, "retrying").await;
+        let saved = std::fs::read_to_string(h.dir.join("transfers.json")).unwrap();
+        assert!(saved.contains("\"running\""), "{saved}");
+        assert!(!saved.contains("retrying"), "{saved}");
+        assert!(!saved.contains("\n  "), "saved file should be compact");
     }
 
     #[tokio::test(start_paused = true)]
