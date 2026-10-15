@@ -47,6 +47,7 @@ function Harness({
   onGoUp = vi.fn(),
   dropKey = null,
   onRowPointerDown = vi.fn(),
+  onPreview = vi.fn(),
 }: {
   rows: Row[];
   filter?: string;
@@ -54,6 +55,7 @@ function Harness({
   onGoUp?: () => void;
   dropKey?: string | null;
   onRowPointerDown?: (row: Row, x: number, y: number) => void;
+  onPreview?: (row: Row) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort>({ key: "name", ascending: true });
@@ -73,6 +75,7 @@ function Harness({
       onLoadMore={vi.fn()}
       dropKey={dropKey}
       onRowPointerDown={onRowPointerDown}
+      onPreview={onPreview}
     />
   );
 }
@@ -184,5 +187,31 @@ describe("FileList dragging", () => {
     fireEvent.pointerDown(screen.getByText("a.txt"), { button: 2, clientX: 5, clientY: 6 });
     fireEvent.pointerDown(screen.getByText("a.txt"), { button: 0, ctrlKey: true, clientX: 5, clientY: 6 });
     expect(onRowPointerDown).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FileList preview", () => {
+  it("puts a small preview button on files Kelp can show", async () => {
+    const onPreview = vi.fn();
+    const onRowPointerDown = vi.fn();
+    render(<Harness rows={[folder("drafts"), file("a.jpg", 1), file("notes.md", 1), file("b.zip", 1)]} onPreview={onPreview} onRowPointerDown={onRowPointerDown} />);
+    expect(screen.getByRole("button", { name: "Preview a.jpg" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Preview notes.md" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Preview b.zip" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Preview drafts" })).toBeNull();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Preview a.jpg" }), { button: 0 });
+    expect(onRowPointerDown).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Preview a.jpg" }));
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ key: "a.jpg" }));
+  });
+
+  it("previews a file on double-click and still opens folders", async () => {
+    const onPreview = vi.fn();
+    const onOpen = vi.fn();
+    render(<Harness rows={[folder("drafts"), file("a.jpg", 1)]} onPreview={onPreview} onOpen={onOpen} />);
+    await userEvent.dblClick(screen.getByText("a.jpg"));
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ key: "a.jpg" }));
+    await userEvent.dblClick(screen.getByText("drafts"));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ key: "drafts/" }));
   });
 });

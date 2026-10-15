@@ -387,6 +387,34 @@ describe("App", () => {
     expect(api.planCopy.mock.calls[0][0].keys).toEqual(["a.mp4"]);
   });
 
+  it("previews from the row button and the right-click menu", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Preview a.jpg" }));
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("a.jpg") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const preview = entries.find((entry) => entry !== "separator" && entry.label === "Preview");
+    if (!preview || preview === "separator") throw new Error("no preview entry");
+    act(() => preview.onSelect());
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+  });
+
+  it("refreshes the folder from the toolbar and with ⌘R", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+    await user.click(document.body);
+    await user.keyboard("{Meta>}r{/Meta}");
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(3));
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);

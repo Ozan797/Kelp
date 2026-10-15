@@ -1357,3 +1357,56 @@ button {
 .file-row {
   user-select: none;
 }
+
+.row-preview {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  margin-left: var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: none;
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: pointer;
+  flex: none;
+}
+
+.row-preview svg {
+  width: 14px;
+  height: 14px;
+}
+
+.file-row:hover .row-preview,
+.file-row.selected .row-preview,
+.row-preview:focus-visible {
+  opacity: 1;
+}
+
+.row-preview:hover {
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+
+.row-preview:focus-visible,
+.toolbar-icon:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.toolbar-icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.toolbar-icon:hover {
+  color: var(--text);
+}

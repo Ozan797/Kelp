@@ -352,6 +352,13 @@ export function Browser({
       .catch(() => undefined);
   };
 
+  const preview = (row: Row) => setSheet({ kind: "preview", key: row.key });
+
+  const reloadHere = () => {
+    if (place) listing.reload();
+    else setReload((n) => n + 1);
+  };
+
   const openRow = (row: Row) => {
     if (place && row.isFolder) go({ bucket: place.bucket, prefix: row.key });
   };
@@ -362,6 +369,7 @@ export function Browser({
   const fileMenu = (row: Row, keys: Set<string>) => {
     const rows = visibleRows.filter((r) => keys.has(r.key));
     const entries: MenuEntry[] = [];
+    if (rows.length === 1 && !row.isFolder) entries.push({ label: "Preview", onSelect: () => preview(row) });
     if (rows.length === 1 && row.isFolder) {
       entries.push({ label: "Open", onSelect: () => openRow(row) });
       entries.push({
@@ -387,6 +395,7 @@ export function Browser({
       "Mod+D": () => selectedRows.length > 0 && download(selectedRows),
       Space: () => previewStart >= 0 && setSheet({ kind: "preview", key: previewFiles[previewStart].key }),
       Backspace: up,
+      "Mod+R": reloadHere,
       "Mod+ArrowUp": up,
     },
     active && sheet.kind === "none",
@@ -420,6 +429,7 @@ export function Browser({
       action("new-folder", "New folder…", () => setSheet({ kind: "folder" }), "⌘⇧N");
       if (selectedRows.length > 0) action("download", downloadLabel(selectedRows), () => download(selectedRows), "⌘D");
       action("size", "Calculate size", () => calculateSize(place));
+      action("refresh", "Refresh", reloadHere, "⌘R");
       if (previewStart >= 0) {
         action("preview", `Preview ${previewFiles[previewStart].name}`, () => setSheet({ kind: "preview", key: previewFiles[previewStart].key }), "Space");
       }
@@ -508,6 +518,7 @@ export function Browser({
               ? rowPlace.prefix
               : null
         }
+        onPreview={preview}
         onRowPointerDown={(row, x, y) => {
           if (!active) return;
           const keys = selected.has(row.key) ? selectedRows.map((r) => r.key) : [row.key];
@@ -561,6 +572,7 @@ export function Browser({
               filter={filter}
               onFilter={setFilter}
               onNewFolder={() => setSheet({ kind: "folder" })}
+              onRefresh={reloadHere}
               onUpload={chooseUpload}
               dropKey={rowPlace?.bucket === place.bucket ? rowPlace.prefix : null}
             />

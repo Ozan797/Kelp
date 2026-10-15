@@ -17,6 +17,7 @@ type ToolbarProps = {
   filter: string;
   onFilter: (text: string) => void;
   onNewFolder: () => void;
+  onRefresh: () => void;
   onUpload: () => void;
   dropKey?: string | null;
 };
@@ -61,6 +62,9 @@ export function Toolbar(props: ToolbarProps) {
         value={props.filter}
         onChange={(event) => props.onFilter(event.target.value)}
       />
+      <button type="button" className="toolbar-icon" aria-label="Refresh" title="Refresh (⌘R)" onClick={props.onRefresh}>
+        ↻
+      </button>
       <button type="button" className="button button-secondary" onClick={props.onNewFolder}>
         New folder
       </button>
