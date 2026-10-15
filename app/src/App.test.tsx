@@ -16,6 +16,10 @@ const api = vi.hoisted(() => ({
   deleteObjects: vi.fn(),
   showContextMenu: vi.fn(),
   startDownload: vi.fn(),
+  startFolderDownload: vi.fn(),
+  pickFolder: vi.fn(),
+  planFolderUpload: vi.fn(),
+  startFolderUpload: vi.fn(),
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
@@ -239,6 +243,61 @@ describe("App", () => {
     if (!remove || remove === "separator") throw new Error("no delete entry");
     remove.onSelect();
     expect((await screen.findByRole("alert")).textContent).toContain("The connection list couldn't be saved.");
+  });
+
+  it("uploads a folder after asking once about files already there", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.pickFolder.mockResolvedValue("/Users/me/photos");
+    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 2, examples: ["photos/a.jpg", "photos/b.jpg"] });
+    api.startFolderUpload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Upload" }));
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    expect(entries.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual(["Upload files…", "Upload a folder…"]);
+    const folder = entries[1];
+    if (folder === "separator") throw new Error("no folder entry");
+    folder.onSelect();
+    await user.click(await screen.findByRole("button", { name: "Skip 2 existing" }));
+    expect(api.planFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos");
+    expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("uploads a folder straight away when nothing clashes", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.pickFolder.mockResolvedValue("/Users/me/photos");
+    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 0, examples: [] });
+    api.startFolderUpload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Upload" }));
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const folder = entries[1];
+    if (folder === "separator") throw new Error("no folder entry");
+    folder.onSelect();
+    await waitFor(() => expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("downloads folders as well as files from the menu", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.txt"]));
+    api.startDownload.mockResolvedValue("t1");
+    api.startFolderDownload.mockResolvedValue("t2");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.txt"));
+    await user.keyboard("{Meta>}a{/Meta}");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("a.txt") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const download = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Download"));
+    if (!download || download === "separator") throw new Error("no download entry");
+    expect(download.label).toBe("Download 2 items");
+    download.onSelect();
+    await waitFor(() => expect(api.startFolderDownload).toHaveBeenCalledWith("c1", "archive", "docs/"));
+    expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10);
   });
 
   it("reloads the folder even when a delete partly fails", async () => {

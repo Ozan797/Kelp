@@ -77,6 +77,8 @@ export type TransferView = {
 };
 export type TransferProgress = { id: string; done: number; total: number; filesDone: number };
 
+export type FolderPlan = { files: number; bytes: number; existing: number; examples: string[] };
+
 export type MenuEntry = { label: string; onSelect: () => void } | "separator";
 
 export function toAppError(value: unknown): AppError {
@@ -112,6 +114,12 @@ export const api = {
     call<string>("start_upload", { id, bucket, prefix, path, replace }),
   startDownload: (id: string, bucket: string, key: string, size: number) =>
     call<string>("start_download", { id, bucket, key, size }),
+  planFolderUpload: (id: string, bucket: string, prefix: string, path: string) =>
+    call<FolderPlan>("plan_folder_upload", { id, bucket, prefix, path }),
+  startFolderUpload: (id: string, bucket: string, prefix: string, path: string, skipExisting: boolean) =>
+    call<string>("start_folder_upload", { id, bucket, prefix, path, skipExisting }),
+  startFolderDownload: (id: string, bucket: string, prefix: string) =>
+    call<string>("start_folder_download", { id, bucket, prefix }),
   listTransfers: () => call<TransferView[]>("list_transfers"),
   pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
   resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),
@@ -127,6 +135,10 @@ export const api = {
     const picked = await open({ multiple: true, directory: false });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];
+  },
+  pickFolder: async (): Promise<string | null> => {
+    const picked = await open({ multiple: false, directory: true });
+    return typeof picked === "string" ? picked : null;
   },
   confirm: (message: string, okLabel: string) =>
     ask(message, { title: "Kelp", kind: "warning", okLabel, cancelLabel: "Cancel" }),

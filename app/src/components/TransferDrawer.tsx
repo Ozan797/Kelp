@@ -37,7 +37,15 @@ function statusText(t: Transfer, now: number): string {
     const seconds = secondsUntil(t.retryAt, now);
     return seconds > 0 ? `Connection dropped · Retrying in ${seconds} s` : "Connection dropped · Retrying now";
   }
+  if (t.kind === "folder") {
+    return `${t.filesDone.toLocaleString("en-GB")} of ${t.filesTotal.toLocaleString("en-GB")} files · ${formatBytes(t.done)} of ${formatBytes(t.total)}`;
+  }
   return `${percent(t)}% · ${formatBytes(t.done)} of ${formatBytes(t.total)}`;
+}
+
+function failedFiles(t: Transfer): string | null {
+  if (t.kind !== "folder" || t.filesFailed === 0 || t.status === "failed") return null;
+  return `${t.filesFailed.toLocaleString("en-GB")} ${t.filesFailed === 1 ? "file" : "files"} failed`;
 }
 
 function speedText(t: Transfer): string | null {
@@ -178,6 +186,7 @@ export function TransferDrawer({
                       <span className="transfer-name">
                         <strong>{t.name}</strong>
                         <small>{destinationText(t)}</small>
+                        {failedFiles(t) && <small className="bad">{failedFiles(t)}</small>}
                         {(t.status === "running" || t.status === "retrying" || t.status === "paused") && (
                           <span className={t.status === "paused" ? "transfer-bar paused" : "transfer-bar"} aria-hidden="true">
                             <span style={{ transform: `scaleX(${fraction(t)})` }} />
@@ -200,8 +209,13 @@ export function TransferDrawer({
                           </button>
                         )}
                         {t.status === "failed" && (
-                          <button type="button" className="button button-secondary" aria-label={`Retry ${t.name}`} onClick={() => onRetry(t.id)}>
-                            Retry
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            aria-label={t.kind === "folder" ? `Retry failed files in ${t.name}` : `Retry ${t.name}`}
+                            onClick={() => onRetry(t.id)}
+                          >
+                            {t.kind === "folder" ? "Retry failed" : "Retry"}
                           </button>
                         )}
                         {(ACTIVE.has(t.status) || t.status === "paused") && (

@@ -147,6 +147,35 @@ describe("TransferDrawer", () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
+  it("shows folders as one row with a file count", () => {
+    renderDrawer({
+      transfers: [
+        transfer({
+          id: "f",
+          kind: "folder",
+          name: "photos",
+          total: 9_800_000_000,
+          done: 3_100_000_000,
+          filesTotal: 1204,
+          filesDone: 412,
+          filesFailed: 2,
+        }),
+      ],
+    });
+    expect(screen.getByText("412 of 1,204 files · 3.1 GB of 9.8 GB")).toBeTruthy();
+    expect(screen.getByText("2 files failed")).toBeTruthy();
+  });
+
+  it("retries only the failed files of a folder", async () => {
+    const props = renderDrawer({
+      transfers: [transfer({ id: "f", kind: "folder", name: "photos", status: "failed", error: "2 files failed.", filesTotal: 10, filesFailed: 2 })],
+    });
+    expect(screen.getByText("2 files failed.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Retry failed files in photos" }));
+    expect(props.onRetry).toHaveBeenCalledWith("f");
+    expect(screen.getByRole("button", { name: "Retry failed files in photos" }).textContent).toBe("Retry failed");
+  });
+
   it("never shows more than 100 percent", () => {
     renderDrawer({ transfers: [transfer({ done: 3_000_000_000 })] });
     expect(screen.getByText("100% · 3 GB of 2.1 GB")).toBeTruthy();

@@ -898,3 +898,28 @@ button {
     translate: 0 4px;
   }
 }
+
+.button.destructive {
+  color: var(--danger);
+}
+
+.clash-list {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 11px / 1.4 var(--font-mono);
+  list-style: none;
+}
+
+.clash-more {
+  color: var(--text-muted);
+}
+
+.transfer-name small.bad {
+  color: var(--danger);
+}
