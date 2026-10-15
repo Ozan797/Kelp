@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::ops::Range;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -12,9 +14,14 @@ use uuid::Uuid;
 use crate::connection::{ConnectionSettings, ProviderKind};
 use crate::error::AppError;
 use crate::profiles::{ConnectionProfile, ProfileStore};
-use crate::providers::{KeyPage, ListPage, ProgressFn, StorageProvider};
+use crate::providers::{
+    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, PartTarget, ProgressFn,
+    StorageProvider,
+};
 use crate::secrets::MemoryStore;
 use crate::state::AppState;
+
+type Upload = (String, BTreeMap<u32, Vec<u8>>);
 
 pub struct FakeProvider {
     buckets: Result<Vec<String>, AppError>,
@@ -25,6 +32,8 @@ pub struct FakeProvider {
     failures: Mutex<Vec<AppError>>,
     calls: Mutex<HashMap<&'static str, usize>>,
     held: watch::Sender<bool>,
+    etags: Mutex<HashMap<String, String>>,
+    uploads: Mutex<HashMap<String, Upload>>,
 }
 
 #[async_trait]
@@ -41,14 +50,17 @@ impl StorageProvider for FakeProvider {
         prefix: &str,
         _: Option<String>,
     ) -> Result<KeyPage, AppError> {
-        let stored = lock(&self.objects).keys().cloned().collect::<Vec<_>>();
+        let stored: Vec<ObjectMeta> = lock(&self.objects)
+            .iter()
+            .map(|(key, bytes)| meta(key, bytes.len() as u64))
+            .collect();
         Ok(KeyPage {
-            keys: self
+            objects: self
                 .keys
                 .iter()
-                .cloned()
+                .map(|key| meta(key, 0))
                 .chain(stored)
-                .filter(|key| key.starts_with(prefix))
+                .filter(|object| object.key.starts_with(prefix))
                 .collect(),
             next_token: None,
         })
@@ -77,20 +89,103 @@ impl StorageProvider for FakeProvider {
         lock(&self.objects).insert(key.to_string(), bytes);
         Ok(())
     }
-    async fn get_file(
+    async fn head(&self, _: &str, key: &str) -> Result<ObjectInfo, AppError> {
+        self.enter("head").await?;
+        let size = self
+            .object(key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?
+            .len() as u64;
+        Ok(ObjectInfo {
+            size,
+            etag: self.etag(key),
+        })
+    }
+    async fn start_multipart(&self, _: &str, key: &str) -> Result<String, AppError> {
+        self.enter("start_multipart").await?;
+        let mut uploads = lock(&self.uploads);
+        let upload_id = format!("up-{}", uploads.len() + 1);
+        uploads.insert(upload_id.clone(), (key.to_string(), BTreeMap::new()));
+        Ok(upload_id)
+    }
+    async fn put_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        path: &Path,
+        offset: u64,
+        len: u64,
+        progress: ProgressFn,
+    ) -> Result<String, AppError> {
+        self.enter("put_part").await?;
+        let mut bytes = vec![0; usize::try_from(len).map_err(|_| AppError::FileTooLarge)?];
+        let mut file = std::fs::File::open(path)?;
+        file.seek(SeekFrom::Start(offset))?;
+        file.read_exact(&mut bytes)?;
+        progress(len);
+        let mut uploads = lock(&self.uploads);
+        let (_, parts) = uploads
+            .get_mut(target.upload_id)
+            .ok_or(AppError::UploadGone)?;
+        parts.insert(number, bytes);
+        Ok(format!("\"p{number}\""))
+    }
+    async fn complete_multipart(
+        &self,
+        target: &PartTarget<'_>,
+        parts: &[CompletedPart],
+    ) -> Result<(), AppError> {
+        self.enter("complete_multipart").await?;
+        let (key, stored) = lock(&self.uploads)
+            .remove(target.upload_id)
+            .ok_or(AppError::UploadGone)?;
+        let mut numbers: Vec<u32> = parts.iter().map(|part| part.number).collect();
+        numbers.sort_unstable();
+        let joined = numbers
+            .iter()
+            .filter_map(|number| stored.get(number))
+            .flatten()
+            .copied()
+            .collect();
+        lock(&self.objects).insert(key, joined);
+        Ok(())
+    }
+    async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError> {
+        self.enter("abort_multipart").await?;
+        lock(&self.uploads).remove(target.upload_id);
+        Ok(())
+    }
+    async fn get_range(
         &self,
         _: &str,
         key: &str,
+        etag: &str,
+        range: Range<u64>,
         path: &Path,
         progress: ProgressFn,
     ) -> Result<(), AppError> {
-        self.enter("get_file").await?;
+        self.enter("get_range").await?;
+        if self.etag(key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
         let bytes = self
             .object(key)
             .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
-        std::fs::write(path, &bytes)?;
-        progress(bytes.len() as u64);
+        let slice = bytes
+            .get(range.start as usize..range.end as usize)
+            .ok_or_else(|| AppError::Provider("InvalidRange".into()))?;
+        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+        file.seek(SeekFrom::Start(range.start))?;
+        file.write_all(slice)?;
+        progress(slice.len() as u64);
         Ok(())
+    }
+}
+
+fn meta(key: &str, size: u64) -> ObjectMeta {
+    ObjectMeta {
+        key: key.to_string(),
+        size,
+        last_modified: None,
     }
 }
 
@@ -114,6 +209,8 @@ impl FakeProvider {
             failures: Mutex::new(Vec::new()),
             calls: Mutex::new(HashMap::new()),
             held: watch::channel(false).0,
+            etags: Mutex::new(HashMap::new()),
+            uploads: Mutex::new(HashMap::new()),
         }
     }
 
@@ -149,6 +246,21 @@ impl FakeProvider {
 
     pub fn calls(&self, name: &str) -> usize {
         lock(&self.calls).get(name).copied().unwrap_or(0)
+    }
+
+    pub fn set_etag(&self, key: &str, etag: &str) {
+        lock(&self.etags).insert(key.to_string(), etag.to_string());
+    }
+
+    pub fn open_uploads(&self) -> usize {
+        lock(&self.uploads).len()
+    }
+
+    fn etag(&self, key: &str) -> String {
+        lock(&self.etags)
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| "\"v1\"".to_string())
     }
 
     pub fn hold(&self) {
@@ -227,19 +339,13 @@ mod tests {
             .unwrap();
         assert_eq!(provider.object("2026/a.txt"), Some(b"hello".to_vec()));
         assert_eq!(provider.calls("put_file"), 1);
-        let keys = provider.list_keys("b", "2026/", None).await.unwrap().keys;
-        assert_eq!(keys, vec!["2026/a.txt".to_string()]);
-    }
-
-    #[tokio::test]
-    async fn downloads_write_the_stored_bytes() {
-        let provider = fake().with_objects(vec![("a.txt", b"hi".to_vec())]);
-        let target = temp_file(b"");
-        provider
-            .get_file("b", "a.txt", &target, no_progress())
-            .await
-            .unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), b"hi");
+        let page = provider.list_keys("b", "2026/", None).await.unwrap();
+        let found: Vec<(&str, u64)> = page
+            .objects
+            .iter()
+            .map(|object| (object.key.as_str(), object.size))
+            .collect();
+        assert_eq!(found, vec![("2026/a.txt", 5)]);
     }
 
     #[tokio::test]
@@ -257,6 +363,70 @@ mod tests {
                 .await
                 .is_ok()
         );
+    }
+
+    fn part_file(bytes: &[u8]) -> std::path::PathBuf {
+        temp_file(bytes)
+    }
+
+    #[tokio::test]
+    async fn multipart_parts_join_in_number_order() {
+        let provider = fake();
+        let source = part_file(b"aaabbbcc");
+        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        let mut parts = Vec::new();
+        for (number, offset, len) in [(3, 6, 2), (1, 0, 3), (2, 3, 3)] {
+            let etag = provider
+                .put_part(&target, number, &source, offset, len, no_progress())
+                .await
+                .unwrap();
+            parts.push(CompletedPart { number, etag });
+        }
+        provider.complete_multipart(&target, &parts).await.unwrap();
+        assert_eq!(provider.object("big.bin"), Some(b"aaabbbcc".to_vec()));
+        assert_eq!(provider.calls("put_part"), 3);
+    }
+
+    #[tokio::test]
+    async fn an_aborted_upload_is_gone() {
+        let provider = fake();
+        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        provider.abort_multipart(&target).await.unwrap();
+        let sent = provider
+            .put_part(&target, 1, &part_file(b"x"), 0, 1, no_progress())
+            .await;
+        assert_eq!(sent, Err(AppError::UploadGone));
+    }
+
+    #[tokio::test]
+    async fn ranges_land_at_their_offset_and_check_the_etag() {
+        let provider = fake().with_objects(vec![("a.bin", b"0123456789".to_vec())]);
+        let info = provider.head("b", "a.bin").await.unwrap();
+        assert_eq!(info.size, 10);
+        let part = temp_file(&[0; 10]);
+        provider
+            .get_range("b", "a.bin", &info.etag, 5..10, &part, no_progress())
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read(&part).unwrap(),
+            [0, 0, 0, 0, 0, b'5', b'6', b'7', b'8', b'9']
+        );
+        provider.set_etag("a.bin", "\"changed\"");
+        let stale = provider
+            .get_range("b", "a.bin", &info.etag, 0..5, &part, no_progress())
+            .await;
+        assert_eq!(stale, Err(AppError::ObjectChanged));
     }
 
     #[tokio::test]

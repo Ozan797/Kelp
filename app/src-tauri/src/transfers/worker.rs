@@ -140,13 +140,25 @@ impl Job {
         let part = part_path(&self.item.local);
         let fetched = self
             .with_retries(|| async {
+                let info = self.provider.head(&self.bucket, &self.item.key).await?;
                 std::fs::OpenOptions::new()
                     .create(true)
                     .truncate(true)
                     .write(true)
-                    .open(&part)?;
+                    .open(&part)?
+                    .set_len(info.size)?;
+                if info.size == 0 {
+                    return Ok(());
+                }
                 self.provider
-                    .get_file(&self.bucket, &self.item.key, &part, self.meter())
+                    .get_range(
+                        &self.bucket,
+                        &self.item.key,
+                        &info.etag,
+                        0..info.size,
+                        &part,
+                        self.meter(),
+                    )
                     .await
             })
             .await;

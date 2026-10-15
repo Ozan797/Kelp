@@ -1,11 +1,12 @@
 pub mod progress_body;
 pub mod s3;
 
+use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 
@@ -32,8 +33,28 @@ pub struct ListPage {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyPage {
-    pub keys: Vec<String>,
+    pub objects: Vec<ObjectMeta>,
     pub next_token: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectInfo {
+    pub size: u64,
+    pub etag: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PartTarget<'a> {
+    pub bucket: &'a str,
+    pub key: &'a str,
+    pub upload_id: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletedPart {
+    pub number: u32,
+    pub etag: String,
 }
 
 #[async_trait]
@@ -60,10 +81,29 @@ pub trait StorageProvider: Send + Sync {
         path: &Path,
         progress: ProgressFn,
     ) -> Result<(), AppError>;
-    async fn get_file(
+    async fn head(&self, bucket: &str, key: &str) -> Result<ObjectInfo, AppError>;
+    async fn start_multipart(&self, bucket: &str, key: &str) -> Result<String, AppError>;
+    async fn put_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        path: &Path,
+        offset: u64,
+        len: u64,
+        progress: ProgressFn,
+    ) -> Result<String, AppError>;
+    async fn complete_multipart(
+        &self,
+        target: &PartTarget<'_>,
+        parts: &[CompletedPart],
+    ) -> Result<(), AppError>;
+    async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError>;
+    async fn get_range(
         &self,
         bucket: &str,
         key: &str,
+        etag: &str,
+        range: Range<u64>,
         path: &Path,
         progress: ProgressFn,
     ) -> Result<(), AppError>;

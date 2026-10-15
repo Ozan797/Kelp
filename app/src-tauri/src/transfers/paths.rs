@@ -75,11 +75,7 @@ pub fn reserve_download(dir: &Path, name: &str) -> std::io::Result<(PathBuf, Pat
 }
 
 pub async fn open_reserved(path: &Path) -> std::io::Result<tokio::fs::File> {
-    tokio::fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(path)
-        .await
+    tokio::fs::OpenOptions::new().write(true).open(path).await
 }
 
 pub fn finish_download(

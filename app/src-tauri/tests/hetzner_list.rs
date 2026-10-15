@@ -146,18 +146,30 @@ async fn round_trips_a_small_file() {
     assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 15);
 
     let target = scratch.join("downloaded.txt");
-    std::fs::write(&target, b"").unwrap();
+    let info = provider.head(&bucket, &key).await.expect("head");
+    assert_eq!(info.size, 15);
+    std::fs::write(&target, vec![0; 15]).unwrap();
     provider
-        .get_file(&bucket, &key, &target, std::sync::Arc::new(|_| {}))
+        .get_range(
+            &bucket,
+            &key,
+            &info.etag,
+            0..15,
+            &target,
+            std::sync::Arc::new(|_| {}),
+        )
         .await
         .expect("download");
     assert_eq!(std::fs::read(&target).unwrap(), b"hello from kelp");
 
-    let keys = provider
+    let keys: Vec<String> = provider
         .list_keys(&bucket, &folder, None)
         .await
         .expect("list keys")
-        .keys;
+        .objects
+        .into_iter()
+        .map(|object| object.key)
+        .collect();
     assert_eq!(keys.len(), 2);
     provider.delete(&bucket, &keys).await.expect("delete");
     assert!(
@@ -165,7 +177,7 @@ async fn round_trips_a_small_file() {
             .list_keys(&bucket, &folder, None)
             .await
             .unwrap()
-            .keys
+            .objects
             .is_empty()
     );
 }

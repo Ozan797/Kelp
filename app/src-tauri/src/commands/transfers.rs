@@ -42,7 +42,8 @@ pub async fn upload_transfer(
         return Err(AppError::FileTooLarge);
     }
     let key = format!("{prefix}{name}");
-    if !replace && provider.list_keys(bucket, &key, None).await?.keys.first() == Some(&key) {
+    let page = provider.list_keys(bucket, &key, None).await?;
+    if !replace && page.objects.first().is_some_and(|object| object.key == key) {
         return Err(AppError::AlreadyExists(name));
     }
     Ok(Transfer {

@@ -45,7 +45,7 @@ pub async fn delete_keys(
             let mut token = None;
             loop {
                 let page = provider.list_keys(bucket, &key, token).await?;
-                targets.extend(page.keys);
+                targets.extend(page.objects.into_iter().map(|object| object.key));
                 token = page.next_token;
                 if token.is_none() {
                     break;
