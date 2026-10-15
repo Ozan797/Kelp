@@ -358,7 +358,7 @@ mod tests {
     use crate::providers::{CompletedPart, PartTarget};
     use crate::testing::FakeProvider;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{Direction, Resume, Transfer};
+    use crate::transfers::model::{Direction, ItemState, Resume, Transfer};
     use crate::transfers::paths::part_path;
     use crate::transfers::store::TransferStore;
     use crate::transfers::worker;
@@ -667,6 +667,46 @@ mod tests {
         assert_eq!(h.provider.calls("abort_multipart"), 1);
         assert_eq!(h.provider.open_uploads(), 0);
         assert!(!part.exists());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_folder_with_one_bad_name_finishes_the_rest_and_fails_with_a_count() {
+        let provider = Arc::new(FakeProvider::empty().with_objects(vec![
+            ("2026/photos/a.jpg", b"aa".to_vec()),
+            ("2026/photos/raw/b.dng", b"bbb".to_vec()),
+        ]));
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let target = h.dir.join("photos");
+        let mut folder = transfer(vec![
+            item("2026/photos/a.jpg", 2),
+            item("2026/photos/raw/", 0),
+            item("2026/photos/raw/b.dng", 3),
+            item("2026/photos/../evil", 1),
+        ]);
+        folder.direction = Direction::Download;
+        folder.local_root = target.clone();
+        for one in &mut folder.items {
+            match crate::transfers::plan::download_target("2026/photos/", &one.key, &target) {
+                Some(local) => one.local = local,
+                None => {
+                    one.state = ItemState::Failed {
+                        message: "This name can't be saved on a Mac.".into(),
+                    }
+                }
+            }
+        }
+        let id = h.manager.add(folder).await;
+        h.wait_for(id, "failed").await;
+        assert_eq!(std::fs::read(target.join("a.jpg")).unwrap(), b"aa");
+        assert_eq!(
+            std::fs::read(target.join("raw").join("b.dng")).unwrap(),
+            b"bbb"
+        );
+        assert!(!h.dir.join("evil").exists());
+        let views = h.manager.list().await;
+        assert_eq!(views[0].error.as_deref(), Some("1 file failed."));
+        assert_eq!((views[0].files_done, views[0].files_failed), (3, 1));
     }
 
     #[tokio::test(start_paused = true)]

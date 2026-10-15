@@ -48,11 +48,15 @@ fn relative_key(root: &Path, path: &Path) -> Result<String, AppError> {
         .ok_or_else(|| AppError::Io("A file name isn't valid text.".into()))
 }
 
-pub fn upload_items(root: &Path, prefix: &str) -> Result<Vec<Item>, AppError> {
-    let name = root
-        .file_name()
+pub fn local_name(root: &Path) -> Result<String, AppError> {
+    root.file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| AppError::Io("That folder has no name.".into()))?;
+        .map(str::to_string)
+        .ok_or_else(|| AppError::Io("That folder has no name.".into()))
+}
+
+pub fn upload_items(root: &Path, prefix: &str) -> Result<Vec<Item>, AppError> {
+    let name = local_name(root)?;
     Ok(walk_folder(root)?
         .into_iter()
         .map(|(local, relative, size)| Item {

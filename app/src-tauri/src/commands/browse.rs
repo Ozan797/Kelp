@@ -2,7 +2,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::providers::ListPage;
+use crate::providers::{ListPage, ObjectMeta, StorageProvider};
 use crate::state::AppState;
 
 pub fn folder_key(prefix: &str, name: &str) -> Result<String, AppError> {
@@ -32,6 +32,23 @@ pub async fn buckets(state: &AppState, id: Uuid) -> Result<Vec<String>, AppError
     state.provider(id).await?.list_buckets().await
 }
 
+pub async fn list_all(
+    provider: &dyn StorageProvider,
+    bucket: &str,
+    prefix: &str,
+) -> Result<Vec<ObjectMeta>, AppError> {
+    let mut objects = Vec::new();
+    let mut token = None;
+    loop {
+        let page = provider.list_keys(bucket, prefix, token).await?;
+        objects.extend(page.objects);
+        token = page.next_token;
+        if token.is_none() {
+            return Ok(objects);
+        }
+    }
+}
+
 pub async fn delete_keys(
     state: &AppState,
     id: Uuid,
@@ -42,15 +59,8 @@ pub async fn delete_keys(
     let mut targets = Vec::new();
     for key in keys {
         if key.ends_with('/') {
-            let mut token = None;
-            loop {
-                let page = provider.list_keys(bucket, &key, token).await?;
-                targets.extend(page.objects.into_iter().map(|object| object.key));
-                token = page.next_token;
-                if token.is_none() {
-                    break;
-                }
-            }
+            let inside = list_all(provider.as_ref(), bucket, &key).await?;
+            targets.extend(inside.into_iter().map(|object| object.key));
         }
         targets.push(key);
     }

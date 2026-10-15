@@ -286,6 +286,13 @@ impl Job {
     }
 
     async fn download(self: Arc<Self>) -> Result<PathBuf, AppError> {
+        if self.item.key.ends_with('/') {
+            std::fs::create_dir_all(&self.item.local)?;
+            return Ok(self.item.local.clone());
+        }
+        if let Some(parent) = self.item.local.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let part = part_path(&self.item.local);
         let mut saved = self.item.resume.clone();
         let mut outcome = Err(AppError::ObjectChanged);
