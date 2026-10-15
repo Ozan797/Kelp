@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -45,17 +44,7 @@ impl ProfileStore {
     }
 
     pub fn save(&self, profiles: &[ConnectionProfile]) -> Result<(), AppError> {
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let json =
-            serde_json::to_vec_pretty(profiles).map_err(|error| AppError::Io(error.to_string()))?;
-        let temporary = self.path.with_extension("json.tmp");
-        let mut file = std::fs::File::create(&temporary)?;
-        file.write_all(&json)?;
-        file.sync_all()?;
-        std::fs::rename(&temporary, &self.path)?;
-        Ok(())
+        crate::json_file::write(&self.path, profiles)
     }
 }
 
