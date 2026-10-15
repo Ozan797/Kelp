@@ -16,6 +16,7 @@ pub mod validation;
 
 use std::sync::Arc;
 
+use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
@@ -61,6 +62,35 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            let kelp = SubmenuBuilder::new(app, "Kelp")
+                .about(None)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+            let edit = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+            let window = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .maximize()
+                .build()?;
+            app.set_menu(
+                MenuBuilder::new(app)
+                    .items(&[&kelp, &edit, &window])
+                    .build()?,
+            )?;
             let dir = app.path().app_data_dir()?;
             let state = AppState::new(
                 ProfileStore::new(&dir),

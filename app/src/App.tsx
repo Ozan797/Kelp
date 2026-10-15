@@ -24,7 +24,7 @@ export default function App() {
   const { transfers, clearFinished } = useTransfers();
   const { settings, setTheme } = useSettings();
   const [{ tabs, activeId }, dispatch] = useTabs();
-  const [refresh, setRefresh] = useState(0);
+  const [refresh, setRefresh] = useState({ connectionId: "", count: 0 });
   const [sheet, setSheet] = useState<Sheet>({ kind: "none" });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionError, setActionError] = useState<AppError | null>(null);
@@ -34,7 +34,9 @@ export default function App() {
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
   const selectedId = activeTab.connectionId;
   const connection = connections?.find((c) => c.id === selectedId) ?? null;
-  const setSelectedId = (id: string) => dispatch({ type: "update", id: activeId, patch: { connectionId: id, place: null } });
+  const setSelectedId = (id: string) => {
+    if (id !== activeTab.connectionId) dispatch({ type: "update", id: activeId, patch: { connectionId: id, place: null } });
+  };
   const report = (caught: unknown) => setActionError(toAppError(caught));
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function App() {
   useShortcuts(
     {
       "Mod+,": () => setSheet({ kind: "settings" }),
-      "Mod+T": () => dispatch({ type: "open", id: newTabId() }),
+      "Mod+T": () => connection && dispatch({ type: "open", id: newTabId() }),
       "Mod+W": () => dispatch({ type: "close", id: activeId }),
       "Mod+Shift+]": () => dispatch({ type: "next" }),
       "Mod+Shift+[": () => dispatch({ type: "previous" }),
@@ -90,7 +92,7 @@ export default function App() {
     for (const [theme, label] of [["system", "System"], ["light", "Light"], ["dark", "Dark"]] as const) {
       if (theme !== settings.theme) action(`theme-${theme}`, `Theme: ${label}`, () => setTheme(theme).catch(report));
     }
-    action("new-tab", "New tab", () => dispatch({ type: "open", id: newTabId() }), "⌘T");
+    if (connection) action("new-tab", "New tab", () => dispatch({ type: "open", id: newTabId() }), "⌘T");
     if (tabs.length > 1) action("close-tab", "Close tab", () => dispatch({ type: "close", id: activeId }), "⌘W");
     action("settings", "Settings…", () => setSheet({ kind: "settings" }), "⌘,");
     return actions;
@@ -143,12 +145,19 @@ export default function App() {
           if (!tabConnection) return null;
           const active = tab.id === activeId;
           return (
-            <div key={`${tab.id}:${tabConnection.id}`} className="tab-pane" hidden={!active}>
+            <div
+              key={`${tab.id}:${tabConnection.id}`}
+              id={`tab-panel-${tab.id}`}
+              role={tabs.length > 1 ? "tabpanel" : undefined}
+              aria-labelledby={tabs.length > 1 ? `tab-${tab.id}` : undefined}
+              className="tab-pane"
+              hidden={!active}
+            >
               <Browser
                 connection={tabConnection}
                 connections={connections ?? []}
                 active={active && sheet.kind === "none"}
-                refresh={refresh}
+                refresh={refresh.connectionId === tabConnection.id ? refresh.count : 0}
                 transfers={transfers}
                 drawer={
                   active && (
@@ -215,7 +224,7 @@ export default function App() {
             setSheet({ kind: "none" });
             await reloadConnections();
             setSelectedId(profile.id);
-            setRefresh((n) => n + 1);
+            setRefresh((current) => ({ connectionId: profile.id, count: current.count + 1 }));
           }}
         />
       )}

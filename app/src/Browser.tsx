@@ -110,6 +110,7 @@ export function Browser({
 
   useEffect(() => {
     let cancelled = false;
+    const keep = latestPlace.current;
     setBuckets(null);
     setBucketsError(null);
     setHistory([]);
@@ -119,7 +120,7 @@ export function Browser({
       .then((list) => {
         if (cancelled) return;
         setBuckets(list);
-        const last = opening.current ?? lastPlaces[connection.id] ?? connection.lastLocation;
+        const last = opening.current ?? keep ?? lastPlaces[connection.id] ?? connection.lastLocation;
         opening.current = null;
         const start = last && list.includes(last.bucket) ? last : list.length === 1 ? { bucket: list[0], prefix: "" } : null;
         if (start) {

@@ -24,6 +24,21 @@ describe("useShortcuts", () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores dialogs hidden inside another tab", () => {
+    const open = vi.fn();
+    renderHook(() => useShortcuts({ "Mod+K": open }, true));
+    const pane = document.createElement("div");
+    pane.hidden = true;
+    pane.innerHTML = '<div role="dialog" aria-modal="true"></div>';
+    document.body.append(pane);
+    press({ key: "k", metaKey: true });
+    expect(open).toHaveBeenCalledTimes(1);
+    pane.hidden = false;
+    press({ key: "k", metaKey: true });
+    expect(open).toHaveBeenCalledTimes(1);
+    pane.remove();
+  });
+
   it("never fires while typing or when turned off", () => {
     const open = vi.fn();
     const { rerender } = renderHook(({ on }) => useShortcuts({ "Mod+K": open, Space: open }, on), { initialProps: { on: true } });

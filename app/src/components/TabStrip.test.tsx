@@ -31,11 +31,25 @@ describe("TabStrip", () => {
     expect(screen.getByRole("tab", { name: "cdn" }).getAttribute("aria-selected")).toBe("false");
   });
 
+  it("follows the tabs pattern: panels, arrow keys and one tab stop", async () => {
+    const props = renderStrip();
+    const [first, second] = screen.getAllByRole("tab");
+    expect(first.getAttribute("aria-controls")).toBe("tab-panel-a");
+    expect(first.tabIndex).toBe(0);
+    expect(second.tabIndex).toBe(-1);
+    first.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(props.onSelect).toHaveBeenCalledWith("b");
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab.closest('[role="tablist"]')?.querySelectorAll("button:not([role=tab])").length).toBe(0);
+    }
+  });
+
   it("selects, closes and opens tabs", async () => {
     const props = renderStrip();
     await userEvent.click(screen.getByRole("tab", { name: "cdn" }));
     expect(props.onSelect).toHaveBeenCalledWith("b");
-    await userEvent.click(screen.getByRole("button", { name: "Close cdn" }));
+    await userEvent.click(screen.getByLabelText("Close cdn"));
     expect(props.onClose).toHaveBeenCalledWith("b");
     await userEvent.click(screen.getByRole("button", { name: "New tab" }));
     expect(props.onNew).toHaveBeenCalled();

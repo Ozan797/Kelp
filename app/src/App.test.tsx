@@ -306,6 +306,19 @@ describe("App", () => {
     expect(screen.getByRole("dialog", { name: "b.jpg" })).toBeTruthy();
   });
 
+  it("keeps a tab's place when its own connection is clicked again", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], []));
+    render(<App />);
+    await screen.findByText("docs");
+    const user = userEvent.setup();
+    await user.dblClick(screen.getByText("docs"));
+    await waitFor(() => expect(api.listObjects).toHaveBeenLastCalledWith("c1", "archive", "docs/", null));
+    await user.click(document.body);
+    await user.keyboard("{Meta>}t{/Meta}");
+    await user.click(screen.getAllByRole("button", { name: "Hetzner · media" })[0]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["archive / docs", "archive / docs"]);
+  });
+
   it("opens tabs that keep their own filter", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt", "b.txt"]));
     render(<App />);
