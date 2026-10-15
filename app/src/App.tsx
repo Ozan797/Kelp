@@ -11,6 +11,8 @@ import { useConnections } from "./hooks/useConnections";
 import { useSettings } from "./hooks/useSettings";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useTransfers } from "./hooks/useTransfers";
+import { newTabId, useTabs } from "./hooks/useTabs";
+import { TabStrip } from "./components/TabStrip";
 import type { Place } from "./lib/drop";
 import type { Command } from "./lib/palette";
 import { api, toAppError, type AppError, type ConnectionProfile } from "./lib/tauri";
@@ -21,7 +23,7 @@ export default function App() {
   const { connections, error: connectionsError, reload: reloadConnections } = useConnections();
   const { transfers, clearFinished } = useTransfers();
   const { settings, setTheme } = useSettings();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [{ tabs, activeId }, dispatch] = useTabs();
   const [refresh, setRefresh] = useState(0);
   const [sheet, setSheet] = useState<Sheet>({ kind: "none" });
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -29,16 +31,31 @@ export default function App() {
   const pill = useRef<HTMLButtonElement>(null);
   const lastPlaces = useRef<Record<string, Place>>({});
 
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
+  const selectedId = activeTab.connectionId;
   const connection = connections?.find((c) => c.id === selectedId) ?? null;
+  const setSelectedId = (id: string) => dispatch({ type: "update", id: activeId, patch: { connectionId: id, place: null } });
   const report = (caught: unknown) => setActionError(toAppError(caught));
 
   useEffect(() => {
-    if (connections && connections.length > 0 && !connections.some((c) => c.id === selectedId)) {
-      setSelectedId(connections[0].id);
+    if (!connections) return;
+    for (const tab of tabs) {
+      if (!connections.some((c) => c.id === tab.connectionId)) {
+        dispatch({ type: "update", id: tab.id, patch: { connectionId: connections[0]?.id ?? null, place: null } });
+      }
     }
-  }, [connections, selectedId]);
+  }, [connections, tabs]);
 
-  useShortcuts({ "Mod+,": () => setSheet({ kind: "settings" }) }, sheet.kind === "none");
+  useShortcuts(
+    {
+      "Mod+,": () => setSheet({ kind: "settings" }),
+      "Mod+T": () => dispatch({ type: "open", id: newTabId() }),
+      "Mod+W": () => dispatch({ type: "close", id: activeId }),
+      "Mod+Shift+]": () => dispatch({ type: "next" }),
+      "Mod+Shift+[": () => dispatch({ type: "previous" }),
+    },
+    sheet.kind === "none",
+  );
 
   const connectionMenu = (profile: ConnectionProfile) => {
     api
@@ -73,6 +90,8 @@ export default function App() {
     for (const [theme, label] of [["system", "System"], ["light", "Light"], ["dark", "Dark"]] as const) {
       if (theme !== settings.theme) action(`theme-${theme}`, `Theme: ${label}`, () => setTheme(theme).catch(report));
     }
+    action("new-tab", "New tab", () => dispatch({ type: "open", id: newTabId() }), "⌘T");
+    if (tabs.length > 1) action("close-tab", "Close tab", () => dispatch({ type: "close", id: activeId }), "⌘W");
     action("settings", "Settings…", () => setSheet({ kind: "settings" }), "⌘,");
     return actions;
   };
@@ -119,26 +138,48 @@ export default function App() {
         onSettings={() => setSheet({ kind: "settings" })}
       />
       {connection ? (
-        <Browser
-          key={connection.id}
-          connection={connection}
-          connections={connections ?? []}
-          active
-          refresh={refresh}
-          transfers={transfers}
-          drawer={
-            <>
-              {errorBanner}
-              {drawer}
-            </>
-          }
-          pillRef={pill}
-          appCommands={appCommands()}
-          lastPlaces={lastPlaces.current}
-          onSelectConnection={setSelectedId}
-          onEditConnection={(profile) => setSheet({ kind: "connection", initial: profile })}
-          onOpenTransfers={() => setDrawerOpen(true)}
-        />
+        tabs.map((tab) => {
+          const tabConnection = connections?.find((c) => c.id === tab.connectionId);
+          if (!tabConnection) return null;
+          const active = tab.id === activeId;
+          return (
+            <div key={`${tab.id}:${tabConnection.id}`} className="tab-pane" hidden={!active}>
+              <Browser
+                connection={tabConnection}
+                connections={connections ?? []}
+                active={active && sheet.kind === "none"}
+                refresh={refresh}
+                transfers={transfers}
+                drawer={
+                  active && (
+                    <>
+                      {errorBanner}
+                      {drawer}
+                    </>
+                  )
+                }
+                pillRef={active ? pill : null}
+                appCommands={appCommands()}
+                lastPlaces={lastPlaces.current}
+                initialPlace={tab.place}
+                strip={
+                  <TabStrip
+                    tabs={tabs}
+                    activeId={activeId}
+                    connections={connections ?? []}
+                    onSelect={(id) => dispatch({ type: "select", id })}
+                    onClose={(id) => dispatch({ type: "close", id })}
+                    onNew={() => dispatch({ type: "open", id: newTabId() })}
+                  />
+                }
+                onPlace={(place) => dispatch({ type: "update", id: tab.id, patch: { place } })}
+                onSelectConnection={(id) => dispatch({ type: "update", id: tab.id, patch: { connectionId: id, place: null } })}
+                onEditConnection={(profile) => setSheet({ kind: "connection", initial: profile })}
+                onOpenTransfers={() => setDrawerOpen(true)}
+              />
+            </div>
+          );
+        })
       ) : (
         <main className="main">
           {connectionsError && <EmptyState tone="error" title="Kelp couldn't load your connections" body={connectionsError.message} />}

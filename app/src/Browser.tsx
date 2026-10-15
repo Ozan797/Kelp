@@ -45,6 +45,9 @@ export type BrowserProps = {
   pillRef: Ref<HTMLButtonElement>;
   appCommands: Command[];
   lastPlaces: Record<string, Place>;
+  initialPlace: Place | null;
+  strip: ReactNode;
+  onPlace: (place: Place | null) => void;
   onSelectConnection: (id: string) => void;
   onEditConnection: (profile: ConnectionProfile) => void;
   onOpenTransfers: () => void;
@@ -60,6 +63,9 @@ export function Browser({
   pillRef,
   appCommands,
   lastPlaces,
+  initialPlace,
+  strip,
+  onPlace,
   onSelectConnection,
   onEditConnection,
   onOpenTransfers,
@@ -81,6 +87,11 @@ export function Browser({
   const listing = useListing(connection.id, place?.bucket ?? null, place?.prefix ?? "");
   const size = useUsage(connection.id, place?.bucket ?? null, place?.prefix ?? "");
   const startSize = size.start;
+
+  const opening = useRef(initialPlace);
+  useEffect(() => {
+    onPlace(place);
+  }, [place?.bucket, place?.prefix]);
 
   const latestPlace = useRef(place);
   latestPlace.current = place;
@@ -108,7 +119,8 @@ export function Browser({
       .then((list) => {
         if (cancelled) return;
         setBuckets(list);
-        const last = lastPlaces[connection.id] ?? connection.lastLocation;
+        const last = opening.current ?? lastPlaces[connection.id] ?? connection.lastLocation;
+        opening.current = null;
         const start = last && list.includes(last.bucket) ? last : list.length === 1 ? { bucket: list[0], prefix: "" } : null;
         if (start) {
           setHistory([start]);
@@ -430,6 +442,7 @@ export function Browser({
         dropBucket={drag?.zone === "bucket" ? (drag.target?.bucket ?? null) : null}
       />
       <main className="main">
+        {strip}
         {!place && bucketsError && failure(bucketsError, "Kelp couldn't load the buckets", () => setReload((n) => n + 1))}
         {!place && !bucketsError && (
           <EmptyState

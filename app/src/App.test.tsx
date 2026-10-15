@@ -306,6 +306,24 @@ describe("App", () => {
     expect(screen.getByRole("dialog", { name: "b.jpg" })).toBeTruthy();
   });
 
+  it("opens tabs that keep their own filter", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt", "b.txt"]));
+    render(<App />);
+    await screen.findByText("b.txt");
+    expect(screen.queryByRole("tablist")).toBeNull();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Filter this folder"), "a");
+    await user.click(document.body);
+    await user.keyboard("{Meta>}t{/Meta}");
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    const visibleFilter = () => screen.getAllByLabelText("Filter this folder").find((field) => field.closest("[hidden]") === null) as HTMLInputElement;
+    await waitFor(() => expect(visibleFilter().value).toBe(""));
+    await user.keyboard("{Meta>}{Shift>}[[{/Shift}{/Meta}");
+    expect(visibleFilter().value).toBe("a");
+    await user.keyboard("{Meta>}w{/Meta}");
+    expect(screen.queryByRole("tablist")).toBeNull();
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);
