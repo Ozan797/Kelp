@@ -122,6 +122,7 @@ src/usage.rs    size counting: UsageResult, usage.json, count loop
 - `AppError` gains `Busy` ("The storage provider is busy. Kelp will keep trying.") for `SlowDown`, `InternalError`,
   `ServiceUnavailable`, `RequestTimeout`; and `ObjectChanged` for `PreconditionFailed` (used internally to restart a
   download). `FileTooLarge` text becomes "This file is larger than 5 TB, the most S3 allows in one object."
+  `UploadGone` ("The upload was cleaned up on the server. Kelp will start it again.") for `NoSuchUpload`.
   Retryable = `Network | Busy`.
 
 ### 5.1 Provider additions
