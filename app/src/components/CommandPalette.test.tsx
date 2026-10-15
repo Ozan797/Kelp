@@ -49,6 +49,32 @@ describe("CommandPalette", () => {
     before.remove();
   });
 
+  it("scrolls the highlighted item into view", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<CommandPalette commands={commands(vi.fn())} onClose={vi.fn()} />);
+    await userEvent.keyboard("{ArrowDown}");
+    expect(scroll).toHaveBeenLastCalledWith({ block: "nearest" });
+    expect(scroll.mock.contexts[scroll.mock.contexts.length - 1]).toBe(screen.getAllByRole("option")[1]);
+  });
+
+  it("points at the highlighted item with a valid id, whatever the folder is called", () => {
+    const spaced: Command[] = [{ id: "folder:my photos/2024/", label: "2024", group: "places", run: vi.fn() }];
+    render(<CommandPalette commands={spaced} onClose={vi.fn()} />);
+    const target = screen.getByRole("combobox").getAttribute("aria-activedescendant") ?? "";
+    expect(target).not.toMatch(/\s/);
+    expect(document.getElementById(target)?.textContent).toBe("2024");
+  });
+
+  it("keeps the list it opened with while it is open", async () => {
+    const run = vi.fn();
+    const first = commands(run);
+    const { rerender } = render(<CommandPalette commands={first} onClose={vi.fn()} />);
+    rerender(<CommandPalette commands={[{ id: "pause", label: "Pause all transfers", group: "actions", run: () => run("pause") }, ...first]} onClose={vi.fn()} />);
+    await userEvent.keyboard("{Enter}");
+    expect(run).toHaveBeenCalledWith("new-folder");
+  });
+
   it("says when nothing matches", async () => {
     render(<CommandPalette commands={commands(vi.fn())} onClose={vi.fn()} />);
     await userEvent.type(screen.getByRole("combobox"), "zzz");

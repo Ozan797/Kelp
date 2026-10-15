@@ -3,10 +3,12 @@ import { rank, type Command } from "../lib/palette";
 
 type CommandPaletteProps = { commands: Command[]; onClose: () => void };
 
-export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
+export function CommandPalette({ commands: opened, onClose }: CommandPaletteProps) {
+  const [commands] = useState(opened);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const field = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const shown = useMemo(() => rank(commands, query), [commands, query]);
 
   useEffect(() => {
@@ -14,6 +16,10 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     field.current?.focus();
     return () => before?.focus();
   }, []);
+
+  useEffect(() => {
+    list.current?.querySelector(`#palette-option-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [active, shown]);
 
   const runAt = (index: number) => {
     const command = shown[index];
@@ -48,7 +54,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
           aria-label="Search commands and places"
           aria-expanded="true"
           aria-controls="palette-list"
-          aria-activedescendant={shown[active] ? `palette-${shown[active].id}` : undefined}
+          aria-activedescendant={shown[active] ? `palette-option-${active}` : undefined}
           placeholder="Search commands and places"
           value={query}
           onChange={(event) => {
@@ -57,12 +63,12 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
           }}
           onKeyDown={keyDown}
         />
-        <ul id="palette-list" className="palette-list" role="listbox" aria-label="Results">
+        <ul ref={list} id="palette-list" className="palette-list" role="listbox" aria-label="Results">
           {shown.length === 0 && <li className="palette-empty">No matches</li>}
           {shown.map((command, index) => (
             <li
               key={command.id}
-              id={`palette-${command.id}`}
+              id={`palette-option-${index}`}
               role="option"
               aria-selected={index === active}
               className={index === active ? "palette-item active" : "palette-item"}
