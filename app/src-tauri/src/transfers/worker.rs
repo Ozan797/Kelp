@@ -207,12 +207,14 @@ impl Job {
                 if let Some(Resume::Upload { upload_id, .. }) = other {
                     self.abort(&upload_id).await;
                 }
-                let upload_id = self
-                    .with_retries(0, || {
-                        self.provider.start_multipart(&self.bucket, &self.item.key)
-                    })
-                    .await?;
-                (upload_id, part_size(local_size), Vec::new())
+                let size = part_size(local_size);
+                let started = self
+                    .clone()
+                    .start_and_save(size, local_size, local_modified_ms);
+                let upload_id = tokio::spawn(started)
+                    .await
+                    .map_err(|_| AppError::UploadGone)??;
+                (upload_id, size, Vec::new())
             }
         };
         let resume = {
@@ -281,6 +283,36 @@ impl Job {
         let target = self.target(&upload_id);
         self.with_retries(0, || self.provider.complete_multipart(&target, &parts))
             .await
+    }
+
+    async fn start_and_save(
+        self: Arc<Self>,
+        part_size: u64,
+        local_size: u64,
+        local_modified_ms: u64,
+    ) -> Result<String, AppError> {
+        let upload_id = self
+            .with_retries(0, || {
+                self.provider.start_multipart(&self.bucket, &self.item.key)
+            })
+            .await?;
+        let resume = Resume::Upload {
+            upload_id: upload_id.clone(),
+            part_size,
+            parts: Vec::new(),
+            local_size,
+            local_modified_ms,
+        };
+        let kept = self
+            .manager
+            .set_resume(self.id, self.index, Some(resume), true, self.run)
+            .await;
+        if kept {
+            Ok(upload_id)
+        } else {
+            self.abort(&upload_id).await;
+            Err(AppError::UploadGone)
+        }
     }
 
     fn target<'a>(&'a self, upload_id: &'a str) -> PartTarget<'a> {

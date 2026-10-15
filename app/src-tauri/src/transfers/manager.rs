@@ -690,6 +690,24 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn cancelling_while_an_upload_is_being_created_leaves_nothing_behind() {
+        let h = harness();
+        h.provider.hold();
+        h.manager.start().await;
+        let (big, _) = h.big_upload();
+        let id = h.manager.add(big).await;
+        h.settle().await;
+        assert_eq!(h.provider.calls("start_multipart"), 1);
+        h.manager.cancel(id).await;
+        h.provider.release();
+        for _ in 0..50 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(h.provider.open_uploads(), 0);
+        assert_eq!(h.provider.calls("put_part"), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn a_big_download_comes_in_ranges() {
         let bytes = patterned(BIG);
         let provider =
