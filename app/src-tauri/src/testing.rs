@@ -391,6 +391,45 @@ impl FakeProvider {
     }
 }
 
+pub async fn state_with_two(
+    first: Arc<FakeProvider>,
+    second: Arc<FakeProvider>,
+) -> (AppState, Uuid, Uuid) {
+    let dir = std::env::temp_dir().join(format!("kelp-state-{}", Uuid::new_v4()));
+    let state = AppState::new(
+        ProfileStore::new(&dir),
+        Box::new(MemoryStore::default()),
+        Box::new(move |settings, _| {
+            let chosen = if settings.access_key_id == "FIRST" {
+                first.clone()
+            } else {
+                second.clone()
+            };
+            Ok(chosen)
+        }),
+    );
+    let mut ids = Vec::new();
+    for key in ["FIRST", "SECOND"] {
+        let id = Uuid::new_v4();
+        state.secrets.set(&id, "s").unwrap();
+        state.profiles.lock().await.push(ConnectionProfile {
+            id,
+            name: key.to_lowercase(),
+            settings: ConnectionSettings {
+                kind: ProviderKind::Hetzner,
+                endpoint: None,
+                region: "hel1".into(),
+                path_style: false,
+                access_key_id: key.into(),
+            },
+            bucket: None,
+            last_location: None,
+        });
+        ids.push(id);
+    }
+    (state, ids[0], ids[1])
+}
+
 pub async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppState, Uuid) {
     let dir = std::env::temp_dir().join(format!("kelp-state-{}", Uuid::new_v4()));
     let shared = fake.clone();

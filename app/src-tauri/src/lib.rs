@@ -20,8 +20,8 @@ use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
-    browse, connections, settings as settings_commands, transfers as transfer_commands,
-    uploads as upload_commands, usage as usage_commands,
+    browse, connections, copies as copy_commands, settings as settings_commands,
+    transfers as transfer_commands, uploads as upload_commands, usage as usage_commands,
 };
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
@@ -121,6 +121,8 @@ pub fn run() {
             browse::delete_objects,
             transfer_commands::list_transfers,
             transfer_commands::start_download,
+            copy_commands::plan_copy,
+            copy_commands::start_copy,
             upload_commands::inspect_drop,
             upload_commands::plan_upload,
             upload_commands::start_uploads,
