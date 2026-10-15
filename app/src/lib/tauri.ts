@@ -49,21 +49,47 @@ export type ErrorKind =
   | "io"
   | "fileTooLarge"
   | "connectionNotFound"
-  | "alreadyExists";
+  | "alreadyExists"
+  | "busy"
+  | "objectChanged"
+  | "uploadGone";
 
 export type AppError = { kind: ErrorKind; message: string };
 
 export type Direction = "upload" | "download";
-export type TransferStatus = "running" | "finished" | "failed" | "cancelled";
-export type TransferInfo = { id: string; direction: Direction; name: string; destination: string; total: number };
-export type TransferProgress = { id: string; done: number; total: number };
-export type TransferStateEvent = {
+export type TransferKind = "file" | "folder";
+export type TransferStatus = "waiting" | "running" | "retrying" | "paused" | "failed" | "finished" | "cancelled";
+export type TransferView = {
   id: string;
-  state: TransferStatus;
-  info: TransferInfo | null;
-  error: AppError | null;
+  direction: Direction;
+  kind: TransferKind;
+  name: string;
+  destination: string;
+  status: TransferStatus;
+  retryAt: number | null;
+  total: number;
+  done: number;
+  filesTotal: number;
+  filesDone: number;
+  filesFailed: number;
+  error: string | null;
   path: string | null;
 };
+export type TransferProgress = { id: string; done: number; total: number; filesDone: number };
+
+export type UsageView = {
+  connectionId: string;
+  bucket: string;
+  prefix: string;
+  bytes: number;
+  objects: number;
+  countedAtMs: number;
+  complete: boolean;
+  resumeToken: string | null;
+  counting: boolean;
+};
+
+export type FolderPlan = { files: number; bytes: number; existing: number; examples: string[] };
 
 export type MenuEntry = { label: string; onSelect: () => void } | "separator";
 
@@ -100,15 +126,38 @@ export const api = {
     call<string>("start_upload", { id, bucket, prefix, path, replace }),
   startDownload: (id: string, bucket: string, key: string, size: number) =>
     call<string>("start_download", { id, bucket, key, size }),
+  planFolderUpload: (id: string, bucket: string, prefix: string, path: string) =>
+    call<FolderPlan>("plan_folder_upload", { id, bucket, prefix, path }),
+  startFolderUpload: (id: string, bucket: string, prefix: string, path: string, skipExisting: boolean) =>
+    call<string>("start_folder_upload", { id, bucket, prefix, path, skipExisting }),
+  startFolderDownload: (id: string, bucket: string, prefix: string) =>
+    call<string>("start_folder_download", { id, bucket, prefix }),
+  getUsage: (id: string, bucket: string, prefix: string) => call<UsageView | null>("get_usage", { id, bucket, prefix }),
+  startUsageCount: (id: string, bucket: string, prefix: string) =>
+    call<UsageView | null>("start_usage_count", { id, bucket, prefix }),
+  cancelUsageCount: (id: string, bucket: string, prefix: string) =>
+    call<UsageView | null>("cancel_usage_count", { id, bucket, prefix }),
+  onUsageProgress: (handler: (view: UsageView) => void): Promise<UnlistenFn> =>
+    listen<UsageView>("usage://progress", (event) => handler(event.payload)),
+  listTransfers: () => call<TransferView[]>("list_transfers"),
+  pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
+  resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),
+  retryTransfer: (transfer: string) => call<void>("retry_transfer", { transfer }),
   cancelTransfer: (transfer: string) => call<void>("cancel_transfer", { transfer }),
+  pauseAll: () => call<void>("pause_all"),
+  resumeAll: () => call<void>("resume_all"),
   onTransferProgress: (handler: (event: TransferProgress) => void): Promise<UnlistenFn> =>
     listen<TransferProgress>("transfer://progress", (event) => handler(event.payload)),
-  onTransferState: (handler: (event: TransferStateEvent) => void): Promise<UnlistenFn> =>
-    listen<TransferStateEvent>("transfer://state", (event) => handler(event.payload)),
+  onTransferState: (handler: (view: TransferView) => void): Promise<UnlistenFn> =>
+    listen<TransferView>("transfer://state", (event) => handler(event.payload)),
   pickFiles: async (): Promise<string[]> => {
     const picked = await open({ multiple: true, directory: false });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];
+  },
+  pickFolder: async (): Promise<string | null> => {
+    const picked = await open({ multiple: false, directory: true });
+    return typeof picked === "string" ? picked : null;
   },
   confirm: (message: string, okLabel: string) =>
     ask(message, { title: "Kelp", kind: "warning", okLabel, cancelLabel: "Cancel" }),

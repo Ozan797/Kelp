@@ -1,3 +1,5 @@
+use std::io::SeekFrom;
+use std::ops::Range;
 use std::path::Path;
 use std::time::Duration;
 
@@ -9,12 +11,17 @@ use aws_sdk_s3::config::{
 };
 use aws_sdk_s3::error::{ProvideErrorMetadata, SdkError};
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
-use aws_sdk_s3::primitives::{ByteStream, DateTimeFormat};
-use aws_sdk_s3::types::{Delete, ObjectIdentifier};
-use tokio::io::AsyncWriteExt;
+use aws_sdk_s3::primitives::{ByteStream, DateTimeFormat, Length};
+use aws_sdk_s3::types::{
+    CompletedMultipartUpload, CompletedPart as S3CompletedPart, Delete, Object, ObjectIdentifier,
+};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 use super::progress_body::with_progress;
-use super::{KeyPage, ListPage, ObjectMeta, ProgressFn, StorageProvider};
+use super::{
+    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, PartTarget, ProgressFn,
+    StorageProvider,
+};
 use crate::connection::ConnectionSettings;
 use crate::error::AppError;
 
@@ -195,10 +202,121 @@ impl StorageProvider for S3Provider {
         Ok(())
     }
 
-    async fn get_file(
+    async fn head(&self, bucket: &str, key: &str) -> Result<ObjectInfo, AppError> {
+        let output = self
+            .client
+            .head_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|error| classify(error, bucket))?;
+        Ok(ObjectInfo {
+            size: output
+                .content_length()
+                .and_then(|size| u64::try_from(size).ok())
+                .unwrap_or(0),
+            etag: output.e_tag().unwrap_or_default().to_string(),
+        })
+    }
+
+    async fn start_multipart(&self, bucket: &str, key: &str) -> Result<String, AppError> {
+        let output = self
+            .client
+            .create_multipart_upload()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|error| classify(error, bucket))?;
+        output
+            .upload_id()
+            .map(str::to_string)
+            .ok_or_else(|| AppError::Provider("The provider didn't return an upload ID.".into()))
+    }
+
+    async fn put_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        path: &Path,
+        offset: u64,
+        len: u64,
+        progress: ProgressFn,
+    ) -> Result<String, AppError> {
+        let file = ByteStream::read_from()
+            .path(path)
+            .offset(offset)
+            .length(Length::Exact(len))
+            .build()
+            .await
+            .map_err(|error| AppError::Io(error.to_string()))?;
+        let body = ByteStream::new(with_progress(file.into_inner(), progress));
+        let output = self
+            .transfer_client
+            .upload_part()
+            .bucket(target.bucket)
+            .key(target.key)
+            .upload_id(target.upload_id)
+            .part_number(part_number(number)?)
+            .content_length(i64::try_from(len).map_err(|_| AppError::FileTooLarge)?)
+            .body(body)
+            .send()
+            .await
+            .map_err(|error| classify(error, target.bucket))?;
+        Ok(output.e_tag().unwrap_or_default().to_string())
+    }
+
+    async fn complete_multipart(
+        &self,
+        target: &PartTarget<'_>,
+        parts: &[CompletedPart],
+    ) -> Result<(), AppError> {
+        let mut sorted = parts.to_vec();
+        sorted.sort_by_key(|part| part.number);
+        let parts = sorted
+            .iter()
+            .map(|part| {
+                Ok(S3CompletedPart::builder()
+                    .part_number(part_number(part.number)?)
+                    .e_tag(&part.etag)
+                    .build())
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+        self.client
+            .complete_multipart_upload()
+            .bucket(target.bucket)
+            .key(target.key)
+            .upload_id(target.upload_id)
+            .multipart_upload(
+                CompletedMultipartUpload::builder()
+                    .set_parts(Some(parts))
+                    .build(),
+            )
+            .send()
+            .await
+            .map_err(|error| classify(error, target.bucket))?;
+        Ok(())
+    }
+
+    async fn abort_multipart(&self, target: &PartTarget<'_>) -> Result<(), AppError> {
+        self.client
+            .abort_multipart_upload()
+            .bucket(target.bucket)
+            .key(target.key)
+            .upload_id(target.upload_id)
+            .send()
+            .await
+            .map_err(|error| classify(error, target.bucket))?;
+        Ok(())
+    }
+
+    async fn get_range(
         &self,
         bucket: &str,
         key: &str,
+        etag: &str,
+        range: Range<u64>,
         path: &Path,
         progress: ProgressFn,
     ) -> Result<(), AppError> {
@@ -207,10 +325,13 @@ impl StorageProvider for S3Provider {
             .get_object()
             .bucket(bucket)
             .key(key)
+            .range(range_header(&range))
+            .if_match(etag)
             .send()
             .await
             .map_err(|error| classify(error, bucket))?;
-        let mut file = crate::transfers::open_reserved(path).await?;
+        let mut file = crate::transfers::paths::open_reserved(path).await?;
+        file.seek(SeekFrom::Start(range.start)).await?;
         let mut received = 0u64;
         while let Some(chunk) = output
             .body
@@ -225,6 +346,14 @@ impl StorageProvider for S3Provider {
         file.flush().await?;
         Ok(())
     }
+}
+
+fn part_number(number: u32) -> Result<i32, AppError> {
+    i32::try_from(number).map_err(|_| AppError::FileTooLarge)
+}
+
+fn range_header(range: &Range<u64>) -> String {
+    format!("bytes={}-{}", range.start, range.end.saturating_sub(1))
 }
 
 fn classify<E: ProvideErrorMetadata, R>(error: SdkError<E, R>, bucket: &str) -> AppError {
@@ -244,13 +373,22 @@ fn next_token(output: &ListObjectsV2Output) -> Option<String> {
 
 fn to_key_page(output: ListObjectsV2Output) -> KeyPage {
     KeyPage {
-        keys: output
-            .contents()
-            .iter()
-            .filter_map(|object| object.key().map(str::to_string))
-            .collect(),
+        objects: output.contents().iter().filter_map(object_meta).collect(),
         next_token: next_token(&output),
     }
+}
+
+fn object_meta(object: &Object) -> Option<ObjectMeta> {
+    Some(ObjectMeta {
+        key: object.key()?.to_string(),
+        size: object
+            .size()
+            .and_then(|size| u64::try_from(size).ok())
+            .unwrap_or(0),
+        last_modified: object
+            .last_modified()
+            .and_then(|time| time.fmt(DateTimeFormat::DateTime).ok()),
+    })
 }
 
 fn to_list_page(output: ListObjectsV2Output, prefix: &str) -> ListPage {
@@ -264,18 +402,7 @@ fn to_list_page(output: ListObjectsV2Output, prefix: &str) -> ListPage {
         .contents()
         .iter()
         .filter(|object| object.key() != Some(prefix))
-        .filter_map(|object| {
-            Some(ObjectMeta {
-                key: object.key()?.to_string(),
-                size: object
-                    .size()
-                    .and_then(|size| u64::try_from(size).ok())
-                    .unwrap_or(0),
-                last_modified: object
-                    .last_modified()
-                    .and_then(|time| time.fmt(DateTimeFormat::DateTime).ok()),
-            })
-        })
+        .filter_map(object_meta)
         .collect();
 
     let next_token = next_token(&output);
@@ -291,7 +418,7 @@ fn to_list_page(output: ListObjectsV2Output, prefix: &str) -> ListPage {
 mod tests {
     use super::*;
     use aws_sdk_s3::primitives::DateTime;
-    use aws_sdk_s3::types::{CommonPrefix, Object};
+    use aws_sdk_s3::types::CommonPrefix;
 
     fn object(key: &str, size: i64) -> Object {
         Object::builder()
@@ -372,8 +499,22 @@ mod tests {
             .next_continuation_token("more")
             .build();
         let page = to_key_page(output);
-        assert_eq!(page.keys, vec!["photos/", "photos/2026/beach.jpg"]);
+        let found: Vec<(&str, u64)> = page
+            .objects
+            .iter()
+            .map(|object| (object.key.as_str(), object.size))
+            .collect();
+        assert_eq!(found, vec![("photos/", 0), ("photos/2026/beach.jpg", 10)]);
         assert_eq!(page.next_token, Some("more".into()));
+    }
+
+    #[test]
+    fn ranges_become_inclusive_byte_headers() {
+        assert_eq!(range_header(&(0..8_388_608)), "bytes=0-8388607");
+        assert_eq!(
+            range_header(&(8_388_608..9_000_000)),
+            "bytes=8388608-8999999"
+        );
     }
 
     #[test]

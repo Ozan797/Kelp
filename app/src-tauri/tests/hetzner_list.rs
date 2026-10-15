@@ -146,18 +146,30 @@ async fn round_trips_a_small_file() {
     assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 15);
 
     let target = scratch.join("downloaded.txt");
-    std::fs::write(&target, b"").unwrap();
+    let info = provider.head(&bucket, &key).await.expect("head");
+    assert_eq!(info.size, 15);
+    std::fs::write(&target, vec![0; 15]).unwrap();
     provider
-        .get_file(&bucket, &key, &target, std::sync::Arc::new(|_| {}))
+        .get_range(
+            &bucket,
+            &key,
+            &info.etag,
+            0..15,
+            &target,
+            std::sync::Arc::new(|_| {}),
+        )
         .await
         .expect("download");
     assert_eq!(std::fs::read(&target).unwrap(), b"hello from kelp");
 
-    let keys = provider
+    let keys: Vec<String> = provider
         .list_keys(&bucket, &folder, None)
         .await
         .expect("list keys")
-        .keys;
+        .objects
+        .into_iter()
+        .map(|object| object.key)
+        .collect();
     assert_eq!(keys.len(), 2);
     provider.delete(&bucket, &keys).await.expect("delete");
     assert!(
@@ -165,7 +177,84 @@ async fn round_trips_a_small_file() {
             .list_keys(&bucket, &folder, None)
             .await
             .unwrap()
-            .keys
+            .objects
             .is_empty()
     );
+}
+
+#[tokio::test]
+#[ignore = "needs real Hetzner keys in .env.test"]
+async fn round_trips_a_multipart_file_in_ranges() {
+    use kelp_lib::providers::{CompletedPart, PartTarget};
+
+    let env = load_env_file();
+    let provider = real_provider(&env);
+    let bucket = env["KELP_TEST_BUCKET"].clone();
+    let mib = 1024 * 1024;
+    let size = 20 * mib;
+    let bytes: Vec<u8> = (0..size).map(|n| (n % 251) as u8).collect();
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let scratch = std::env::temp_dir().join(format!("kelp-multipart-{stamp}"));
+    std::fs::create_dir_all(&scratch).unwrap();
+    let source = scratch.join("big.bin");
+    std::fs::write(&source, &bytes).unwrap();
+    let key = format!("kelp-test/{stamp}.bin");
+
+    let upload_id = provider
+        .start_multipart(&bucket, &key)
+        .await
+        .expect("start multipart");
+    let target = PartTarget {
+        bucket: &bucket,
+        key: &key,
+        upload_id: &upload_id,
+    };
+    let ranges = [(0, 8 * mib), (8 * mib, 8 * mib), (16 * mib, 4 * mib)];
+    let mut parts = Vec::new();
+    for (index, (offset, len)) in ranges.iter().enumerate() {
+        let number = index as u32 + 1;
+        let etag = provider
+            .put_part(
+                &target,
+                number,
+                &source,
+                *offset as u64,
+                *len as u64,
+                std::sync::Arc::new(|_| {}),
+            )
+            .await
+            .expect("upload part");
+        parts.push(CompletedPart { number, etag });
+    }
+    provider
+        .complete_multipart(&target, &parts)
+        .await
+        .expect("complete");
+
+    let info = provider.head(&bucket, &key).await.expect("head");
+    assert_eq!(info.size, size as u64);
+    let copy = scratch.join("copy.bin");
+    std::fs::File::create(&copy)
+        .unwrap()
+        .set_len(info.size)
+        .unwrap();
+    for (offset, len) in ranges {
+        let range = offset as u64..(offset + len) as u64;
+        provider
+            .get_range(
+                &bucket,
+                &key,
+                &info.etag,
+                range,
+                &copy,
+                std::sync::Arc::new(|_| {}),
+            )
+            .await
+            .expect("download range");
+    }
+    assert!(std::fs::read(&copy).unwrap() == bytes);
+    provider.delete(&bucket, &[key]).await.expect("delete");
 }

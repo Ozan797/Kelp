@@ -1,60 +1,87 @@
 import { describe, expect, it } from "vitest";
-import type { TransferInfo } from "../lib/tauri";
+import type { TransferView } from "../lib/tauri";
 import { transfersReducer, type Transfer } from "./useTransfers";
 
-const info: TransferInfo = { id: "t1", direction: "upload", name: "a.mp4", destination: "media/", total: 100 };
+function view(partial: Partial<TransferView> = {}): TransferView {
+  return {
+    id: "t1",
+    direction: "upload",
+    kind: "file",
+    name: "a.mp4",
+    destination: "media/",
+    status: "running",
+    retryAt: null,
+    total: 100,
+    done: 0,
+    filesTotal: 1,
+    filesDone: 0,
+    filesFailed: 0,
+    error: null,
+    path: null,
+    ...partial,
+  };
+}
 
 function started(): Transfer[] {
-  return transfersReducer([], { type: "state", event: { id: "t1", state: "running", info, error: null, path: null } });
+  return transfersReducer([], { type: "state", view: view() });
 }
 
 describe("transfersReducer", () => {
-  it("adds a transfer when it starts", () => {
-    expect(started()).toEqual([{ ...info, status: "running", done: 0, error: null, path: null }]);
+  it("adds a transfer the first time it is seen", () => {
+    expect(started()).toEqual([{ ...view(), speed: null, sample: null }]);
   });
 
-  it("updates progress", () => {
-    const next = transfersReducer(started(), { type: "progress", event: { id: "t1", done: 40, total: 100 } });
-    expect(next[0].done).toBe(40);
+  it("replaces a known transfer with its newest view", () => {
+    const paused = transfersReducer(started(), { type: "state", view: view({ status: "paused", done: 40 }) });
+    expect(paused).toHaveLength(1);
+    expect(paused[0].status).toBe("paused");
+    expect(paused[0].done).toBe(40);
   });
 
-  it("records the outcome", () => {
-    const failed = transfersReducer(started(), {
-      type: "state",
-      event: { id: "t1", state: "failed", info: null, error: { kind: "network", message: "offline" }, path: null },
-    });
-    expect(failed[0].status).toBe("failed");
-    expect(failed[0].error?.kind).toBe("network");
+  it("updates progress and works out the speed", () => {
+    let state = transfersReducer(started(), { type: "progress", event: { id: "t1", done: 10, total: 100, filesDone: 0 }, at: 1000 });
+    expect(state[0].done).toBe(10);
+    expect(state[0].speed).toBeNull();
+    state = transfersReducer(state, { type: "progress", event: { id: "t1", done: 30, total: 100, filesDone: 0 }, at: 2000 });
+    expect(state[0].speed).toBe(20);
   });
 
-  it("ignores events for unknown transfers", () => {
-    expect(transfersReducer([], { type: "progress", event: { id: "nope", done: 1, total: 2 } })).toEqual([]);
+  it("forgets the speed once a transfer stops running", () => {
+    let state = transfersReducer(started(), { type: "progress", event: { id: "t1", done: 10, total: 100, filesDone: 0 }, at: 1000 });
+    state = transfersReducer(state, { type: "progress", event: { id: "t1", done: 30, total: 100, filesDone: 0 }, at: 2000 });
+    state = transfersReducer(state, { type: "state", view: view({ status: "paused", done: 30 }) });
+    expect(state[0].speed).toBeNull();
   });
 
-  it("clears finished and cancelled transfers but keeps running and failed ones", () => {
+  it("shows a finished transfer as complete", () => {
+    const finished = transfersReducer(started(), { type: "state", view: view({ status: "finished", done: 60 }) });
+    expect(finished[0].done).toBe(100);
+  });
+
+  it("ignores progress for unknown transfers", () => {
+    expect(transfersReducer([], { type: "progress", event: { id: "nope", done: 1, total: 2, filesDone: 0 }, at: 0 })).toEqual([]);
+  });
+
+  it("adds transfers saved from last time without duplicating live ones", () => {
+    const state = transfersReducer(started(), { type: "loaded", views: [view({ status: "waiting" }), view({ id: "t2", status: "paused" })] });
+    expect(state.map((t) => [t.id, t.status])).toEqual([
+      ["t1", "running"],
+      ["t2", "paused"],
+    ]);
+  });
+
+  it("clears finished and cancelled transfers but keeps the rest", () => {
     let state = started();
-    state = transfersReducer(state, {
-      type: "state",
-      event: { id: "t2", state: "running", info: { ...info, id: "t2" }, error: null, path: null },
-    });
-    state = transfersReducer(state, { type: "state", event: { id: "t1", state: "finished", info: null, error: null, path: "/x" } });
-    expect(transfersReducer(state, { type: "clearFinished" }).map((t) => t.id)).toEqual(["t2"]);
-  });
-});
-
-describe("transfersReducer duplicates", () => {
-  it("does not add a transfer twice when its start event repeats", () => {
-    const again = transfersReducer(started(), {
-      type: "state",
-      event: { id: "t1", state: "running", info, error: null, path: null },
-    });
-    expect(again).toHaveLength(1);
-  });
-});
-
-describe("transfersReducer cancelled", () => {
-  it("clears cancelled transfers", () => {
-    const cancelled = transfersReducer(started(), { type: "state", event: { id: "t1", state: "cancelled", info: null, error: null, path: null } });
-    expect(transfersReducer(cancelled, { type: "clearFinished" })).toEqual([]);
+    for (const [id, status] of [
+      ["t2", "waiting"],
+      ["t3", "paused"],
+      ["t4", "failed"],
+      ["t5", "finished"],
+      ["t6", "cancelled"],
+      ["t7", "retrying"],
+    ] as const) {
+      state = transfersReducer(state, { type: "state", view: view({ id, status }) });
+    }
+    expect(transfersReducer(state, { type: "clearFinished" }).map((t) => t.id)).toEqual(["t1", "t2", "t3", "t4", "t7"]);
   });
 });

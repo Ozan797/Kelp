@@ -2,7 +2,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::providers::ListPage;
+use crate::providers::{ListPage, ObjectMeta, StorageProvider};
 use crate::state::AppState;
 
 pub fn folder_key(prefix: &str, name: &str) -> Result<String, AppError> {
@@ -32,6 +32,23 @@ pub async fn buckets(state: &AppState, id: Uuid) -> Result<Vec<String>, AppError
     state.provider(id).await?.list_buckets().await
 }
 
+pub async fn list_all(
+    provider: &dyn StorageProvider,
+    bucket: &str,
+    prefix: &str,
+) -> Result<Vec<ObjectMeta>, AppError> {
+    let mut objects = Vec::new();
+    let mut token = None;
+    loop {
+        let page = provider.list_keys(bucket, prefix, token).await?;
+        objects.extend(page.objects);
+        token = page.next_token;
+        if token.is_none() {
+            return Ok(objects);
+        }
+    }
+}
+
 pub async fn delete_keys(
     state: &AppState,
     id: Uuid,
@@ -42,15 +59,8 @@ pub async fn delete_keys(
     let mut targets = Vec::new();
     for key in keys {
         if key.ends_with('/') {
-            let mut token = None;
-            loop {
-                let page = provider.list_keys(bucket, &key, token).await?;
-                targets.extend(page.keys);
-                token = page.next_token;
-                if token.is_none() {
-                    break;
-                }
-            }
+            let inside = list_all(provider.as_ref(), bucket, &key).await?;
+            targets.extend(inside.into_iter().map(|object| object.key));
         }
         targets.push(key);
     }
@@ -112,36 +122,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::connection::{ConnectionSettings, ProviderKind};
-    use crate::profiles::{ConnectionProfile, ProfileStore};
-    use crate::secrets::MemoryStore;
-    use crate::testing::FakeProvider;
-
-    async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppState, Uuid) {
-        let dir = std::env::temp_dir().join(format!("kelp-browse-{}", Uuid::new_v4()));
-        let shared = fake.clone();
-        let state = AppState::new(
-            ProfileStore::new(&dir),
-            Box::new(MemoryStore::default()),
-            Box::new(move |_, _| Ok(shared.clone())),
-        );
-        let id = Uuid::new_v4();
-        state.secrets.set(&id, "s").unwrap();
-        state.profiles.lock().await.push(ConnectionProfile {
-            id,
-            name: "media".into(),
-            settings: ConnectionSettings {
-                kind: ProviderKind::Hetzner,
-                endpoint: None,
-                region: "hel1".into(),
-                path_style: false,
-                access_key_id: "AKIDEXAMPLE".into(),
-            },
-            bucket: bucket.map(String::from),
-            last_location: None,
-        });
-        (state, id)
-    }
+    use crate::testing::{FakeProvider, state_with};
 
     #[test]
     fn folder_names_are_trimmed() {

@@ -7,9 +7,10 @@ type BucketColumnProps = {
   error: AppError | null;
   selected: string | null;
   onSelect: (bucket: string) => void;
+  onContextMenu?: (bucket: string) => void;
 };
 
-export function BucketColumn({ connection, buckets, error, selected, onSelect }: BucketColumnProps) {
+export function BucketColumn({ connection, buckets, error, selected, onSelect, onContextMenu }: BucketColumnProps) {
   return (
     <aside className="buckets" aria-label="Buckets" data-tauri-drag-region>
       <header className="buckets-head">
@@ -35,6 +36,11 @@ export function BucketColumn({ connection, buckets, error, selected, onSelect }:
               className={bucket === selected ? "bucket selected" : "bucket"}
               aria-current={bucket === selected ? "true" : undefined}
               onClick={() => onSelect(bucket)}
+              onContextMenu={(event) => {
+                if (!onContextMenu) return;
+                event.preventDefault();
+                onContextMenu(bucket);
+              }}
             >
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M4 6h12l-1.3 9.2a1.5 1.5 0 0 1-1.5 1.3H6.8a1.5 1.5 0 0 1-1.5-1.3z" fill="currentColor" />

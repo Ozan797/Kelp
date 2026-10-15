@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionProfile, ListPage, MenuEntry, TransferStateEvent } from "./lib/tauri";
+import type { ConnectionProfile, ListPage, MenuEntry, TransferView } from "./lib/tauri";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -11,10 +11,19 @@ const api = vi.hoisted(() => ({
   setLastLocation: vi.fn(),
   onTransferState: vi.fn(),
   onTransferProgress: vi.fn(),
+  listTransfers: vi.fn(),
+  getUsage: vi.fn(),
+  onUsageProgress: vi.fn(),
+  startUsageCount: vi.fn(),
+  cancelUsageCount: vi.fn(),
   confirm: vi.fn(),
   deleteObjects: vi.fn(),
   showContextMenu: vi.fn(),
   startDownload: vi.fn(),
+  startFolderDownload: vi.fn(),
+  pickFolder: vi.fn(),
+  planFolderUpload: vi.fn(),
+  startFolderUpload: vi.fn(),
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
@@ -63,6 +72,10 @@ beforeEach(() => {
   api.setLastLocation.mockResolvedValue(undefined);
   api.onTransferState.mockResolvedValue(() => undefined);
   api.onTransferProgress.mockResolvedValue(() => undefined);
+  api.listTransfers.mockResolvedValue([]);
+  api.getUsage.mockResolvedValue(null);
+  api.onUsageProgress.mockResolvedValue(() => undefined);
+  api.startUsageCount.mockResolvedValue(null);
   api.deleteObjects.mockResolvedValue(1);
   api.showContextMenu.mockResolvedValue(undefined);
 });
@@ -210,16 +223,19 @@ describe("App", () => {
     api.listBuckets.mockImplementation(async (id: string) => (id === "c1" ? ["archive"] : ["a", "b"]));
     api.deleteConnection.mockRejectedValue({ kind: "io", message: "The connection list couldn't be saved." });
     api.confirm.mockResolvedValue(true);
-    let emit: (event: TransferStateEvent) => void = () => undefined;
-    api.onTransferState.mockImplementation(async (handler: (event: TransferStateEvent) => void) => {
+    let emit: (view: TransferView) => void = () => undefined;
+    api.onTransferState.mockImplementation(async (handler: (view: TransferView) => void) => {
       emit = handler;
       return () => undefined;
     });
     render(<App />);
     await screen.findByText("This folder is empty");
-    const info = { id: "t1", direction: "download" as const, name: "a.txt", destination: "/Users/me/Downloads/a.txt", total: 10 };
-    act(() => emit({ id: "t1", state: "running", info, error: null, path: null }));
-    act(() => emit({ id: "t1", state: "finished", info: null, error: null, path: info.destination }));
+    const running: TransferView = {
+      id: "t1", direction: "download", kind: "file", name: "a.txt", destination: "/Users/me/Downloads/a.txt", status: "running",
+      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
+    };
+    act(() => emit(running));
+    act(() => emit({ ...running, status: "finished", done: 10, filesDone: 1, path: running.destination }));
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Cloudflare · cdn" }));
     expect(await screen.findByText("Choose a bucket")).toBeTruthy();
@@ -234,6 +250,80 @@ describe("App", () => {
     if (!remove || remove === "separator") throw new Error("no delete entry");
     remove.onSelect();
     expect((await screen.findByRole("alert")).textContent).toContain("The connection list couldn't be saved.");
+  });
+
+  it("uploads a folder after asking once about files already there", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.pickFolder.mockResolvedValue("/Users/me/photos");
+    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 2, examples: ["photos/a.jpg", "photos/b.jpg"] });
+    api.startFolderUpload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Upload" }));
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    expect(entries.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual(["Upload files…", "Upload a folder…"]);
+    const folder = entries[1];
+    if (folder === "separator") throw new Error("no folder entry");
+    folder.onSelect();
+    await user.click(await screen.findByRole("button", { name: "Skip 2 existing" }));
+    expect(api.planFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos");
+    expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("uploads a folder straight away when nothing clashes", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.pickFolder.mockResolvedValue("/Users/me/photos");
+    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 0, examples: [] });
+    api.startFolderUpload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Upload" }));
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const folder = entries[1];
+    if (folder === "separator") throw new Error("no folder entry");
+    folder.onSelect();
+    await waitFor(() => expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("downloads folders as well as files from the menu", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.txt"]));
+    api.startDownload.mockResolvedValue("t1");
+    api.startFolderDownload.mockResolvedValue("t2");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.txt"));
+    await user.keyboard("{Meta>}a{/Meta}");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("a.txt") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const download = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Download"));
+    if (!download || download === "separator") throw new Error("no download entry");
+    expect(download.label).toBe("Download 2 items");
+    download.onSelect();
+    await waitFor(() => expect(api.startFolderDownload).toHaveBeenCalledWith("c1", "archive", "docs/"));
+    expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10);
+  });
+
+  it("calculates the size of the open folder, a folder row or a bucket", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.txt"]));
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Calculate size" }));
+    expect(api.startUsageCount).toHaveBeenCalledWith("c1", "archive", "");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("docs") });
+    const rowEntries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const folderSize = rowEntries.find((entry) => entry !== "separator" && entry.label === "Calculate size");
+    if (!folderSize || folderSize === "separator") throw new Error("no size entry for the folder");
+    folderSize.onSelect();
+    await waitFor(() => expect(api.startUsageCount).toHaveBeenCalledWith("c1", "archive", "docs/"));
+    const bucketColumn = screen.getByRole("complementary", { name: "Buckets" });
+    await user.pointer({ keys: "[MouseRight]", target: within(bucketColumn).getByRole("button", { name: "archive" }) });
+    const bucketEntries = api.showContextMenu.mock.calls[1][0] as MenuEntry[];
+    expect(bucketEntries.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual(["Calculate size"]);
   });
 
   it("reloads the folder even when a delete partly fails", async () => {

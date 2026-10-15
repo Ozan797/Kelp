@@ -29,7 +29,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["fs", "io-util", "sync"] }
+tokio = { version = "1.53.3", features = ["fs", "io-util", "macros", "rt", "sync", "time"] }
 uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 # Smaller, faster release builds: https://tauri.app/concept/size/#cargo-configuration
@@ -41,4 +41,4 @@ panic = "abort"
 strip = true
 
 [dev-dependencies]
-tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "test-util"] }

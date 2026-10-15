@@ -3,41 +3,103 @@ import type { Transfer } from "../hooks/useTransfers";
 import { formatBytes } from "../lib/format";
 import { transferSummary } from "./StatusBar";
 
-type GroupId = "running" | "failed" | "finished";
+type GroupId = "running" | "waiting" | "paused" | "failed" | "finished";
 
 const GROUPS: { id: GroupId; label: string; matches: (t: Transfer) => boolean }[] = [
-  { id: "running", label: "In progress", matches: (t) => t.status === "running" },
+  { id: "running", label: "In progress", matches: (t) => t.status === "running" || t.status === "retrying" },
+  { id: "waiting", label: "Waiting", matches: (t) => t.status === "waiting" },
+  { id: "paused", label: "Paused", matches: (t) => t.status === "paused" },
   { id: "failed", label: "Failed", matches: (t) => t.status === "failed" },
   { id: "finished", label: "Finished", matches: (t) => t.status === "finished" || t.status === "cancelled" },
 ];
+
+const ACTIVE = new Set(["waiting", "running", "retrying"]);
 
 function fraction(t: Transfer): number {
   return t.total === 0 ? 0 : Math.min(t.done / t.total, 1);
 }
 
-function statusText(t: Transfer): string {
-  if (t.status === "failed") return t.error?.message ?? "Failed";
+function percent(t: Transfer): number {
+  return Math.floor(fraction(t) * 100);
+}
+
+function secondsUntil(at: number | null, now: number): number {
+  return at === null ? 0 : Math.max(Math.ceil((at - now) / 1000), 0);
+}
+
+function statusText(t: Transfer, now: number): string {
+  if (t.status === "failed") return t.error ?? "Failed";
   if (t.status === "cancelled") return "Cancelled";
   if (t.status === "finished") return t.direction === "download" ? "Downloaded" : "Uploaded";
-  return `${Math.floor(fraction(t) * 100)}% · ${formatBytes(t.done)} of ${formatBytes(t.total)}`;
+  if (t.status === "waiting") return "Waiting";
+  if (t.status === "paused") return `Paused at ${percent(t)}%`;
+  if (t.status === "retrying") {
+    const seconds = secondsUntil(t.retryAt, now);
+    return seconds > 0 ? `Connection dropped · Retrying in ${seconds} s` : "Connection dropped · Retrying now";
+  }
+  if (t.kind === "folder") {
+    return `${t.filesDone.toLocaleString("en-GB")} of ${t.filesTotal.toLocaleString("en-GB")} files · ${formatBytes(t.done)} of ${formatBytes(t.total)}`;
+  }
+  return `${percent(t)}% · ${formatBytes(t.done)} of ${formatBytes(t.total)}`;
+}
+
+function failedFiles(t: Transfer): string | null {
+  if (t.kind !== "folder" || t.filesFailed === 0 || t.status === "failed") return null;
+  return `${t.filesFailed.toLocaleString("en-GB")} ${t.filesFailed === 1 ? "file" : "files"} failed`;
+}
+
+function speedText(t: Transfer): string | null {
+  if (t.status !== "running" || !t.speed) return null;
+  const left = Math.ceil(Math.max(t.total - t.done, 0) / t.speed);
+  const remaining = left < 60 ? `${left} s` : `${Math.ceil(left / 60)} min`;
+  return `${formatBytes(t.speed)}/s · ${remaining} left`;
 }
 
 function destinationText(t: Transfer): string {
   if (t.direction === "upload") return `to ${t.destination}`;
-  const folder = t.path?.split("/").slice(0, -1).pop();
+  const folder = (t.path ?? t.destination).split("/").slice(0, -1).pop();
   return `to ${folder || "Downloads"}`;
+}
+
+function useNow(ticking: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+  return now;
 }
 
 type TransferDrawerProps = {
   transfers: Transfer[];
+  onPause: (id: string) => void;
+  onResume: (id: string) => void;
+  onRetry: (id: string) => void;
   onCancel: (id: string) => void;
+  onPauseAll: () => void;
+  onResumeAll: () => void;
   onReveal: (path: string) => void;
   onClearFinished: () => void;
   onClose: () => void;
 };
 
-export function TransferDrawer({ transfers, onCancel, onReveal, onClearFinished, onClose }: TransferDrawerProps) {
-  const [open, setOpen] = useState<Record<GroupId, boolean>>({ running: true, failed: true, finished: false });
+export function TransferDrawer({
+  transfers,
+  onPause,
+  onResume,
+  onRetry,
+  onCancel,
+  onPauseAll,
+  onResumeAll,
+  onReveal,
+  onClearFinished,
+  onClose,
+}: TransferDrawerProps) {
+  const [open, setOpen] = useState<Record<GroupId, boolean>>({ running: true, waiting: false, paused: true, failed: true, finished: false });
+  const now = useNow(transfers.some((t) => t.status === "retrying"));
+  const anyActive = transfers.some((t) => ACTIVE.has(t.status));
+  const anyPaused = transfers.some((t) => t.status === "paused");
   const [height, setHeight] = useState(260);
   const section = useRef<HTMLElement>(null);
   const drag = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -82,6 +144,16 @@ export function TransferDrawer({ transfers, onCancel, onReveal, onClearFinished,
         <h2>Transfers</h2>
         <span className="drawer-summary">{transferSummary(transfers) ?? "Nothing in progress"}</span>
         <span className="spacer" />
+        {anyActive && (
+          <button type="button" className="button button-secondary" onClick={onPauseAll}>
+            Pause all
+          </button>
+        )}
+        {!anyActive && anyPaused && (
+          <button type="button" className="button button-secondary" onClick={onResumeAll}>
+            Resume all
+          </button>
+        )}
         <button type="button" className="button button-secondary" onClick={onClearFinished}>
           Clear finished
         </button>
@@ -109,21 +181,50 @@ export function TransferDrawer({ transfers, onCancel, onReveal, onClearFinished,
                   {items.map((t) => (
                     <li key={t.id} className="transfer-row" tabIndex={0}>
                       <span className={`direction ${t.status}`} aria-hidden="true">
-                        {t.status === "failed" ? "!" : t.direction === "upload" ? "↑" : "↓"}
+                        {t.status === "failed" ? "!" : t.status === "paused" ? "⏸" : t.status === "waiting" ? "·" : t.direction === "upload" ? "↑" : "↓"}
                       </span>
                       <span className="transfer-name">
                         <strong>{t.name}</strong>
                         <small>{destinationText(t)}</small>
-                        {t.status === "running" && (
-                          <span className="transfer-bar" aria-hidden="true">
+                        {failedFiles(t) && <small className="bad">{failedFiles(t)}</small>}
+                        {(t.status === "running" || t.status === "retrying" || t.status === "paused") && (
+                          <span className={t.status === "paused" ? "transfer-bar paused" : "transfer-bar"} aria-hidden="true">
                             <span style={{ transform: `scaleX(${fraction(t)})` }} />
                           </span>
                         )}
                       </span>
-                      <span className={t.status === "failed" ? "transfer-status bad" : "transfer-status"}>{statusText(t)}</span>
+                      <span className={`transfer-status ${t.status === "failed" ? "bad" : t.status === "retrying" ? "warn" : ""}`}>
+                        <span>{statusText(t, now)}</span>
+                        {speedText(t) && <span>{speedText(t)}</span>}
+                      </span>
                       <span className="transfer-actions">
-                        {t.status === "running" && (
+                        {ACTIVE.has(t.status) && (
+                          <button type="button" aria-label={`Pause ${t.name}`} onClick={() => onPause(t.id)}>
+                            ⏸
+                          </button>
+                        )}
+                        {t.status === "paused" && (
+                          <button type="button" aria-label={`Resume ${t.name}`} onClick={() => onResume(t.id)}>
+                            ▶
+                          </button>
+                        )}
+                        {t.status === "failed" && (
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            aria-label={t.kind === "folder" ? `Retry failed files in ${t.name}` : `Retry ${t.name}`}
+                            onClick={() => onRetry(t.id)}
+                          >
+                            {t.kind === "folder" ? "Retry failed" : "Retry"}
+                          </button>
+                        )}
+                        {(ACTIVE.has(t.status) || t.status === "paused") && (
                           <button type="button" aria-label={`Cancel ${t.name}`} onClick={() => onCancel(t.id)}>
+                            ✕
+                          </button>
+                        )}
+                        {t.status === "failed" && (
+                          <button type="button" aria-label={`Remove ${t.name}`} onClick={() => onCancel(t.id)}>
                             ✕
                           </button>
                         )}

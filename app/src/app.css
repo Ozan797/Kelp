@@ -262,6 +262,22 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.statusbar-info,
+.size-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.size-progress .spinner {
+  width: 10px;
+  height: 10px;
+}
+
+.statusbar .link-button {
+  font-size: 11px;
+}
+
 .transfer-pill {
   display: flex;
   align-items: center;
@@ -775,8 +791,25 @@ button {
 }
 
 .transfer-status {
+  display: grid;
+  gap: 2px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.transfer-status.warn {
+  color: var(--warning);
+}
+
+.direction.waiting,
+.direction.paused {
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+.transfer-bar.paused span {
+  background: var(--text-muted);
 }
 
 .transfer-bar {
@@ -796,6 +829,9 @@ button {
 }
 
 .transfer-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
   justify-self: end;
   opacity: 0;
 }
@@ -877,4 +913,29 @@ button {
     opacity: 0;
     translate: 0 4px;
   }
+}
+
+.button.destructive {
+  color: var(--danger);
+}
+
+.clash-list {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 11px / 1.4 var(--font-mono);
+  list-style: none;
+}
+
+.clash-more {
+  color: var(--text-muted);
+}
+
+.transfer-name small.bad {
+  color: var(--danger);
 }

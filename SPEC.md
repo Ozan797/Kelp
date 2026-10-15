@@ -39,12 +39,12 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 
 ## 4. Features and milestones
 
-**M1 – Core (CLI proof)**
+**M1 – Core (CLI proof)** · done (verified on S3 and Hetzner; R2 still to verify)
 - `StorageProvider` trait with an S3 implementation.
 - List (with prefix, delimiter, pagination), head, get, put, delete.
 - Verified against one real bucket per provider.
 
-**M2 – Basic app**
+**M2 – Basic app** · done
 - Tauri shell, connection list, file list with breadcrumbs.
 - Saved connections: add once, then open from the sidebar with one click (see 5.7).
 - Add, edit, delete connection profiles; secrets in Keychain.
@@ -52,7 +52,7 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 - Reopen each connection in the bucket and folder you last had open.
 - Download and upload single files with progress.
 
-**M3 – Transfers**
+**M3 – Transfers** · done (design: `docs/superpowers/specs/2026-10-15-kelp-m3-transfers-design.md`)
 - Transfer queue with concurrency limit, pause, resume, cancel, retry with backoff.
 - Multipart upload and ranged parallel download for large files.
 - Folder upload and download (recursive).
@@ -99,7 +99,8 @@ kelp/
 │       └── src/
 │           ├── commands/     # what the UI can call
 │           ├── providers/    # StorageProvider trait + s3.rs (+ sftp.rs later)
-│           ├── transfers/    # queue.rs, worker.rs
+│           ├── transfers/    # model, queue, plan, retry, store, manager, worker
+│           ├── usage.rs      # bucket and folder size
 │           ├── credentials.rs  state.rs  error.rs  lib.rs  main.rs
 ├── website/              # landing site (separate Vite project)
 ├── design/               # shared tokens, components, fonts, brand
@@ -153,21 +154,22 @@ UsageResult {
 Profiles (without secrets) are stored as JSON in the app data directory. Usage results are cached as JSON
 next to them, per connection, bucket and prefix.
 
-### 5.4 Tauri commands (initial set)
+### 5.4 Tauri commands
 
-`list_connections`, `save_connection`, `delete_connection`, `test_connection`,
+`list_connections`, `save_connection`, `delete_connection`, `test_connection`, `set_last_location`,
 `list_buckets`, `list_objects`, `delete_objects`, `create_folder`,
-`start_upload`, `start_download`, `pause_transfer`, `resume_transfer`, `cancel_transfer`, `list_transfers`,
-`set_last_location`, `get_usage`, `start_usage_count`, `cancel_usage_count`.
+`list_transfers`, `start_upload`, `start_download`, `plan_folder_upload`, `start_folder_upload`, `start_folder_download`,
+`pause_transfer`, `resume_transfer`, `retry_transfer`, `cancel_transfer`, `pause_all`, `resume_all`,
+`get_usage`, `start_usage_count`, `cancel_usage_count`.
 
 Events: `transfer://progress`, `transfer://state`, `usage://progress`.
 
 ### 5.5 Transfer engine
 
-- Global concurrency limit (default 4 files) and per-file part concurrency (default 4 parts).
-- Multipart upload above 16 MiB, 8 MiB parts. Ranged GETs for large downloads.
-- Retries with exponential backoff and jitter; each part retries independently.
-- Pause and resume persist state to disk so a restart can resume.
+- 4 transfers run at once; each sends up to 4 requests (parts, ranges or files); at most 16 requests in flight.
+- Multipart upload above 16 MiB, 8 MiB parts (larger for files over 80 GB, to stay under 10,000 parts). Downloads fetch 8 MiB ranges.
+- Retries on network and busy errors: 5 attempts, backoff 1, 2, 4, 8, 16 s (max 30 s) with jitter; each part retries independently.
+- Finished parts and ranges are saved in `transfers.json`, so pause, quit and resume all continue where they stopped.
 - Downloads write to a `.part` file and rename on completion.
 
 ### 5.6 Folder semantics

@@ -12,6 +12,25 @@ export function formatBytes(bytes: number): string {
   return `${rounded} ${UNITS[unit]}`;
 }
 
+export function formatCount(count: number): string {
+  if (count < 10_000) return count.toLocaleString("en-GB");
+  if (count < 1_000_000) return `${Math.round(count / 1000)} K`;
+  const millions = count / 1_000_000;
+  return `${millions < 10 ? Math.round(millions * 10) / 10 : Math.round(millions)} M`;
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+export function formatAge(at: number, now: number = Date.now()): string {
+  const elapsed = Math.max(now - at, 0);
+  if (elapsed < MINUTE) return "just now";
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} min ago`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} h ago`;
+  return `${Math.floor(elapsed / DAY)} d ago`;
+}
+
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

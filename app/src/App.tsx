@@ -12,10 +12,16 @@ import { TransferDrawer } from "./components/TransferDrawer";
 import { useConnections } from "./hooks/useConnections";
 import { useListing, type Row } from "./hooks/useListing";
 import { useTransfers } from "./hooks/useTransfers";
-import { api, toAppError, type AppError, type ConnectionProfile, type MenuEntry } from "./lib/tauri";
+import { useUsage } from "./hooks/useUsage";
+import { OverwriteSheet } from "./components/OverwriteSheet";
+import { api, toAppError, type AppError, type ConnectionProfile, type FolderPlan, type MenuEntry } from "./lib/tauri";
 
 type Place = { bucket: string; prefix: string };
-type Sheet = { kind: "none" } | { kind: "connection"; initial: ConnectionProfile | null } | { kind: "folder" };
+type Sheet =
+  | { kind: "none" }
+  | { kind: "connection"; initial: ConnectionProfile | null }
+  | { kind: "folder" }
+  | { kind: "overwrite"; plan: FolderPlan; path: string };
 
 function parentOf(prefix: string): string {
   const parts = prefix.split("/").filter(Boolean).slice(0, -1);
@@ -45,6 +51,7 @@ export default function App() {
   const connection = connections?.find((c) => c.id === selectedId) ?? null;
   const place = position >= 0 ? history[position] : null;
   const listing = useListing(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
+  const size = useUsage(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
 
   const selectConnection = (id: string) => {
     if (id === selectedId) return;
@@ -144,9 +151,10 @@ export default function App() {
 
   const download = async (rows: Row[]) => {
     if (!connection || !place) return;
-    for (const row of rows.filter((r) => !r.isFolder)) {
+    for (const row of rows) {
       try {
-        await api.startDownload(connection.id, place.bucket, row.key, row.size ?? 0);
+        if (row.isFolder) await api.startFolderDownload(connection.id, place.bucket, row.key);
+        else await api.startDownload(connection.id, place.bucket, row.key, row.size ?? 0);
         setDrawerOpen(true);
       } catch (caught) {
         setActionError(toAppError(caught));
@@ -199,19 +207,79 @@ export default function App() {
     }
   };
 
+  const startFolderUpload = async (path: string, skipExisting: boolean) => {
+    if (!connection || !place) return;
+    try {
+      await api.startFolderUpload(connection.id, place.bucket, place.prefix, path, skipExisting);
+      setDrawerOpen(true);
+    } catch (caught) {
+      setActionError(toAppError(caught));
+    }
+  };
+
+  const uploadFolder = async () => {
+    if (!connection || !place) return;
+    const path = await api.pickFolder();
+    if (!path) return;
+    try {
+      const plan = await api.planFolderUpload(connection.id, place.bucket, place.prefix, path);
+      if (plan.existing === 0) await startFolderUpload(path, false);
+      else setSheet({ kind: "overwrite", plan, path });
+    } catch (caught) {
+      setActionError(toAppError(caught));
+    }
+  };
+
+  const chooseUpload = () => {
+    api
+      .showContextMenu([
+        { label: "Upload files…", onSelect: upload },
+        { label: "Upload a folder…", onSelect: uploadFolder },
+      ])
+      .catch(() => undefined);
+  };
+
+  const calculateSize = (bucket: string, prefix: string) => {
+    if (!connection) return;
+    api.startUsageCount(connection.id, bucket, prefix).catch((e) => setActionError(toAppError(e)));
+  };
+
+  const bucketMenu = (bucket: string) => {
+    api
+      .showContextMenu([
+        {
+          label: "Calculate size",
+          onSelect: () => {
+            go({ bucket, prefix: "" });
+            calculateSize(bucket, "");
+          },
+        },
+      ])
+      .catch(() => undefined);
+  };
+
   const openRow = (row: Row) => {
     if (place && row.isFolder) go({ bucket: place.bucket, prefix: row.key });
   };
 
   const fileMenu = (row: Row, keys: Set<string>) => {
     const rows = visibleRows.filter((r) => keys.has(r.key));
-    const files = rows.filter((r) => !r.isFolder);
+    const onlyFiles = rows.every((r) => !r.isFolder);
     const entries: MenuEntry[] = [];
-    if (rows.length === 1 && row.isFolder) entries.push({ label: "Open", onSelect: () => openRow(row) });
-    if (files.length > 0) {
+    if (rows.length === 1 && row.isFolder) {
+      entries.push({ label: "Open", onSelect: () => openRow(row) });
       entries.push({
-        label: files.length === 1 ? `Download ${files[0].name}` : `Download ${plural(files.length, "file")}`,
-        onSelect: () => download(files),
+        label: "Calculate size",
+        onSelect: () => {
+          openRow(row);
+          if (place) calculateSize(place.bucket, row.key);
+        },
+      });
+    }
+    if (rows.length > 0) {
+      entries.push({
+        label: rows.length === 1 ? `Download ${rows[0].name}` : `Download ${plural(rows.length, onlyFiles ? "file" : "item")}`,
+        onSelect: () => download(rows),
       });
     }
     if (entries.length > 0) entries.push("separator");
@@ -329,6 +397,7 @@ export default function App() {
           error={bucketsError}
           selected={place?.bucket ?? null}
           onSelect={(bucket) => go({ bucket, prefix: "" })}
+          onContextMenu={bucketMenu}
         />
       )}
       <main className="main">
@@ -374,7 +443,7 @@ export default function App() {
               filter={filter}
               onFilter={setFilter}
               onNewFolder={() => setSheet({ kind: "folder" })}
-              onUpload={upload}
+              onUpload={chooseUpload}
             />
             {content()}
           </>
@@ -390,7 +459,12 @@ export default function App() {
         {drawerOpen && (
           <TransferDrawer
             transfers={transfers}
+            onPause={(id) => api.pauseTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onResume={(id) => api.resumeTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onRetry={(id) => api.retryTransfer(id).catch((e) => setActionError(toAppError(e)))}
             onCancel={(id) => api.cancelTransfer(id).catch((e) => setActionError(toAppError(e)))}
+            onPauseAll={() => api.pauseAll().catch((e) => setActionError(toAppError(e)))}
+            onResumeAll={() => api.resumeAll().catch((e) => setActionError(toAppError(e)))}
             onReveal={(path) => api.revealInFinder(path).catch((e) => setActionError(toAppError(e)))}
             onClearFinished={clearFinished}
             onClose={() => {
@@ -407,6 +481,16 @@ export default function App() {
             transfers={transfers}
             onOpenTransfers={() => setDrawerOpen(true)}
             pillRef={pill}
+            size={
+              place
+                ? {
+                    usage: size.usage,
+                    now: Date.now(),
+                    onCalculate: () => size.start().catch((e) => setActionError(toAppError(e))),
+                    onCancel: () => size.cancel().catch((e) => setActionError(toAppError(e))),
+                  }
+                : null
+            }
           />
         )}
       </main>
@@ -419,6 +503,22 @@ export default function App() {
             await reloadConnections();
             selectConnection(profile.id);
             setRefresh((n) => n + 1);
+          }}
+        />
+      )}
+      {sheet.kind === "overwrite" && place && (
+        <OverwriteSheet
+          plan={sheet.plan}
+          folderName={sheet.path.split("/").filter(Boolean).pop() ?? sheet.path}
+          destination={`${place.bucket}/${place.prefix}`}
+          onCancel={() => setSheet({ kind: "none" })}
+          onSkip={() => {
+            setSheet({ kind: "none" });
+            startFolderUpload(sheet.path, true);
+          }}
+          onReplace={() => {
+            setSheet({ kind: "none" });
+            startFolderUpload(sheet.path, false);
           }}
         />
       )}
