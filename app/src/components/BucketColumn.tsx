@@ -8,9 +8,10 @@ type BucketColumnProps = {
   selected: string | null;
   onSelect: (bucket: string) => void;
   onContextMenu?: (bucket: string) => void;
+  dropBucket?: string | null;
 };
 
-export function BucketColumn({ connection, buckets, error, selected, onSelect, onContextMenu }: BucketColumnProps) {
+export function BucketColumn({ connection, buckets, error, selected, onSelect, onContextMenu, dropBucket = null }: BucketColumnProps) {
   return (
     <aside className="buckets" aria-label="Buckets" data-tauri-drag-region>
       <header className="buckets-head">
@@ -33,7 +34,9 @@ export function BucketColumn({ connection, buckets, error, selected, onSelect, o
           <li key={bucket}>
             <button
               type="button"
-              className={bucket === selected ? "bucket selected" : "bucket"}
+              className={["bucket", bucket === selected ? "selected" : "", bucket === dropBucket ? "drop-target" : ""].join(" ").trim()}
+              data-drop="bucket"
+              data-bucket={bucket}
               aria-current={bucket === selected ? "true" : undefined}
               onClick={() => onSelect(bucket)}
               onContextMenu={(event) => {

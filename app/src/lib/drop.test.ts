@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationText, dropTarget, pillText, summaryText, toCssPoint } from "./drop";
+import { destinationText, dropTarget, dropZone, pillText, summaryText, toCssPoint } from "./drop";
 
 const open = { bucket: "media", prefix: "vimeo/" };
 
@@ -60,5 +60,14 @@ describe("drop text", () => {
   it("says what will happen or where to drop", () => {
     expect(pillText("3 files · 412 MB", open)).toBe("Upload 3 files · 412 MB to vimeo/");
     expect(pillText("3 files · 412 MB", null)).toBe("Drop on a folder or a bucket");
+  });
+});
+
+describe("dropZone", () => {
+  it("names the kind of target under the pointer", () => {
+    expect(dropZone(inside('<button data-drop="bucket" data-bucket="b"><span id="here"></span></button>'))).toBe("bucket");
+    expect(dropZone(inside('<div data-drop="list"><span id="here"></span></div>'))).toBe("list");
+    expect(dropZone(inside('<nav><span id="here"></span></nav>'))).toBeNull();
+    expect(dropZone(null)).toBeNull();
   });
 });

@@ -7,6 +7,13 @@ export function toCssPoint(x: number, y: number, ratio: number): { x: number; y:
   return { x: x / ratio, y: y / ratio };
 }
 
+export type DropZone = "list" | "folder" | "bucket";
+
+export function dropZone(element: Element | null): DropZone | null {
+  const zone = element?.closest<HTMLElement>("[data-drop]")?.dataset.drop;
+  return zone === "list" || zone === "folder" || zone === "bucket" ? zone : null;
+}
+
 export function dropTarget(element: Element | null, open: Place | null): Place | null {
   const target = element?.closest<HTMLElement>("[data-drop]");
   if (!target) return null;
