@@ -1,6 +1,7 @@
 import type { Ref } from "react";
 import type { Transfer } from "../hooks/useTransfers";
-import { formatBytes } from "../lib/format";
+import { formatAge, formatBytes, formatCount } from "../lib/format";
+import type { UsageView } from "../lib/tauri";
 
 const plural = (count: number) => `${count} ${count === 1 ? "file" : "files"}`;
 
@@ -28,6 +29,44 @@ export function transferSummary(transfers: Transfer[]): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+type Size = { usage: UsageView | null; now: number; onCalculate: () => void; onCancel: () => void };
+
+function SizeText({ usage, now, onCalculate, onCancel }: Size) {
+  const action = (label: string, onClick: () => void) => (
+    <button type="button" className="link-button" onClick={onClick}>
+      {label}
+    </button>
+  );
+  if (!usage) return action("Calculate size", onCalculate);
+  if (usage.counting) {
+    return (
+      <>
+        <span className="size-progress">
+          <span className="spinner" aria-hidden="true" />
+          Counting · {formatCount(usage.objects)} files · {formatBytes(usage.bytes)} so far
+        </span>
+        {action("Cancel", onCancel)}
+      </>
+    );
+  }
+  if (usage.complete) {
+    return (
+      <>
+        <span>
+          {formatBytes(usage.bytes)} · {formatCount(usage.objects)} files · {formatAge(usage.countedAtMs, now)}
+        </span>
+        {action("Recalculate", onCalculate)}
+      </>
+    );
+  }
+  return (
+    <>
+      <span>{formatBytes(usage.bytes)} counted so far</span>
+      {action("Continue", onCalculate)}
+    </>
+  );
+}
+
 type StatusBarProps = {
   itemCount: number | null;
   selectedCount: number;
@@ -35,18 +74,27 @@ type StatusBarProps = {
   transfers: Transfer[];
   onOpenTransfers: () => void;
   pillRef?: Ref<HTMLButtonElement>;
+  size?: Size | null;
 };
 
-export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef }: StatusBarProps) {
+export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size }: StatusBarProps) {
   const summary = transferSummary(transfers);
   const running = transfers.filter(inProgress);
   const total = running.reduce((sum, t) => sum + t.total, 0);
   const done = running.reduce((sum, t) => sum + t.done, 0);
   return (
     <footer className="statusbar">
-      <span>
-        {itemCount !== null && `${itemCount} ${itemCount === 1 ? "item" : "items"}`}
-        {selectedCount > 0 && ` · ${selectedCount} selected · ${formatBytes(selectedBytes)}`}
+      <span className="statusbar-info">
+        <span>
+          {itemCount !== null && `${itemCount} ${itemCount === 1 ? "item" : "items"}`}
+          {selectedCount > 0 && ` · ${selectedCount} selected · ${formatBytes(selectedBytes)}`}
+        </span>
+        {size && (
+          <>
+            <span aria-hidden="true">·</span>
+            <SizeText {...size} />
+          </>
+        )}
       </span>
       {summary && (
         <button type="button" ref={pillRef} className="transfer-pill" onClick={onOpenTransfers}>

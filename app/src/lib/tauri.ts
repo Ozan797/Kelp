@@ -77,6 +77,18 @@ export type TransferView = {
 };
 export type TransferProgress = { id: string; done: number; total: number; filesDone: number };
 
+export type UsageView = {
+  connectionId: string;
+  bucket: string;
+  prefix: string;
+  bytes: number;
+  objects: number;
+  countedAtMs: number;
+  complete: boolean;
+  resumeToken: string | null;
+  counting: boolean;
+};
+
 export type FolderPlan = { files: number; bytes: number; existing: number; examples: string[] };
 
 export type MenuEntry = { label: string; onSelect: () => void } | "separator";
@@ -120,6 +132,13 @@ export const api = {
     call<string>("start_folder_upload", { id, bucket, prefix, path, skipExisting }),
   startFolderDownload: (id: string, bucket: string, prefix: string) =>
     call<string>("start_folder_download", { id, bucket, prefix }),
+  getUsage: (id: string, bucket: string, prefix: string) => call<UsageView | null>("get_usage", { id, bucket, prefix }),
+  startUsageCount: (id: string, bucket: string, prefix: string) =>
+    call<UsageView | null>("start_usage_count", { id, bucket, prefix }),
+  cancelUsageCount: (id: string, bucket: string, prefix: string) =>
+    call<UsageView | null>("cancel_usage_count", { id, bucket, prefix }),
+  onUsageProgress: (handler: (view: UsageView) => void): Promise<UnlistenFn> =>
+    listen<UsageView>("usage://progress", (event) => handler(event.payload)),
   listTransfers: () => call<TransferView[]>("list_transfers"),
   pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
   resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),

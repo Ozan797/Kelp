@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayName, fileKind, formatBytes, formatModified } from "./format";
+import { displayName, fileKind, formatAge, formatBytes, formatCount, formatModified } from "./format";
 
 describe("formatBytes", () => {
   it("uses decimal units like Finder", () => {
@@ -58,5 +58,25 @@ describe("fileKind", () => {
 
   it("does not treat object property names as extensions", () => {
     expect(fileKind("notes.constructor", false)).toBe("other");
+  });
+});
+
+describe("formatCount", () => {
+  it("keeps small counts exact and shortens big ones", () => {
+    expect(formatCount(7)).toBe("7");
+    expect(formatCount(2400)).toBe("2,400");
+    expect(formatCount(12_300)).toBe("12 K");
+    expect(formatCount(3_100_000)).toBe("3.1 M");
+    expect(formatCount(24_000_000)).toBe("24 M");
+  });
+});
+
+describe("formatAge", () => {
+  const now = 1_000_000_000;
+  it("says how long ago in the biggest whole unit", () => {
+    expect(formatAge(now - 20_000, now)).toBe("just now");
+    expect(formatAge(now - 5 * 60_000, now)).toBe("5 min ago");
+    expect(formatAge(now - 3 * 3_600_000, now)).toBe("3 h ago");
+    expect(formatAge(now - 2 * 86_400_000, now)).toBe("2 d ago");
   });
 });

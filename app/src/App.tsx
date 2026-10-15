@@ -12,6 +12,7 @@ import { TransferDrawer } from "./components/TransferDrawer";
 import { useConnections } from "./hooks/useConnections";
 import { useListing, type Row } from "./hooks/useListing";
 import { useTransfers } from "./hooks/useTransfers";
+import { useUsage } from "./hooks/useUsage";
 import { OverwriteSheet } from "./components/OverwriteSheet";
 import { api, toAppError, type AppError, type ConnectionProfile, type FolderPlan, type MenuEntry } from "./lib/tauri";
 
@@ -50,6 +51,7 @@ export default function App() {
   const connection = connections?.find((c) => c.id === selectedId) ?? null;
   const place = position >= 0 ? history[position] : null;
   const listing = useListing(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
+  const size = useUsage(connection?.id ?? null, place?.bucket ?? null, place?.prefix ?? "");
 
   const selectConnection = (id: string) => {
     if (id === selectedId) return;
@@ -237,6 +239,25 @@ export default function App() {
       .catch(() => undefined);
   };
 
+  const calculateSize = (bucket: string, prefix: string) => {
+    if (!connection) return;
+    api.startUsageCount(connection.id, bucket, prefix).catch((e) => setActionError(toAppError(e)));
+  };
+
+  const bucketMenu = (bucket: string) => {
+    api
+      .showContextMenu([
+        {
+          label: "Calculate size",
+          onSelect: () => {
+            go({ bucket, prefix: "" });
+            calculateSize(bucket, "");
+          },
+        },
+      ])
+      .catch(() => undefined);
+  };
+
   const openRow = (row: Row) => {
     if (place && row.isFolder) go({ bucket: place.bucket, prefix: row.key });
   };
@@ -245,7 +266,16 @@ export default function App() {
     const rows = visibleRows.filter((r) => keys.has(r.key));
     const onlyFiles = rows.every((r) => !r.isFolder);
     const entries: MenuEntry[] = [];
-    if (rows.length === 1 && row.isFolder) entries.push({ label: "Open", onSelect: () => openRow(row) });
+    if (rows.length === 1 && row.isFolder) {
+      entries.push({ label: "Open", onSelect: () => openRow(row) });
+      entries.push({
+        label: "Calculate size",
+        onSelect: () => {
+          openRow(row);
+          if (place) calculateSize(place.bucket, row.key);
+        },
+      });
+    }
     if (rows.length > 0) {
       entries.push({
         label: rows.length === 1 ? `Download ${rows[0].name}` : `Download ${plural(rows.length, onlyFiles ? "file" : "item")}`,
@@ -367,6 +397,7 @@ export default function App() {
           error={bucketsError}
           selected={place?.bucket ?? null}
           onSelect={(bucket) => go({ bucket, prefix: "" })}
+          onContextMenu={bucketMenu}
         />
       )}
       <main className="main">
@@ -450,6 +481,16 @@ export default function App() {
             transfers={transfers}
             onOpenTransfers={() => setDrawerOpen(true)}
             pillRef={pill}
+            size={
+              place
+                ? {
+                    usage: size.usage,
+                    now: Date.now(),
+                    onCalculate: () => size.start().catch((e) => setActionError(toAppError(e))),
+                    onCancel: () => size.cancel().catch((e) => setActionError(toAppError(e))),
+                  }
+                : null
+            }
           />
         )}
       </main>

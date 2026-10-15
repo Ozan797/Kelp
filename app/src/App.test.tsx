@@ -12,6 +12,10 @@ const api = vi.hoisted(() => ({
   onTransferState: vi.fn(),
   onTransferProgress: vi.fn(),
   listTransfers: vi.fn(),
+  getUsage: vi.fn(),
+  onUsageProgress: vi.fn(),
+  startUsageCount: vi.fn(),
+  cancelUsageCount: vi.fn(),
   confirm: vi.fn(),
   deleteObjects: vi.fn(),
   showContextMenu: vi.fn(),
@@ -69,6 +73,9 @@ beforeEach(() => {
   api.onTransferState.mockResolvedValue(() => undefined);
   api.onTransferProgress.mockResolvedValue(() => undefined);
   api.listTransfers.mockResolvedValue([]);
+  api.getUsage.mockResolvedValue(null);
+  api.onUsageProgress.mockResolvedValue(() => undefined);
+  api.startUsageCount.mockResolvedValue(null);
   api.deleteObjects.mockResolvedValue(1);
   api.showContextMenu.mockResolvedValue(undefined);
 });
@@ -298,6 +305,25 @@ describe("App", () => {
     download.onSelect();
     await waitFor(() => expect(api.startFolderDownload).toHaveBeenCalledWith("c1", "archive", "docs/"));
     expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10);
+  });
+
+  it("calculates the size of the open folder, a folder row or a bucket", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.txt"]));
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Calculate size" }));
+    expect(api.startUsageCount).toHaveBeenCalledWith("c1", "archive", "");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("docs") });
+    const rowEntries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const folderSize = rowEntries.find((entry) => entry !== "separator" && entry.label === "Calculate size");
+    if (!folderSize || folderSize === "separator") throw new Error("no size entry for the folder");
+    folderSize.onSelect();
+    await waitFor(() => expect(api.startUsageCount).toHaveBeenCalledWith("c1", "archive", "docs/"));
+    const bucketColumn = screen.getByRole("complementary", { name: "Buckets" });
+    await user.pointer({ keys: "[MouseRight]", target: within(bucketColumn).getByRole("button", { name: "archive" }) });
+    const bucketEntries = api.showContextMenu.mock.calls[1][0] as MenuEntry[];
+    expect(bucketEntries.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual(["Calculate size"]);
   });
 
   it("reloads the folder even when a delete partly fails", async () => {
