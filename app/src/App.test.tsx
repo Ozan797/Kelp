@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionProfile, ListPage, MenuEntry, TransferView } from "./lib/tauri";
+import type { ConnectionProfile, FileDropEvent, ListPage, MenuEntry, TransferView } from "./lib/tauri";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -22,8 +22,11 @@ const api = vi.hoisted(() => ({
   startDownload: vi.fn(),
   startFolderDownload: vi.fn(),
   pickFolder: vi.fn(),
-  planFolderUpload: vi.fn(),
-  startFolderUpload: vi.fn(),
+  pickFiles: vi.fn(),
+  planUpload: vi.fn(),
+  startUploads: vi.fn(),
+  inspectDrop: vi.fn(),
+  onFileDrop: vi.fn(),
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
@@ -73,6 +76,8 @@ beforeEach(() => {
   api.onTransferState.mockResolvedValue(() => undefined);
   api.onTransferProgress.mockResolvedValue(() => undefined);
   api.listTransfers.mockResolvedValue([]);
+  api.onFileDrop.mockResolvedValue(() => undefined);
+  api.startUploads.mockResolvedValue(["t1"]);
   api.getUsage.mockResolvedValue(null);
   api.onUsageProgress.mockResolvedValue(() => undefined);
   api.startUsageCount.mockResolvedValue(null);
@@ -255,8 +260,7 @@ describe("App", () => {
   it("uploads a folder after asking once about files already there", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
     api.pickFolder.mockResolvedValue("/Users/me/photos");
-    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 2, examples: ["photos/a.jpg", "photos/b.jpg"] });
-    api.startFolderUpload.mockResolvedValue("t1");
+    api.planUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 2, examples: ["photos/a.jpg", "photos/b.jpg"] });
     render(<App />);
     await screen.findByText("a.txt");
     const user = userEvent.setup();
@@ -267,16 +271,15 @@ describe("App", () => {
     if (folder === "separator") throw new Error("no folder entry");
     folder.onSelect();
     await user.click(await screen.findByRole("button", { name: "Skip 2 existing" }));
-    expect(api.planFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos");
-    expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", true);
+    expect(api.planUpload).toHaveBeenCalledWith("c1", "archive", "", ["/Users/me/photos"]);
+    expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "", ["/Users/me/photos"], true);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("uploads a folder straight away when nothing clashes", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
     api.pickFolder.mockResolvedValue("/Users/me/photos");
-    api.planFolderUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 0, examples: [] });
-    api.startFolderUpload.mockResolvedValue("t1");
+    api.planUpload.mockResolvedValue({ files: 10, bytes: 100, existing: 0, examples: [] });
     render(<App />);
     await screen.findByText("a.txt");
     await userEvent.setup().click(screen.getByRole("button", { name: "Upload" }));
@@ -284,8 +287,61 @@ describe("App", () => {
     const folder = entries[1];
     if (folder === "separator") throw new Error("no folder entry");
     folder.onSelect();
-    await waitFor(() => expect(api.startFolderUpload).toHaveBeenCalledWith("c1", "archive", "", "/Users/me/photos", false));
+    await waitFor(() => expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "", ["/Users/me/photos"], false));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("uploads what is dropped onto a folder row into that folder", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    api.planUpload.mockResolvedValue({ files: 1, bytes: 5, existing: 0, examples: [] });
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
+    act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 10, y: 10 }));
+    expect((await screen.findByRole("status")).textContent).toBe("Upload 1 file · 5 B to drafts/");
+    act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 10, y: 10 }));
+    await waitFor(() => expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"], false));
+    expect(api.planUpload).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"]);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("asks once when a drop would replace files", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5 });
+    api.planUpload.mockResolvedValue({ files: 5, bytes: 5, existing: 2, examples: ["a.txt", "b.txt"] });
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => screen.getByText("a.txt"));
+    act(() => emit({ type: "drop", paths: ["/u/a.txt", "/u/b.txt"], x: 1, y: 1 }));
+    expect(await screen.findByRole("dialog", { name: "2 of 5 files are already here" })).toBeTruthy();
+    expect(screen.getByText("Uploading 2 items to archive/ would replace them.")).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Skip 2 existing" }));
+    expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "", ["/u/a.txt", "/u/b.txt"], true);
+  });
+
+  it("asks once when picked files already exist", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.pickFiles.mockResolvedValue(["/u/a.txt", "/u/b.txt"]);
+    api.planUpload.mockResolvedValue({ files: 2, bytes: 2, existing: 2, examples: ["a.txt", "b.txt"] });
+    render(<App />);
+    await screen.findByText("a.txt");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Upload" }));
+    const files = (api.showContextMenu.mock.calls[0][0] as MenuEntry[])[0];
+    if (files === "separator") throw new Error("no files entry");
+    files.onSelect();
+    expect(await screen.findByRole("dialog", { name: "2 of 2 files are already here" })).toBeTruthy();
+    expect(api.confirm).not.toHaveBeenCalled();
   });
 
   it("downloads folders as well as files from the menu", async () => {

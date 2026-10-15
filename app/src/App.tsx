@@ -12,7 +12,9 @@ import { TransferDrawer } from "./components/TransferDrawer";
 import { useConnections } from "./hooks/useConnections";
 import { useListing, type Row } from "./hooks/useListing";
 import { useTransfers } from "./hooks/useTransfers";
+import { useFileDrop } from "./hooks/useFileDrop";
 import { useUsage } from "./hooks/useUsage";
+import { DropOverlay } from "./components/DropOverlay";
 import { OverwriteSheet } from "./components/OverwriteSheet";
 import { api, toAppError, type AppError, type ConnectionProfile, type FolderPlan, type MenuEntry } from "./lib/tauri";
 
@@ -21,7 +23,7 @@ type Sheet =
   | { kind: "none" }
   | { kind: "connection"; initial: ConnectionProfile | null }
   | { kind: "folder" }
-  | { kind: "overwrite"; plan: FolderPlan; path: string };
+  | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
 
 function parentOf(prefix: string): string {
   const parts = prefix.split("/").filter(Boolean).slice(0, -1);
@@ -190,53 +192,40 @@ export default function App() {
     }
   };
 
-  const upload = async () => {
-    if (!connection || !place) return;
-    for (const path of await api.pickFiles()) {
-      const name = path.split("/").pop() ?? path;
-      try {
-        await api.startUpload(connection.id, place.bucket, place.prefix, path, false);
-        setDrawerOpen(true);
-      } catch (caught) {
-        const error = toAppError(caught);
-        if (error.kind !== "alreadyExists") {
-          setActionError(error);
-          continue;
-        }
-        const replace = await api.confirm(`Replace "${name}"? The file already in this folder will be overwritten.`, `Replace ${name}`);
-        if (!replace) continue;
-        try {
-          await api.startUpload(connection.id, place.bucket, place.prefix, path, true);
-          setDrawerOpen(true);
-        } catch (failed) {
-          setActionError(toAppError(failed));
-        }
-      }
+  const uploadPaths = async (paths: string[], target: Place) => {
+    if (!connection || paths.length === 0) return;
+    try {
+      const plan = await api.planUpload(connection.id, target.bucket, target.prefix, paths);
+      if (plan.existing > 0) setSheet({ kind: "overwrite", plan, paths, target });
+      else await startUploads(paths, target, false);
+    } catch (caught) {
+      setActionError(toAppError(caught));
     }
   };
 
-  const startFolderUpload = async (path: string, skipExisting: boolean) => {
-    if (!connection || !place) return;
+  const startUploads = async (paths: string[], target: Place, skipExisting: boolean) => {
+    if (!connection) return;
     try {
-      await api.startFolderUpload(connection.id, place.bucket, place.prefix, path, skipExisting);
+      await api.startUploads(connection.id, target.bucket, target.prefix, paths, skipExisting);
       setDrawerOpen(true);
     } catch (caught) {
       setActionError(toAppError(caught));
     }
   };
 
-  const uploadFolder = async () => {
-    if (!connection || !place) return;
-    const path = await api.pickFolder();
-    if (!path) return;
-    try {
-      const plan = await api.planFolderUpload(connection.id, place.bucket, place.prefix, path);
-      if (plan.existing === 0) await startFolderUpload(path, false);
-      else setSheet({ kind: "overwrite", plan, path });
-    } catch (caught) {
-      setActionError(toAppError(caught));
-    }
+  const upload = async () => {
+    if (place) await uploadPaths(await api.pickFiles(), place);
   };
+
+  const uploadFolder = async () => {
+    if (!place) return;
+    const path = await api.pickFolder();
+    if (path) await uploadPaths([path], place);
+  };
+
+  const drag = useFileDrop(place, (paths, target) => {
+    uploadPaths(paths, target);
+  });
 
   const chooseUpload = () => {
     api
@@ -387,6 +376,7 @@ export default function App() {
         hasMore={listing.hasMore}
         loading={listing.loading}
         onLoadMore={listing.loadMore}
+        dropKey={drag?.zone === "folder" && drag.target?.bucket === place.bucket ? drag.target.prefix : null}
       />
     );
   };
@@ -402,6 +392,7 @@ export default function App() {
           selected={place?.bucket ?? null}
           onSelect={(bucket) => go({ bucket, prefix: "" })}
           onContextMenu={bucketMenu}
+          dropBucket={drag?.zone === "bucket" ? (drag.target?.bucket ?? null) : null}
         />
       )}
       <main className="main">
@@ -449,9 +440,13 @@ export default function App() {
               onNewFolder={() => setSheet({ kind: "folder" })}
               onUpload={chooseUpload}
             />
-            {content()}
+            <div className="drop-area" data-drop="list">
+              {content()}
+              {drag && <DropOverlay drag={drag} open={place} />}
+            </div>
           </>
         )}
+        {drag && !place && <DropOverlay drag={drag} open={null} />}
         {actionError && (
           <div className="action-error" role="alert">
             <span>{actionError.message}</span>
@@ -510,19 +505,19 @@ export default function App() {
           }}
         />
       )}
-      {sheet.kind === "overwrite" && place && (
+      {sheet.kind === "overwrite" && (
         <OverwriteSheet
           plan={sheet.plan}
-          folderName={sheet.path.split("/").filter(Boolean).pop() ?? sheet.path}
-          destination={`${place.bucket}/${place.prefix}`}
+          what={sheet.paths.length === 1 ? `"${sheet.paths[0].split("/").filter(Boolean).pop() ?? sheet.paths[0]}"` : `${sheet.paths.length} items`}
+          destination={`${sheet.target.bucket}/${sheet.target.prefix}`}
           onCancel={() => setSheet({ kind: "none" })}
           onSkip={() => {
             setSheet({ kind: "none" });
-            startFolderUpload(sheet.path, true);
+            startUploads(sheet.paths, sheet.target, true);
           }}
           onReplace={() => {
             setSheet({ kind: "none" });
-            startFolderUpload(sheet.path, false);
+            startUploads(sheet.paths, sheet.target, false);
           }}
         />
       )}

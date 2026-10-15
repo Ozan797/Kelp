@@ -133,12 +133,6 @@ export const api = {
     call<number>("delete_objects", { id, bucket, keys }),
   startDownload: (id: string, bucket: string, key: string, size: number) =>
     call<string>("start_download", { id, bucket, key, size }),
-  startUpload: (id: string, bucket: string, prefix: string, path: string, replace: boolean) =>
-    call<string>("start_upload", { id, bucket, prefix, path, replace }),
-  planFolderUpload: (id: string, bucket: string, prefix: string, path: string) =>
-    call<FolderPlan>("plan_folder_upload", { id, bucket, prefix, path }),
-  startFolderUpload: (id: string, bucket: string, prefix: string, path: string, skipExisting: boolean) =>
-    call<string>("start_folder_upload", { id, bucket, prefix, path, skipExisting }),
   inspectDrop: (paths: string[]) => call<DropSummary>("inspect_drop", { paths }),
   planUpload: (id: string, bucket: string, prefix: string, paths: string[]) =>
     call<FolderPlan>("plan_upload", { id, bucket, prefix, paths }),
