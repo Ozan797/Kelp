@@ -49,7 +49,10 @@ export type ErrorKind =
   | "io"
   | "fileTooLarge"
   | "connectionNotFound"
-  | "alreadyExists";
+  | "alreadyExists"
+  | "busy"
+  | "objectChanged"
+  | "uploadGone";
 
 export type AppError = { kind: ErrorKind; message: string };
 

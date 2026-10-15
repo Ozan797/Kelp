@@ -41,7 +41,7 @@ pub enum AppError {
     #[error("Kelp couldn't read or write a file on this Mac: {0}")]
     Io(String),
 
-    #[error("This file is larger than 5 GB. Uploads this large arrive in a later version of Kelp.")]
+    #[error("This file is larger than 5 TB, the most S3 allows in one object.")]
     FileTooLarge,
 
     #[error("This connection no longer exists. Add it again.")]
@@ -49,6 +49,15 @@ pub enum AppError {
 
     #[error("A file named \"{0}\" is already in this folder.")]
     AlreadyExists(String),
+
+    #[error("The storage provider is busy. Kelp will keep trying.")]
+    Busy,
+
+    #[error("This file changed on the server while it was downloading. Kelp will start it again.")]
+    ObjectChanged,
+
+    #[error("The upload was cleaned up on the server. Kelp will start it again.")]
+    UploadGone,
 }
 
 impl AppError {
@@ -58,6 +67,11 @@ impl AppError {
             Some("NoSuchBucket") => Self::BucketNotFound(bucket.to_string()),
             Some("SignatureDoesNotMatch" | "InvalidAccessKeyId") => Self::BadCredentials,
             Some("RequestTimeTooSkewed") => Self::ClockWrong,
+            Some("SlowDown" | "InternalError" | "ServiceUnavailable" | "RequestTimeout") => {
+                Self::Busy
+            }
+            Some("PreconditionFailed") => Self::ObjectChanged,
+            Some("NoSuchUpload") => Self::UploadGone,
             _ => Self::Provider(message.or(code).unwrap_or("unknown error").to_string()),
         }
     }
@@ -77,6 +91,9 @@ impl AppError {
             Self::FileTooLarge => "fileTooLarge",
             Self::ConnectionNotFound => "connectionNotFound",
             Self::AlreadyExists(_) => "alreadyExists",
+            Self::Busy => "busy",
+            Self::ObjectChanged => "objectChanged",
+            Self::UploadGone => "uploadGone",
         }
     }
 }
@@ -114,9 +131,32 @@ mod tests {
     }
 
     #[test]
+    fn busy_codes_become_busy_and_a_failed_precondition_means_the_object_changed() {
+        let from = |code| AppError::from_provider_code(Some(code), Some("raw message"), "photos");
+        for code in [
+            "SlowDown",
+            "InternalError",
+            "ServiceUnavailable",
+            "RequestTimeout",
+        ] {
+            assert_eq!(from(code), AppError::Busy, "{code}");
+        }
+        assert_eq!(from("PreconditionFailed"), AppError::ObjectChanged);
+        assert_eq!(from("NoSuchUpload"), AppError::UploadGone);
+    }
+
+    #[test]
+    fn the_size_limit_message_names_five_terabytes() {
+        assert_eq!(
+            AppError::FileTooLarge.to_string(),
+            "This file is larger than 5 TB, the most S3 allows in one object."
+        );
+    }
+
+    #[test]
     fn unknown_codes_keep_the_providers_message() {
         let error = AppError::from_provider_code(
-            Some("SlowDown"),
+            Some("InvalidObjectState"),
             Some("Please reduce your request rate."),
             "b",
         );
@@ -161,6 +201,9 @@ mod tests {
             (AppError::FileTooLarge, "fileTooLarge"),
             (AppError::ConnectionNotFound, "connectionNotFound"),
             (AppError::AlreadyExists("a.txt".into()), "alreadyExists"),
+            (AppError::Busy, "busy"),
+            (AppError::ObjectChanged, "objectChanged"),
+            (AppError::UploadGone, "uploadGone"),
         ];
         for (error, kind) in cases {
             assert_eq!(error.kind(), kind);

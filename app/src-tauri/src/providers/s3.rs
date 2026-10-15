@@ -210,7 +210,7 @@ impl StorageProvider for S3Provider {
             .send()
             .await
             .map_err(|error| classify(error, bucket))?;
-        let mut file = crate::transfers::open_reserved(path).await?;
+        let mut file = crate::transfers::paths::open_reserved(path).await?;
         let mut received = 0u64;
         while let Some(chunk) = output
             .body

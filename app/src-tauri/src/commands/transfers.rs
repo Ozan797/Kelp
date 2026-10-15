@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::providers::ProgressFn;
 use crate::providers::s3::MAX_SINGLE_UPLOAD;
 use crate::state::AppState;
-use crate::transfers::{
+use crate::transfers::paths::{
     Direction, Throttle, TransferInfo, TransferProgress, TransferStateEvent, TransferStatus,
     finish_download, reserve_download, safe_file_name,
 };
