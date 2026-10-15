@@ -273,10 +273,12 @@ impl FakeProvider {
 
     async fn enter(&self, name: &'static str) -> Result<(), AppError> {
         *lock(&self.calls).entry(name).or_insert(0) += 1;
-        let mut held = self.held.subscribe();
-        held.wait_for(|held| !*held)
-            .await
-            .map_err(|_| AppError::Network)?;
+        if name != "abort_multipart" {
+            let mut held = self.held.subscribe();
+            held.wait_for(|held| !*held)
+                .await
+                .map_err(|_| AppError::Network)?;
+        }
         let mut failures = lock(&self.failures);
         if failures.is_empty() {
             Ok(())
