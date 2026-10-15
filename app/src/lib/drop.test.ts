@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationText, dropTarget, dropZone, pillText, summaryText } from "./drop";
+import { destinationText, dropTarget, dropZone, pillText, rowDropTarget, summaryText } from "./drop";
 
 const open = { bucket: "media", prefix: "vimeo/" };
 
@@ -63,5 +63,33 @@ describe("dropZone", () => {
     expect(dropZone(inside('<div data-drop="list"><span id="here"></span></div>'))).toBe("list");
     expect(dropZone(inside('<nav><span id="here"></span></nav>'))).toBeNull();
     expect(dropZone(null)).toBeNull();
+  });
+});
+
+describe("rowDropTarget", () => {
+  const here = { bucket: "media", prefix: "vimeo/" };
+
+  it("drops rows into a folder row, a breadcrumb, a bucket or another connection", () => {
+    expect(rowDropTarget(inside('<div data-drop="folder" data-key="vimeo/drafts/"><b id="here"></b></div>'), here, ["vimeo/a.mp4"], "c1")).toEqual({
+      kind: "place",
+      place: { bucket: "media", prefix: "vimeo/drafts/" },
+    });
+    expect(rowDropTarget(inside('<button data-drop="bucket" data-bucket="old-site"><b id="here"></b></button>'), here, ["vimeo/a.mp4"], "c1")).toEqual({
+      kind: "place",
+      place: { bucket: "old-site", prefix: "" },
+    });
+    expect(rowDropTarget(inside('<button data-drop="connection" data-connection="c2"><b id="here"></b></button>'), here, ["vimeo/a.mp4"], "c1")).toEqual({
+      kind: "connection",
+      connectionId: "c2",
+    });
+  });
+
+  it("refuses the folder the rows are in, dragged folders and their insides, and its own connection", () => {
+    const folder = (key: string) => inside(`<div data-drop="folder" data-key="${key}"><b id="here"></b></div>`);
+    expect(rowDropTarget(folder("vimeo/"), here, ["vimeo/a.mp4"], "c1")).toBeNull();
+    expect(rowDropTarget(folder("vimeo/drafts/"), here, ["vimeo/drafts/"], "c1")).toBeNull();
+    expect(rowDropTarget(folder("vimeo/drafts/old/"), here, ["vimeo/drafts/"], "c1")).toBeNull();
+    expect(rowDropTarget(inside('<button data-drop="connection" data-connection="c1"><b id="here"></b></button>'), here, ["vimeo/a.mp4"], "c1")).toBeNull();
+    expect(rowDropTarget(inside('<div data-drop="list"><b id="here"></b></div>'), here, ["vimeo/a.mp4"], "c1")).toBeNull();
   });
 });

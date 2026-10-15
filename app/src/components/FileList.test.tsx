@@ -46,12 +46,14 @@ function Harness({
   onOpen = vi.fn(),
   onGoUp = vi.fn(),
   dropKey = null,
+  onRowPointerDown = vi.fn(),
 }: {
   rows: Row[];
   filter?: string;
   onOpen?: (row: Row) => void;
   onGoUp?: () => void;
   dropKey?: string | null;
+  onRowPointerDown?: (row: Row, x: number, y: number) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort>({ key: "name", ascending: true });
@@ -70,6 +72,7 @@ function Harness({
       loading={false}
       onLoadMore={vi.fn()}
       dropKey={dropKey}
+      onRowPointerDown={onRowPointerDown}
     />
   );
 }
@@ -169,5 +172,16 @@ describe("FileList drop targets", () => {
     expect(drafts?.classList.contains("drop-target")).toBe(true);
     expect(screen.getByText("2024").closest("[role=row]")?.classList.contains("drop-target")).toBe(false);
     expect(screen.getByText("a.txt").closest("[role=row]")?.hasAttribute("data-drop")).toBe(false);
+  });
+});
+
+describe("FileList dragging", () => {
+  it("tells the browser where a press on a row started", () => {
+    const onRowPointerDown = vi.fn();
+    render(<Harness rows={[file("a.txt", 1)]} onRowPointerDown={onRowPointerDown} />);
+    fireEvent.pointerDown(screen.getByText("a.txt"), { button: 0, clientX: 5, clientY: 6 });
+    expect(onRowPointerDown).toHaveBeenCalledWith(expect.objectContaining({ key: "a.txt" }), 5, 6);
+    fireEvent.pointerDown(screen.getByText("a.txt"), { button: 2, clientX: 5, clientY: 6 });
+    expect(onRowPointerDown).toHaveBeenCalledTimes(1);
   });
 });

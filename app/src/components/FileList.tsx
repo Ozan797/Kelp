@@ -90,10 +90,11 @@ type FileListProps = {
   loading: boolean;
   onLoadMore: () => void;
   dropKey?: string | null;
+  onRowPointerDown?: (row: Row, x: number, y: number) => void;
 };
 
 export function FileList(props: FileListProps) {
-  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null } = props;
+  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null, onRowPointerDown } = props;
   const visible = useMemo(() => sortRows(filterRows(rows, filter), sort), [rows, filter, sort]);
   const ordered = useMemo(() => visible.map((row) => row.key), [visible]);
   const scroller = useRef<HTMLDivElement>(null);
@@ -196,6 +197,9 @@ export function FileList(props: FileListProps) {
                 ].join(" ")}
                 style={{ height: item.size, transform: `translateY(${item.start}px)`, "--i": item.index } as CSSProperties}
                 onClick={(event) => click(row, item.index, event)}
+                onPointerDown={(event) => {
+                  if (event.button === 0 && !event.metaKey && !event.shiftKey) onRowPointerDown?.(row, event.clientX, event.clientY);
+                }}
                 onDoubleClick={() => onOpen(row)}
                 onContextMenu={(event) => {
                   event.preventDefault();
