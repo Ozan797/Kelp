@@ -89,10 +89,11 @@ type FileListProps = {
   hasMore: boolean;
   loading: boolean;
   onLoadMore: () => void;
+  dropKey?: string | null;
 };
 
 export function FileList(props: FileListProps) {
-  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore } = props;
+  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null } = props;
   const visible = useMemo(() => sortRows(filterRows(rows, filter), sort), [rows, filter, sort]);
   const ordered = useMemo(() => visible.map((row) => row.key), [visible]);
   const scroller = useRef<HTMLDivElement>(null);
@@ -184,8 +185,11 @@ export function FileList(props: FileListProps) {
                 key={row.key}
                 role="row"
                 aria-selected={isSelected}
+                data-drop={row.isFolder ? "folder" : undefined}
+                data-key={row.isFolder ? row.key : undefined}
                 className={[
                   "file-row",
+                  row.isFolder && row.key === dropKey ? "drop-target" : "",
                   isSelected ? "selected" : "",
                   item.index === focusIndex ? "focused" : "",
                   introducing && item.index < INTRO_ROWS ? "intro" : "",

@@ -84,3 +84,15 @@ describe("transferSummary", () => {
     expect(transferSummary([transfer({ status: "paused" })])).toBe("1 paused");
   });
 });
+
+describe("BucketColumn drop targets", () => {
+  it("marks buckets as drop targets and highlights the one under the pointer", async () => {
+    const { BucketColumn } = await import("./BucketColumn");
+    render(<BucketColumn connection={media} buckets={["media-archive", "old-site"]} error={null} selected="media-archive" onSelect={vi.fn()} dropBucket="old-site" />);
+    const oldSite = screen.getByRole("button", { name: "old-site" });
+    expect(oldSite.getAttribute("data-drop")).toBe("bucket");
+    expect(oldSite.getAttribute("data-bucket")).toBe("old-site");
+    expect(oldSite.classList.contains("drop-target")).toBe(true);
+    expect(screen.getByRole("button", { name: "media-archive" }).classList.contains("drop-target")).toBe(false);
+  });
+});

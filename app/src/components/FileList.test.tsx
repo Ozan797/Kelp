@@ -45,11 +45,13 @@ function Harness({
   filter = "",
   onOpen = vi.fn(),
   onGoUp = vi.fn(),
+  dropKey = null,
 }: {
   rows: Row[];
   filter?: string;
   onOpen?: (row: Row) => void;
   onGoUp?: () => void;
+  dropKey?: string | null;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort>({ key: "name", ascending: true });
@@ -67,6 +69,7 @@ function Harness({
       hasMore={false}
       loading={false}
       onLoadMore={vi.fn()}
+      dropKey={dropKey}
     />
   );
 }
@@ -154,5 +157,17 @@ describe("FileList", () => {
     expect(screen.getAllByRole("row", { selected: false })[0].classList.contains("intro")).toBe(true);
     fireEvent.scroll(screen.getByRole("grid"));
     expect(document.querySelector(".file-row.intro")).toBeNull();
+  });
+});
+
+describe("FileList drop targets", () => {
+  it("marks folder rows as drop targets and highlights the one under the pointer", () => {
+    render(<Harness rows={[folder("drafts"), folder("2024"), file("a.txt", 1)]} dropKey="drafts/" />);
+    const drafts = screen.getByText("drafts").closest("[role=row]");
+    expect(drafts?.getAttribute("data-drop")).toBe("folder");
+    expect(drafts?.getAttribute("data-key")).toBe("drafts/");
+    expect(drafts?.classList.contains("drop-target")).toBe(true);
+    expect(screen.getByText("2024").closest("[role=row]")?.classList.contains("drop-target")).toBe(false);
+    expect(screen.getByText("a.txt").closest("[role=row]")?.hasAttribute("data-drop")).toBe(false);
   });
 });

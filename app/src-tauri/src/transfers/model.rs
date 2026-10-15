@@ -127,6 +127,16 @@ fn piece(size: u64, piece_size: u64, index: u64) -> u64 {
 }
 
 impl Item {
+    pub fn pending(local: PathBuf, key: String, size: u64) -> Self {
+        Self {
+            local,
+            key,
+            size,
+            state: ItemState::Pending,
+            resume: None,
+        }
+    }
+
     pub fn done_bytes(&self) -> u64 {
         if self.state == ItemState::Done {
             return self.size;

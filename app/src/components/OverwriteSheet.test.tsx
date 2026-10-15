@@ -13,7 +13,7 @@ const plan = {
 function renderSheet(overrides: Partial<Parameters<typeof OverwriteSheet>[0]> = {}) {
   const props = {
     plan,
-    folderName: "photos",
+    what: '"photos"',
     destination: "media-archive/2026/",
     onCancel: vi.fn(),
     onSkip: vi.fn(),
@@ -58,5 +58,12 @@ describe("OverwriteSheet", () => {
     expect(screen.getByRole("dialog", { name: "1 of 3 files is already here" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Replace 1 file" })).toBeTruthy();
     expect(screen.queryByText(/more$/)).toBeNull();
+  });
+});
+
+describe("OverwriteSheet for several items", () => {
+  it("counts the items being uploaded", () => {
+    renderSheet({ what: "3 items" });
+    expect(screen.getByText("Uploading 3 items to media-archive/2026/ would replace them.")).toBeTruthy();
   });
 });

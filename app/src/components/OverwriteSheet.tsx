@@ -3,7 +3,7 @@ import type { FolderPlan } from "../lib/tauri";
 
 type OverwriteSheetProps = {
   plan: FolderPlan;
-  folderName: string;
+  what: string;
   destination: string;
   onCancel: () => void;
   onSkip: () => void;
@@ -12,7 +12,7 @@ type OverwriteSheetProps = {
 
 const files = (count: number) => `${count.toLocaleString("en-GB")} ${count === 1 ? "file" : "files"}`;
 
-export function OverwriteSheet({ plan, folderName, destination, onCancel, onSkip, onReplace }: OverwriteSheetProps) {
+export function OverwriteSheet({ plan, what, destination, onCancel, onSkip, onReplace }: OverwriteSheetProps) {
   const skip = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLFormElement>(null);
   const existing = plan.existing.toLocaleString("en-GB");
@@ -49,7 +49,7 @@ export function OverwriteSheet({ plan, folderName, destination, onCancel, onSkip
           {plan.existing.toLocaleString("en-GB")} of {files(plan.files)} {plan.existing === 1 ? "is" : "are"} already here
         </h2>
         <p className="sheet-note">
-          Uploading "{folderName}" to {destination} would replace them.
+          Uploading {what} to {destination} would replace them.
         </p>
         <ul className="clash-list">
           {plan.examples.map((key) => (
