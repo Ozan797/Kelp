@@ -19,7 +19,7 @@ export function useShortcuts(map: Record<string, () => void>, enabled: boolean) 
   useEffect(() => {
     if (!enabled) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isTyping(event.target)) return;
+      if (event.defaultPrevented || isTyping(event.target) || document.querySelector('[aria-modal="true"]')) return;
       const action = latest.current[shortcutOf(event)];
       if (!action) return;
       event.preventDefault();
