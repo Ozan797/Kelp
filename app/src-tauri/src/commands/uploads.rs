@@ -121,8 +121,12 @@ async fn checked(
     paths: &[PathBuf],
 ) -> Result<Vec<(Entry, HashSet<String>)>, AppError> {
     let provider = state.provider(id).await?;
+    let (owned_prefix, owned_paths) = (prefix.to_string(), paths.to_vec());
+    let walked = tokio::task::spawn_blocking(move || entries(&owned_prefix, &owned_paths))
+        .await
+        .map_err(|error| AppError::Io(error.to_string()))??;
     let mut checked = Vec::new();
-    for entry in entries(prefix, paths)? {
+    for entry in walked {
         let found = present(provider.as_ref(), bucket, prefix, &entry).await?;
         checked.push((entry, found));
     }

@@ -15,6 +15,7 @@ import { useTransfers } from "./hooks/useTransfers";
 import { useFileDrop } from "./hooks/useFileDrop";
 import { useUsage } from "./hooks/useUsage";
 import { DropOverlay } from "./components/DropOverlay";
+import { destinationText, pillText, summaryText } from "./lib/drop";
 import { OverwriteSheet } from "./components/OverwriteSheet";
 import { api, toAppError, type AppError, type ConnectionProfile, type FolderPlan, type MenuEntry } from "./lib/tauri";
 
@@ -29,6 +30,8 @@ function parentOf(prefix: string): string {
   const parts = prefix.split("/").filter(Boolean).slice(0, -1);
   return parts.length > 0 ? `${parts.join("/")}/` : "";
 }
+
+const NOTHING_TO_UPLOAD = "Nothing to upload. The folder is empty or everything is already there.";
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -48,6 +51,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [countOnOpen, setCountOnOpen] = useState<Place | null>(null);
+  const [checking, setChecking] = useState<Place | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
   const lastPlaces = useRef<Record<string, Place>>({});
 
@@ -194,20 +198,24 @@ export default function App() {
 
   const uploadPaths = async (paths: string[], target: Place) => {
     if (!connection || paths.length === 0) return;
+    setChecking(target);
     try {
       const plan = await api.planUpload(connection.id, target.bucket, target.prefix, paths);
       if (plan.existing > 0) setSheet({ kind: "overwrite", plan, paths, target });
       else await startUploads(paths, target, false);
     } catch (caught) {
       setActionError(toAppError(caught));
+    } finally {
+      setChecking(null);
     }
   };
 
   const startUploads = async (paths: string[], target: Place, skipExisting: boolean) => {
     if (!connection) return;
     try {
-      await api.startUploads(connection.id, target.bucket, target.prefix, paths, skipExisting);
-      setDrawerOpen(true);
+      const started = await api.startUploads(connection.id, target.bucket, target.prefix, paths, skipExisting);
+      if (started.length > 0) setDrawerOpen(true);
+      else setActionError({ kind: "io", message: NOTHING_TO_UPLOAD });
     } catch (caught) {
       setActionError(toAppError(caught));
     }
@@ -304,6 +312,14 @@ export default function App() {
       ])
       .catch(() => undefined);
   };
+
+  const checkingText = checking ? `Checking what's already in ${destinationText(checking)}…` : "";
+  const liveText = checking ? checkingText : drag ? pillText(summaryText(drag.summary, drag.paths.length), drag.target) : "";
+  const checkingPill = (
+    <div className="drop-pill" aria-hidden="true">
+      {checkingText}
+    </div>
+  );
 
   if (connections === null && !connectionsError) return <div className="window" />;
   const noConnections = (connections ?? []).length === 0;
@@ -443,10 +459,15 @@ export default function App() {
             <div className="drop-area" data-drop="list">
               {content()}
               {drag && <DropOverlay drag={drag} open={place} />}
+              {checking && checkingPill}
             </div>
           </>
         )}
         {drag && !place && <DropOverlay drag={drag} open={null} />}
+        {checking && !place && checkingPill}
+        <p className="visually-hidden" role="status">
+          {liveText}
+        </p>
         {actionError && (
           <div className="action-error" role="alert">
             <span>{actionError.message}</span>

@@ -8,7 +8,7 @@ export function DropOverlay({ drag, open }: DropOverlayProps) {
   return (
     <>
       {covering && <div className="drop-panel" aria-hidden="true" />}
-      <div className="drop-pill" role="status">
+      <div className="drop-pill" aria-hidden="true">
         {pillText(summaryText(drag.summary, drag.paths.length), drag.target)}
       </div>
     </>

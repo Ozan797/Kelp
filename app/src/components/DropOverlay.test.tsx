@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DropOverlay } from "./DropOverlay";
 
@@ -10,23 +10,23 @@ describe("DropOverlay", () => {
   it("covers the list and names the open folder", () => {
     const { container } = render(<DropOverlay drag={{ paths, summary, target: open, zone: "list" }} open={open} />);
     expect(container.querySelector(".drop-panel")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Upload 3 files · 412 MB to vimeo/");
+    expect(container.querySelector(".drop-pill")?.textContent).toBe("Upload 3 files · 412 MB to vimeo/");
   });
 
   it("names the folder row under the pointer", () => {
-    render(<DropOverlay drag={{ paths, summary, target: { bucket: "media", prefix: "vimeo/drafts/" }, zone: "folder" }} open={open} />);
-    expect(screen.getByRole("status").textContent).toBe("Upload 3 files · 412 MB to vimeo/drafts/");
+    const { container } = render(<DropOverlay drag={{ paths, summary, target: { bucket: "media", prefix: "vimeo/drafts/" }, zone: "folder" }} open={open} />);
+    expect(container.querySelector(".drop-pill")?.textContent).toBe("Upload 3 files · 412 MB to vimeo/drafts/");
   });
 
   it("steps aside for a bucket in the sidebar", () => {
     const { container } = render(<DropOverlay drag={{ paths, summary, target: { bucket: "old-site", prefix: "" }, zone: "bucket" }} open={open} />);
     expect(container.querySelector(".drop-panel")).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Upload 3 files · 412 MB to old-site");
+    expect(container.querySelector(".drop-pill")?.textContent).toBe("Upload 3 files · 412 MB to old-site");
   });
 
   it("says where to drop when there is no target", () => {
     const { container } = render(<DropOverlay drag={{ paths, summary: null, target: null, zone: null }} open={null} />);
     expect(container.querySelector(".drop-panel")).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Drop on a folder or a bucket");
+    expect(container.querySelector(".drop-pill")?.textContent).toBe("Drop on a folder or a bucket");
   });
 });

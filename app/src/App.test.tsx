@@ -304,11 +304,11 @@ describe("App", () => {
     await screen.findByText("a.txt");
     document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
     act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 10, y: 10 }));
-    expect((await screen.findByRole("status")).textContent).toBe("Upload 1 file · 5 B to drafts/");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Upload 1 file · 5 B to drafts/"));
     act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 10, y: 10 }));
     await waitFor(() => expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"], false));
     expect(api.planUpload).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"]);
-    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(""));
   });
 
   it("aims a drop at the point the pointer is at, even on a Retina screen", async () => {
@@ -328,6 +328,45 @@ describe("App", () => {
     act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 900, y: 500 }));
     window.devicePixelRatio = ratio;
     expect(pick).toHaveBeenCalledWith(900, 500);
+  });
+
+  it("says it is checking between a drop and the upload, and announces it", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    let answer: (plan: { files: number; bytes: number; existing: number; examples: string[] }) => void = () => undefined;
+    api.planUpload.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    const { container } = render(<App />);
+    await screen.findByText("a.txt");
+    expect(screen.getByRole("status").className).toContain("visually-hidden");
+    expect(screen.getByRole("status").textContent).toBe("");
+    document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
+    act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 1, y: 1 }));
+    expect(await screen.findByText("Checking what's already in drafts/…", { selector: ".drop-pill" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Checking what's already in drafts/…");
+    expect(container.querySelector(".drop-pill")?.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => answer({ files: 1, bytes: 1, existing: 0, examples: [] }));
+    await waitFor(() => expect(container.querySelector(".drop-pill")).toBeNull());
+  });
+
+  it("says so when a drop has nothing to upload", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.planUpload.mockResolvedValue({ files: 0, bytes: 0, existing: 0, examples: [] });
+    api.startUploads.mockResolvedValue([]);
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    const row = await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => row);
+    act(() => emit({ type: "drop", paths: ["/u/empty"], x: 1, y: 1 }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Nothing to upload. The folder is empty or everything is already there.");
+    expect(screen.queryByRole("region", { name: "Transfers" })).toBeNull();
   });
 
   it("ignores a second drop while the first one is still asking", async () => {
