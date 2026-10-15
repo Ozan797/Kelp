@@ -198,6 +198,7 @@ pub async fn upload_transfers(
             status: Status::Waiting,
             error: None,
             items,
+            source: None,
         });
     }
     Ok(transfers)

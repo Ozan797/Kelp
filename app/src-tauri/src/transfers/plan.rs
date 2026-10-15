@@ -65,6 +65,7 @@ pub fn upload_items(root: &Path, prefix: &str) -> Result<Vec<Item>, AppError> {
             size,
             state: ItemState::Pending,
             resume: None,
+            source_key: None,
         })
         .collect())
 }

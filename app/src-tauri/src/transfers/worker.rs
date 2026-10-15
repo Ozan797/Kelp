@@ -139,6 +139,7 @@ impl Job {
         let outcome = match self.direction {
             Direction::Upload => self.clone().upload().await.map(|()| None),
             Direction::Download => self.clone().download().await.map(Some),
+            Direction::Copy => self.clone().copy().await.map(|()| None),
         };
         read(&self.meters).retain(|(index, _), _| *index != self.index);
         match outcome {
@@ -161,6 +162,12 @@ impl Job {
         Arc::new(move |bytes| {
             read(&meters).insert(key, bytes);
         })
+    }
+
+    async fn copy(self: Arc<Self>) -> Result<(), AppError> {
+        Err(AppError::Provider(
+            "Copying arrives in the next step.".into(),
+        ))
     }
 
     async fn upload(self: Arc<Self>) -> Result<(), AppError> {

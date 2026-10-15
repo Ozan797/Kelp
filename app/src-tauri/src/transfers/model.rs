@@ -12,6 +12,7 @@ use super::plan::PART_SIZE;
 pub enum Direction {
     Upload,
     Download,
+    Copy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,12 +64,22 @@ pub enum Resume {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Source {
+    pub connection_id: Uuid,
+    pub bucket: String,
+    pub move_after: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Item {
     pub local: PathBuf,
     pub key: String,
     pub size: u64,
     pub state: ItemState,
     pub resume: Option<Resume>,
+    #[serde(default)]
+    pub source_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +96,8 @@ pub struct Transfer {
     pub status: Status,
     pub error: Option<String>,
     pub items: Vec<Item>,
+    #[serde(default)]
+    pub source: Option<Source>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -134,6 +147,7 @@ impl Item {
             size,
             state: ItemState::Pending,
             resume: None,
+            source_key: None,
         }
     }
 
@@ -192,7 +206,9 @@ impl Transfer {
         };
         let local = self.local_root.to_string_lossy().into_owned();
         let (destination, path) = match self.direction {
-            Direction::Upload => (format!("{}/{}", self.bucket, self.remote_root), None),
+            Direction::Upload | Direction::Copy => {
+                (format!("{}/{}", self.bucket, self.remote_root), None)
+            }
             Direction::Download => {
                 let finished = self.status == Status::Finished;
                 (local.clone(), finished.then_some(local))
@@ -232,6 +248,7 @@ pub mod tests {
             size,
             state: ItemState::Pending,
             resume: None,
+            source_key: None,
         }
     }
 
@@ -252,6 +269,7 @@ pub mod tests {
             status: Status::Waiting,
             error: None,
             items,
+            source: None,
         }
     }
 
