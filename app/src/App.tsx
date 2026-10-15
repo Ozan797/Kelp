@@ -224,7 +224,7 @@ export default function App() {
   };
 
   const drag = useFileDrop(place, (paths, target) => {
-    uploadPaths(paths, target);
+    if (sheet.kind === "none") uploadPaths(paths, target);
   });
 
   const chooseUpload = () => {

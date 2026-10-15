@@ -311,6 +311,44 @@ describe("App", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
+  it("aims a drop at the point the pointer is at, even on a Retina screen", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    const ratio = window.devicePixelRatio;
+    window.devicePixelRatio = 2;
+    render(<App />);
+    await screen.findByText("a.txt");
+    const pick = vi.fn(() => screen.getByText("drafts"));
+    document.elementFromPoint = pick;
+    act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 900, y: 500 }));
+    window.devicePixelRatio = ratio;
+    expect(pick).toHaveBeenCalledWith(900, 500);
+  });
+
+  it("ignores a second drop while the first one is still asking", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.planUpload.mockResolvedValue({ files: 1, bytes: 1, existing: 1, examples: ["a.txt"] });
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    const row = await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => row);
+    act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 1, y: 1 }));
+    await screen.findByRole("dialog");
+    act(() => emit({ type: "drop", paths: ["/u/other.txt"], x: 1, y: 1 }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.planUpload).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Uploading "a.txt" to archive/ would replace them.')).toBeTruthy();
+  });
+
   it("asks once when a drop would replace files", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
     api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5 });

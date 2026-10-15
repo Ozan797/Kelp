@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { dropTarget, dropZone, toCssPoint, type DropZone, type Place } from "../lib/drop";
+import { dropTarget, dropZone, type DropZone, type Place } from "../lib/drop";
 import { api, type DropSummary } from "../lib/tauri";
 
 export type Drag = { paths: string[]; summary: DropSummary | null; target: Place | null; zone: DropZone | null };
 
 function pointAt(x: number, y: number): Element | null {
-  const point = toCssPoint(x, y, window.devicePixelRatio || 1);
-  return document.elementFromPoint(point.x, point.y);
+  return document.elementFromPoint(x, y);
 }
 
 export function useFileDrop(open: Place | null, onDrop: (paths: string[], target: Place) => void): Drag | null {

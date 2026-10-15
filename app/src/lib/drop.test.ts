@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationText, dropTarget, dropZone, pillText, summaryText, toCssPoint } from "./drop";
+import { destinationText, dropTarget, dropZone, pillText, summaryText } from "./drop";
 
 const open = { bucket: "media", prefix: "vimeo/" };
 
@@ -9,13 +9,6 @@ function inside(html: string): Element {
   if (!found) throw new Error("no #here");
   return found;
 }
-
-describe("toCssPoint", () => {
-  it("turns physical pixels into CSS pixels", () => {
-    expect(toCssPoint(200, 100, 2)).toEqual({ x: 100, y: 50 });
-    expect(toCssPoint(200, 100, 1)).toEqual({ x: 200, y: 100 });
-  });
-});
 
 describe("dropTarget", () => {
   it("drops into a folder row", () => {

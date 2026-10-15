@@ -3,10 +3,6 @@ import type { DropSummary } from "./tauri";
 
 export type Place = { bucket: string; prefix: string };
 
-export function toCssPoint(x: number, y: number, ratio: number): { x: number; y: number } {
-  return { x: x / ratio, y: y / ratio };
-}
-
 export type DropZone = "list" | "folder" | "bucket";
 
 export function dropZone(element: Element | null): DropZone | null {

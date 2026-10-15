@@ -77,8 +77,11 @@ fn entries(prefix: &str, paths: &[PathBuf]) -> Result<Vec<Entry>, AppError> {
         .into_iter()
         .map(|root| {
             let name = local_name(&root)?;
-            let metadata = std::fs::metadata(&root)
-                .map_err(|_| AppError::Io(format!("\"{name}\" is no longer there.")))?;
+            let metadata = std::fs::metadata(&root).map_err(|_| {
+                AppError::Io(format!(
+                    "\"{name}\" is no longer there. Drop it again from Finder."
+                ))
+            })?;
             let (kind, items) = if metadata.is_dir() {
                 (Kind::Folder, upload_items(&root, prefix)?)
             } else {
@@ -352,6 +355,11 @@ mod tests {
         let mut paths = dropped(&dir);
         paths.push(dir.join("gone.txt"));
         let refused = upload_transfers(&state, id, "media", "", &paths, false).await;
-        assert!(matches!(refused, Err(AppError::Io(_))));
+        assert_eq!(
+            refused.map(|_| ()),
+            Err(AppError::Io(
+                "\"gone.txt\" is no longer there. Drop it again from Finder.".into()
+            ))
+        );
     }
 }

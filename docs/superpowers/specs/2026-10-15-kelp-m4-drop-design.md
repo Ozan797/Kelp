@@ -51,8 +51,10 @@ drop(paths, position)   → pick target; if none, do nothing
 leave                   → clear
 ```
 
-**Picking the target.** Tauri positions are physical pixels relative to the webview; divide by
-`window.devicePixelRatio`, then `document.elementFromPoint(x, y)?.closest("[data-drop]")`. Attributes:
+**Picking the target.** On macOS, Tauri's drop positions are labelled physical pixels but are already
+points (CSS pixels) relative to the webview (wry builds them from AppKit's `draggingLocation`), so they go
+straight into `document.elementFromPoint(x, y)?.closest("[data-drop]")`, with no `devicePixelRatio` division.
+Drops are ignored while a sheet is open. Attributes:
 `data-drop="folder"` + `data-key` on folder rows, `data-drop="bucket"` + `data-bucket` on bucket buttons,
 `data-drop="list"` on the file list area. A folder target is `{ bucket: openBucket, prefix: key }`; a bucket target
 is `{ bucket, prefix: "" }`; the list is the open place.
