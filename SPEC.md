@@ -74,7 +74,6 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 - Rename and "Copy link" in the file menu; dragging rows out to Finder; keeping tabs between launches.
 - Analytics, error reports and usage stats (opt-in): draft in `docs/superpowers/specs/2026-10-15-kelp-analytics-design.md`.
 - Search across a bucket with a local index.
-- Server-side copy between buckets on the same provider.
 - Hetzner Storage Box over SFTP (second provider implementation).
 
 ## 5. Architecture
