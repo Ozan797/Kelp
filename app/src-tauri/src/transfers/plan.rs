@@ -9,6 +9,15 @@ pub const MULTIPART_THRESHOLD: u64 = 16 * MIB;
 pub const PART_SIZE: u64 = 8 * MIB;
 const MAX_PARTS: u64 = 10_000;
 
+#[cfg(not(test))]
+pub const MAX_SIMPLE_COPY: u64 = 5 * 1024 * MIB;
+#[cfg(test)]
+pub const MAX_SIMPLE_COPY: u64 = 16 * MIB;
+#[cfg(not(test))]
+pub const COPY_PART_SIZE: u64 = 512 * MIB;
+#[cfg(test)]
+pub const COPY_PART_SIZE: u64 = 8 * MIB;
+
 pub fn uses_multipart(size: u64) -> bool {
     size > MULTIPART_THRESHOLD
 }

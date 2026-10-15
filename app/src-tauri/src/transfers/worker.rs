@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -11,10 +13,10 @@ use uuid::Uuid;
 use super::manager::TransferManager;
 use super::model::{CompletedPart, Direction, Item, ItemState, Resume, Transfer};
 use super::paths::{finish_download, part_path};
-use super::plan::{PART_SIZE, part_size, ranges, uses_multipart};
+use super::plan::{COPY_PART_SIZE, MAX_SIMPLE_COPY, PART_SIZE, part_size, ranges, uses_multipart};
 use super::retry::{backoff, is_retryable, jitter};
 use crate::error::AppError;
-use crate::providers::{PartTarget, ProgressFn, StorageProvider};
+use crate::providers::{ObjectRef, PartTarget, ProgressFn, StorageProvider};
 
 const REQUESTS_PER_TRANSFER: usize = 4;
 const MAX_ATTEMPTS: u32 = 5;
@@ -33,11 +35,36 @@ struct Job {
     direction: Direction,
     bucket: String,
     item: Item,
+    source: Option<CopySource>,
 }
 
+#[derive(Clone)]
+struct CopySource {
+    provider: Arc<dyn StorageProvider>,
+    bucket: String,
+    same: bool,
+    move_after: bool,
+}
+
+type PartFuture = Pin<Box<dyn Future<Output = Result<String, AppError>> + Send>>;
+type SendPart = Arc<dyn Fn(Arc<Job>, String, u32, Range<u64>) -> PartFuture + Send + Sync>;
+
 pub async fn run(manager: Arc<TransferManager>, transfer: Transfer, run: u64) {
-    match (manager.provider_for)(transfer.connection_id).await {
-        Ok(provider) => run_items(&manager, &transfer, provider, run).await,
+    let source = match &transfer.source {
+        Some(source) => match (manager.provider_for)(source.connection_id).await {
+            Ok(provider) => Ok(Some(CopySource {
+                provider,
+                bucket: source.bucket.clone(),
+                same: source.connection_id == transfer.connection_id,
+                move_after: source.move_after,
+            })),
+            Err(error) => Err(error),
+        },
+        None => Ok(None),
+    };
+    let destination = (manager.provider_for)(transfer.connection_id).await;
+    match destination.and_then(|provider| source.map(|source| (provider, source))) {
+        Ok((provider, source)) => run_items(&manager, &transfer, provider, source, run).await,
         Err(error) => {
             for index in pending(&transfer) {
                 manager.item_failed(transfer.id, index, &error, run).await;
@@ -67,6 +94,12 @@ pub async fn clean_up(transfer: &Transfer, provider: Option<Arc<dyn StorageProvi
             _ => {}
         }
     }
+}
+
+pub fn stamp(etag: &str) -> u64 {
+    etag.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 pub fn modified_ms(path: &Path) -> Result<u64, AppError> {
@@ -105,6 +138,7 @@ async fn run_items(
     manager: &Arc<TransferManager>,
     transfer: &Transfer,
     provider: Arc<dyn StorageProvider>,
+    source: Option<CopySource>,
     run: u64,
 ) {
     let meters: Meters = Arc::default();
@@ -122,6 +156,7 @@ async fn run_items(
             direction: transfer.direction,
             bucket: transfer.bucket.clone(),
             item: transfer.items[index].clone(),
+            source: source.clone(),
         });
         jobs.spawn(job.run());
     }
@@ -165,9 +200,111 @@ impl Job {
     }
 
     async fn copy(self: Arc<Self>) -> Result<(), AppError> {
-        Err(AppError::Provider(
-            "Copying arrives in the next step.".into(),
-        ))
+        let lost = || {
+            AppError::Provider("This copy has lost its source. Remove it and copy again.".into())
+        };
+        let source = self.source.clone().ok_or_else(lost)?;
+        let from_key = self.item.source_key.clone().ok_or_else(lost)?;
+        let mut saved = self.item.resume.clone();
+        for attempt in 0..2 {
+            let copied = self
+                .clone()
+                .copy_once(&source, &from_key, saved.take())
+                .await;
+            match copied {
+                Err(AppError::ObjectChanged) if attempt == 0 => {
+                    self.manager
+                        .set_resume(self.id, self.index, None, true, self.run)
+                        .await;
+                }
+                other => {
+                    other?;
+                    break;
+                }
+            }
+        }
+        if source.move_after {
+            let keys = [from_key.clone()];
+            self.with_retries(0, || source.provider.delete(&source.bucket, &keys))
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn copy_once(
+        self: Arc<Self>,
+        source: &CopySource,
+        from_key: &str,
+        saved: Option<Resume>,
+    ) -> Result<(), AppError> {
+        let info = self
+            .with_retries(0, || source.provider.head(&source.bucket, from_key))
+            .await?;
+        self.manager
+            .set_size(self.id, self.index, info.size, self.run)
+            .await;
+        let fingerprint = stamp(&info.etag);
+        let (bucket, key) = (source.bucket.clone(), from_key.to_string());
+        if source.same {
+            if info.size <= MAX_SIMPLE_COPY {
+                let from = ObjectRef {
+                    bucket: &bucket,
+                    key: &key,
+                };
+                let to = ObjectRef {
+                    bucket: &self.bucket,
+                    key: &self.item.key,
+                };
+                return self
+                    .with_retries(0, || self.provider.copy_object(&from, &to))
+                    .await;
+            }
+            let send: SendPart = Arc::new(move |job, upload_id, number, range| {
+                let (bucket, key) = (bucket.clone(), key.clone());
+                Box::pin(async move {
+                    let from = ObjectRef {
+                        bucket: &bucket,
+                        key: &key,
+                    };
+                    job.provider
+                        .copy_part(&job.target(&upload_id), number, &from, range)
+                        .await
+                })
+            });
+            let part = COPY_PART_SIZE.max(part_size(info.size));
+            return self
+                .in_parts(saved, info.size, fingerprint, part, send)
+                .await;
+        }
+        let from = source.provider.clone();
+        if !uses_multipart(info.size) {
+            let etag = info.etag.clone();
+            return self
+                .with_retries(0, || async {
+                    let bytes = if info.size == 0 {
+                        bytes::Bytes::new()
+                    } else {
+                        from.get_bytes(&bucket, &key, &etag, 0..info.size).await?
+                    };
+                    self.provider
+                        .put_bytes(&self.bucket, &self.item.key, bytes, self.meter(0))
+                        .await
+                })
+                .await;
+        }
+        let etag = info.etag.clone();
+        let send: SendPart = Arc::new(move |job, upload_id, number, range| {
+            let (from, bucket, key, etag) =
+                (from.clone(), bucket.clone(), key.clone(), etag.clone());
+            Box::pin(async move {
+                let bytes = from.get_bytes(&bucket, &key, &etag, range).await?;
+                job.provider
+                    .put_part_bytes(&job.target(&upload_id), number, bytes, job.meter(number))
+                    .await
+            })
+        });
+        self.in_parts(saved, info.size, fingerprint, part_size(info.size), send)
+            .await
     }
 
     async fn upload(self: Arc<Self>) -> Result<(), AppError> {
@@ -183,9 +320,42 @@ impl Job {
                 })
                 .await;
         }
-        let mut resume = self.item.resume.clone();
+        let size = std::fs::metadata(&self.item.local)?.len();
+        let fingerprint = modified_ms(&self.item.local)?;
+        let send: SendPart = Arc::new(|job, upload_id, number, range| {
+            Box::pin(async move {
+                job.provider
+                    .put_part(
+                        &job.target(&upload_id),
+                        number,
+                        &job.item.local,
+                        range.start,
+                        range.end - range.start,
+                        job.meter(number),
+                    )
+                    .await
+            })
+        });
+        let saved = self.item.resume.clone();
+        self.in_parts(saved, size, fingerprint, part_size(size), send)
+            .await
+    }
+
+    async fn in_parts(
+        self: Arc<Self>,
+        saved: Option<Resume>,
+        size: u64,
+        fingerprint: u64,
+        part: u64,
+        send: SendPart,
+    ) -> Result<(), AppError> {
+        let mut resume = saved;
         for _ in 0..2 {
-            match self.clone().multipart(resume.take()).await {
+            let sent = self
+                .clone()
+                .multipart(resume.take(), size, fingerprint, part, send.clone())
+                .await;
+            match sent {
                 Err(AppError::UploadGone) => {
                     self.manager
                         .set_resume(self.id, self.index, None, true, self.run)
@@ -197,9 +367,14 @@ impl Job {
         Err(AppError::UploadGone)
     }
 
-    async fn multipart(self: Arc<Self>, saved: Option<Resume>) -> Result<(), AppError> {
-        let local_size = std::fs::metadata(&self.item.local)?.len();
-        let local_modified_ms = modified_ms(&self.item.local)?;
+    async fn multipart(
+        self: Arc<Self>,
+        saved: Option<Resume>,
+        local_size: u64,
+        local_modified_ms: u64,
+        part: u64,
+        send: SendPart,
+    ) -> Result<(), AppError> {
         let (upload_id, size, done) = match saved {
             Some(Resume::Upload {
                 upload_id,
@@ -214,14 +389,13 @@ impl Job {
                 if let Some(Resume::Upload { upload_id, .. }) = other {
                     self.abort(&upload_id).await;
                 }
-                let size = part_size(local_size);
                 let started = self
                     .clone()
-                    .start_and_save(size, local_size, local_modified_ms);
+                    .start_and_save(part, local_size, local_modified_ms);
                 let upload_id = tokio::spawn(started)
                     .await
                     .map_err(|_| AppError::UploadGone)??;
-                (upload_id, size, Vec::new())
+                (upload_id, part, Vec::new())
             }
         };
         let resume = {
@@ -257,18 +431,11 @@ impl Job {
             let parts = parts.clone();
             let upload_id = upload_id.clone();
             let resume = resume.clone();
+            let send = send.clone();
             sending.spawn(async move {
-                let target = job.target(&upload_id);
                 let etag = job
                     .with_retries(number, || {
-                        job.provider.put_part(
-                            &target,
-                            number,
-                            &job.item.local,
-                            range.start,
-                            range.end - range.start,
-                            job.meter(number),
-                        )
+                        send(job.clone(), upload_id.clone(), number, range.clone())
                     })
                     .await?;
                 read(&job.meters).remove(&(job.index, number));

@@ -35,6 +35,7 @@ pub struct FakeProvider {
     etags: Mutex<HashMap<String, String>>,
     uploads: Mutex<HashMap<String, Upload>>,
     page_size: usize,
+    fail_on: Mutex<HashMap<&'static str, AppError>>,
 }
 
 #[async_trait]
@@ -71,6 +72,7 @@ impl StorageProvider for FakeProvider {
         })
     }
     async fn delete(&self, _: &str, keys: &[String]) -> Result<(), AppError> {
+        self.enter("delete").await?;
         lock(&self.deleted).extend(keys.iter().cloned());
         let mut objects = lock(&self.objects);
         for key in keys {
@@ -285,6 +287,7 @@ impl FakeProvider {
             etags: Mutex::new(HashMap::new()),
             uploads: Mutex::new(HashMap::new()),
             page_size: 1000,
+            fail_on: Mutex::new(HashMap::new()),
         }
     }
 
@@ -317,6 +320,10 @@ impl FakeProvider {
 
     pub fn object(&self, key: &str) -> Option<Vec<u8>> {
         lock(&self.objects).get(key).cloned()
+    }
+
+    pub fn fail_on(&self, name: &'static str, error: AppError) {
+        lock(&self.fail_on).insert(name, error);
     }
 
     pub fn fail_next(&self, count: usize, error: AppError) {
@@ -371,6 +378,9 @@ impl FakeProvider {
             held.wait_for(|held| !*held)
                 .await
                 .map_err(|_| AppError::Network)?;
+        }
+        if let Some(error) = lock(&self.fail_on).remove(name) {
+            return Err(error);
         }
         let mut failures = lock(&self.failures);
         if failures.is_empty() {

@@ -413,7 +413,7 @@ mod tests {
     use crate::providers::{CompletedPart, PartTarget};
     use crate::testing::FakeProvider;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{Direction, ItemState, Kind, Resume, Status, Transfer};
+    use crate::transfers::model::{Direction, ItemState, Kind, Resume, Source, Status, Transfer};
     use crate::transfers::paths::part_path;
     use crate::transfers::store::TransferStore;
     use crate::transfers::worker;
@@ -456,6 +456,49 @@ mod tests {
             events,
             dir,
         }
+    }
+
+    fn two_connections(
+        destination: Arc<FakeProvider>,
+        source: Arc<FakeProvider>,
+    ) -> (Harness, Uuid) {
+        let source_id = Uuid::new_v4();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = events.clone();
+        let (to, from) = (destination.clone(), source.clone());
+        let provider_for: ProviderFor = Arc::new(move |id| {
+            let chosen = if id == source_id {
+                from.clone()
+            } else {
+                to.clone()
+            };
+            Box::pin(async move { Ok(chosen as Arc<dyn StorageProvider>) })
+        });
+        let dir = temp_dir();
+        let manager = TransferManager::new(
+            TransferStore::new(&dir),
+            Arc::new(move |event| captured.lock().unwrap().push(event)),
+            provider_for,
+        );
+        let harness = Harness {
+            manager,
+            provider: destination,
+            events,
+            dir,
+        };
+        (harness, source_id)
+    }
+
+    fn copy_of(key: &str, to: &str, size: u64, source: Uuid, move_after: bool) -> Transfer {
+        let mut copy = transfer(vec![item(to, size)]);
+        copy.direction = Direction::Copy;
+        copy.items[0].source_key = Some(key.to_string());
+        copy.source = Some(Source {
+            connection_id: source,
+            bucket: "media".into(),
+            move_after,
+        });
+        copy
     }
 
     fn harness() -> Harness {
@@ -849,6 +892,199 @@ mod tests {
         let views = h.manager.list().await;
         assert_eq!(views[0].error.as_deref(), Some("1 file failed."));
         assert_eq!((views[0].files_done, views[0].files_failed), (3, 1));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_small_copy_inside_one_connection_happens_on_the_server() {
+        let provider =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/a.jpg", b"aa".to_vec())]));
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let mut copy = copy_of("v/a.jpg", "drafts/a.jpg", 2, Uuid::nil(), false);
+        copy.source.as_mut().unwrap().connection_id = copy.connection_id;
+        let id = h.manager.add(copy).await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("drafts/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(h.provider.object("v/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(h.provider.calls("copy_object"), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_large_copy_inside_one_connection_copies_parts_on_the_server() {
+        let bytes = patterned(BIG);
+        let provider =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/big.bin", bytes.clone())]));
+        let h = harness_in(temp_dir(), provider, true);
+        h.manager.start().await;
+        let mut copy = copy_of(
+            "v/big.bin",
+            "drafts/big.bin",
+            BIG as u64,
+            Uuid::nil(),
+            false,
+        );
+        copy.source.as_mut().unwrap().connection_id = copy.connection_id;
+        let id = h.manager.add(copy).await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("drafts/big.bin"), Some(bytes));
+        assert_eq!(h.provider.calls("copy_part"), 3);
+        assert_eq!(h.provider.calls("copy_object"), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_small_copy_between_connections_goes_through_this_mac() {
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/a.jpg", b"aa".to_vec())]));
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source.clone());
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of("v/a.jpg", "cdn/a.jpg", 2, source_id, false))
+            .await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("cdn/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(h.provider.calls("put_bytes"), 1);
+        assert_eq!(source.object("v/a.jpg"), Some(b"aa".to_vec()));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_big_copy_between_connections_streams_in_parts() {
+        let bytes = patterned(BIG);
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/big.bin", bytes.clone())]));
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source.clone());
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of(
+                "v/big.bin",
+                "cdn/big.bin",
+                BIG as u64,
+                source_id,
+                false,
+            ))
+            .await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("cdn/big.bin"), Some(bytes));
+        assert_eq!(h.provider.calls("put_part_bytes"), 3);
+        assert_eq!(source.calls("get_bytes"), 3);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_resumed_copy_sends_only_the_missing_parts_and_a_changed_source_starts_again() {
+        let bytes = patterned(BIG);
+        for (stamp_matches, expected_parts) in [(true, 2), (false, 3)] {
+            let source =
+                Arc::new(FakeProvider::empty().with_objects(vec![("v/big.bin", bytes.clone())]));
+            let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source);
+            h.manager.start().await;
+            let upload_id = h
+                .provider
+                .start_multipart("media", "cdn/big.bin")
+                .await
+                .unwrap();
+            let target = PartTarget {
+                bucket: "media",
+                key: "cdn/big.bin",
+                upload_id: &upload_id,
+            };
+            let etag = h
+                .provider
+                .put_part_bytes(
+                    &target,
+                    1,
+                    bytes::Bytes::copy_from_slice(&bytes[..8 * 1024 * 1024]),
+                    Arc::new(|_| {}),
+                )
+                .await
+                .unwrap();
+            let mut copy = copy_of("v/big.bin", "cdn/big.bin", BIG as u64, source_id, false);
+            copy.items[0].resume = Some(Resume::Upload {
+                upload_id,
+                part_size: 8 * 1024 * 1024,
+                parts: vec![CompletedPart { number: 1, etag }],
+                local_size: BIG as u64,
+                local_modified_ms: if stamp_matches {
+                    worker::stamp("\"v1\"")
+                } else {
+                    1
+                },
+            });
+            let id = h.manager.add(copy).await;
+            h.wait_for(id, "finished").await;
+            assert_eq!(h.provider.object("cdn/big.bin"), Some(bytes.clone()));
+            assert_eq!(
+                h.provider.calls("put_part_bytes"),
+                1 + expected_parts,
+                "stamp matches: {stamp_matches}"
+            );
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_move_removes_the_original_only_after_the_copy() {
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/a.jpg", b"aa".to_vec())]));
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source.clone());
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of("v/a.jpg", "cdn/a.jpg", 2, source_id, true))
+            .await;
+        h.wait_for(id, "finished").await;
+        assert_eq!(h.provider.object("cdn/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(source.object("v/a.jpg"), None);
+        assert_eq!(source.deleted(), vec!["v/a.jpg".to_string()]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_failed_delete_keeps_the_copy_and_deletes_nothing_else() {
+        let source = Arc::new(FakeProvider::empty().with_objects(vec![
+            ("v/a.jpg", b"aa".to_vec()),
+            ("v/b.jpg", b"bb".to_vec()),
+        ]));
+        source.fail_on("delete", AppError::AccessDenied);
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source.clone());
+        h.manager.start().await;
+        let id = h
+            .manager
+            .add(copy_of("v/a.jpg", "cdn/a.jpg", 2, source_id, true))
+            .await;
+        h.wait_for(id, "failed").await;
+        assert_eq!(h.provider.object("cdn/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(source.object("v/a.jpg"), Some(b"aa".to_vec()));
+        assert_eq!(source.object("v/b.jpg"), Some(b"bb".to_vec()));
+        let views = h.manager.list().await;
+        assert_eq!(
+            views[0].error.as_deref(),
+            Some(AppError::AccessDenied.to_string().as_str())
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_a_copy_aborts_its_upload_at_the_destination() {
+        let source =
+            Arc::new(FakeProvider::empty().with_objects(vec![("v/big.bin", patterned(BIG))]));
+        let (h, source_id) = two_connections(Arc::new(FakeProvider::empty()), source);
+        h.manager.start().await;
+        let upload_id = h
+            .provider
+            .start_multipart("media", "cdn/big.bin")
+            .await
+            .unwrap();
+        let mut copy = copy_of("v/big.bin", "cdn/big.bin", BIG as u64, source_id, false);
+        copy.items[0].resume = Some(Resume::Upload {
+            upload_id,
+            part_size: 8 * 1024 * 1024,
+            parts: Vec::new(),
+            local_size: BIG as u64,
+            local_modified_ms: worker::stamp("\"v1\""),
+        });
+        h.provider.hold();
+        let id = h.manager.add(copy).await;
+        h.settle().await;
+        h.manager.cancel(id).await;
+        assert_eq!(h.provider.open_uploads(), 0);
     }
 
     #[tokio::test(start_paused = true)]
