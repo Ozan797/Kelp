@@ -29,6 +29,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionError, setActionError] = useState<AppError | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
+  const [dropConnection, setDropConnection] = useState<string | null>(null);
   const lastPlaces = useRef<Record<string, Place>>({});
 
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
@@ -138,6 +139,7 @@ export default function App() {
         onAdd={addConnection}
         onContextMenu={connectionMenu}
         onSettings={() => setSheet({ kind: "settings" })}
+        dropConnection={dropConnection}
       />
       {connection ? (
         tabs.map((tab) => {
@@ -185,6 +187,7 @@ export default function App() {
                 onSelectConnection={(id) => dispatch({ type: "update", id: tab.id, patch: { connectionId: id, place: null } })}
                 onEditConnection={(profile) => setSheet({ kind: "connection", initial: profile })}
                 onOpenTransfers={() => setDrawerOpen(true)}
+                onDragConnection={setDropConnection}
               />
             </div>
           );

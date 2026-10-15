@@ -58,7 +58,7 @@ export type ErrorKind =
 
 export type AppError = { kind: ErrorKind; message: string };
 
-export type Direction = "upload" | "download";
+export type Direction = "upload" | "download" | "copy";
 export type TransferKind = "file" | "folder";
 export type TransferStatus = "waiting" | "running" | "retrying" | "paused" | "failed" | "finished" | "cancelled";
 export type TransferView = {
@@ -76,7 +76,10 @@ export type TransferView = {
   filesFailed: number;
   error: string | null;
   path: string | null;
+  moving: boolean;
 };
+
+export type CopyRequest = { from: string; fromBucket: string; keys: string[]; to: string; toBucket: string; prefix: string };
 export type TransferProgress = { id: string; done: number; total: number; filesDone: number };
 
 export type UsageView = {
@@ -160,6 +163,9 @@ export const api = {
   getSettings: () => call<Settings>("get_settings"),
   setSettings: (settings: Settings) => call<Settings>("set_settings", { settings }),
   setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
+  planCopy: (request: CopyRequest) => call<FolderPlan>("plan_copy", { request }),
+  startCopy: (request: CopyRequest, skipExisting: boolean, moveAfter: boolean) =>
+    call<string[]>("start_copy", { request, skipExisting, moveAfter }),
   listTransfers: () => call<TransferView[]>("list_transfers"),
   pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
   resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),

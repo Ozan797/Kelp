@@ -17,20 +17,27 @@ import type { Transfer } from "./hooks/useTransfers";
 import { useUsage } from "./hooks/useUsage";
 import { destinationText, pillText, summaryText, type Place } from "./lib/drop";
 import type { Command } from "./lib/palette";
-import { api, toAppError, type AppError, type ConnectionProfile, type FolderPlan, type MenuEntry } from "./lib/tauri";
+import { CopySheet } from "./components/CopySheet";
+import { DragGhost } from "./components/DragGhost";
+import { MoveSheet } from "./components/MoveSheet";
+import { useRowDrag } from "./hooks/useRowDrag";
+import { api, toAppError, type AppError, type ConnectionProfile, type CopyRequest, type FolderPlan, type MenuEntry } from "./lib/tauri";
 
 type Sheet =
   | { kind: "none" }
   | { kind: "folder" }
   | { kind: "palette" }
   | { kind: "preview"; key: string }
-  | { kind: "overwrite"; plan: FolderPlan; paths: string[]; target: Place };
+  | { kind: "overwrite"; plan: FolderPlan; what: string; destination: string; verb: string; start: (skipExisting: boolean) => void }
+  | { kind: "move"; plan: FolderPlan; count: number; destination: string; from: string; start: () => void }
+  | { kind: "copyTo"; target: ConnectionProfile; keys: string[] };
 
 function parentOf(prefix: string): string {
   const parts = prefix.split("/").filter(Boolean).slice(0, -1);
   return parts.length > 0 ? `${parts.join("/")}/` : "";
 }
 
+const NOTHING_TO_COPY = "Nothing to copy. Everything is already there.";
 const NOTHING_TO_UPLOAD = "Nothing to upload. The folder is empty or everything is already there.";
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -51,6 +58,7 @@ export type BrowserProps = {
   onSelectConnection: (id: string) => void;
   onEditConnection: (profile: ConnectionProfile) => void;
   onOpenTransfers: () => void;
+  onDragConnection: (id: string | null) => void;
 };
 
 export function Browser({
@@ -69,6 +77,7 @@ export function Browser({
   onSelectConnection,
   onEditConnection,
   onOpenTransfers,
+  onDragConnection,
 }: BrowserProps) {
   const [reload, setReload] = useState(0);
   const [buckets, setBuckets] = useState<string[] | null>(null);
@@ -145,7 +154,7 @@ export function Browser({
     return () => clearTimeout(timer);
   }, [connection.id, place?.bucket, place?.prefix]);
 
-  const finishedUploads = transfers.filter((t) => t.direction === "upload" && t.status === "finished").length;
+  const finishedUploads = transfers.filter((t) => t.direction !== "download" && t.status === "finished").length;
   const seenUploads = useRef(finishedUploads);
   useEffect(() => {
     if (finishedUploads > seenUploads.current) listing.reload();
@@ -230,7 +239,16 @@ export function Browser({
     setChecking(target);
     try {
       const plan = await api.planUpload(connection.id, target.bucket, target.prefix, paths);
-      if (plan.existing > 0) setSheet({ kind: "overwrite", plan, paths, target });
+      if (plan.existing > 0) {
+        setSheet({
+          kind: "overwrite",
+          plan,
+          what: paths.length === 1 ? `"${paths[0].split("/").filter(Boolean).pop() ?? paths[0]}"` : `${paths.length} items`,
+          destination: `${target.bucket}/${target.prefix}`,
+          verb: "Uploading",
+          start: (skip) => startUploads(paths, target, skip),
+        });
+      }
       else await startUploads(paths, target, false);
     } catch (caught) {
       setActionError(toAppError(caught));
@@ -256,6 +274,63 @@ export function Browser({
     },
     active,
   );
+
+  const startCopy = async (request: CopyRequest, skipExisting: boolean, moving: boolean) => {
+    try {
+      const started = await api.startCopy(request, skipExisting, moving);
+      if (started.length > 0) onOpenTransfers();
+      else setActionError({ kind: "io", message: NOTHING_TO_COPY });
+    } catch (caught) {
+      setActionError(toAppError(caught));
+    }
+  };
+
+  const copyOrMove = async (request: CopyRequest, moving: boolean) => {
+    if (!place) return;
+    try {
+      const plan = await api.planCopy(request);
+      const count = request.keys.length;
+      const destination = destinationText({ bucket: request.toBucket, prefix: request.prefix });
+      if (plan.existing > 0) {
+        const first = request.keys[0].split("/").filter(Boolean).pop() ?? request.keys[0];
+        setSheet({
+          kind: "overwrite",
+          plan,
+          what: count === 1 ? `"${first}"` : `${count} items`,
+          destination: `${request.toBucket}/${request.prefix}`,
+          verb: moving ? "Moving" : "Copying",
+          start: (skip) => startCopy(request, skip, moving),
+        });
+      } else if (moving) {
+        setSheet({ kind: "move", plan, count, destination, from: destinationText(place), start: () => startCopy(request, false, true) });
+      } else {
+        await startCopy(request, false, false);
+      }
+    } catch (caught) {
+      setActionError(toAppError(caught));
+    }
+  };
+
+  const rowDrag = useRowDrag({
+    open: place,
+    connectionId: connection.id,
+    onDrop: (keys, target, copy) => {
+      if (!place || sheet.kind !== "none") return;
+      if (target.kind === "connection") {
+        const other = connections.find((c) => c.id === target.connectionId);
+        if (other) setSheet({ kind: "copyTo", target: other, keys });
+        return;
+      }
+      const request = { from: connection.id, fromBucket: place.bucket, keys, to: connection.id, toBucket: target.place.bucket, prefix: target.place.prefix };
+      copyOrMove(request, !copy);
+    },
+  });
+  const rowTarget = rowDrag.drag?.target ?? null;
+  const rowPlace = rowTarget?.kind === "place" ? rowTarget.place : null;
+  const dragConnection = rowTarget?.kind === "connection" ? rowTarget.connectionId : null;
+  useEffect(() => {
+    onDragConnection(dragConnection);
+  }, [dragConnection]);
 
   const chooseUpload = () => {
     api
@@ -426,7 +501,19 @@ export function Browser({
         hasMore={listing.hasMore}
         loading={listing.loading}
         onLoadMore={listing.loadMore}
-        dropKey={drag?.zone === "folder" && drag.target?.bucket === place.bucket ? drag.target.prefix : null}
+        dropKey={
+          drag?.zone === "folder" && drag.target?.bucket === place.bucket
+            ? drag.target.prefix
+            : rowPlace?.bucket === place.bucket
+              ? rowPlace.prefix
+              : null
+        }
+        onRowPointerDown={(row, x, y) => {
+          if (!active) return;
+          const keys = selected.has(row.key) ? [...selected] : [row.key];
+          if (!selected.has(row.key)) setSelected(new Set([row.key]));
+          rowDrag.begin(keys, x, y);
+        }}
       />
     );
   };
@@ -440,7 +527,13 @@ export function Browser({
         selected={place?.bucket ?? null}
         onSelect={(bucket) => go({ bucket, prefix: "" })}
         onContextMenu={bucketMenu}
-        dropBucket={drag?.zone === "bucket" ? (drag.target?.bucket ?? null) : null}
+        dropBucket={
+          drag?.zone === "bucket"
+            ? (drag.target?.bucket ?? null)
+            : rowPlace && rowPlace.prefix === "" && rowPlace.bucket !== place?.bucket
+              ? rowPlace.bucket
+              : null
+        }
       />
       <main className="main">
         {strip}
@@ -469,6 +562,7 @@ export function Browser({
               onFilter={setFilter}
               onNewFolder={() => setSheet({ kind: "folder" })}
               onUpload={chooseUpload}
+              dropKey={rowPlace?.bucket === place.bucket ? rowPlace.prefix : null}
             />
             <div className="drop-area" data-drop="list">
               {content()}
@@ -513,19 +607,47 @@ export function Browser({
       {sheet.kind === "overwrite" && (
         <OverwriteSheet
           plan={sheet.plan}
-          what={sheet.paths.length === 1 ? `"${sheet.paths[0].split("/").filter(Boolean).pop() ?? sheet.paths[0]}"` : `${sheet.paths.length} items`}
-          destination={`${sheet.target.bucket}/${sheet.target.prefix}`}
+          what={sheet.what}
+          verb={sheet.verb}
+          destination={sheet.destination}
           onCancel={() => setSheet({ kind: "none" })}
           onSkip={() => {
             setSheet({ kind: "none" });
-            startUploads(sheet.paths, sheet.target, true);
+            sheet.start(true);
           }}
           onReplace={() => {
             setSheet({ kind: "none" });
-            startUploads(sheet.paths, sheet.target, false);
+            sheet.start(false);
           }}
         />
       )}
+      {sheet.kind === "move" && (
+        <MoveSheet
+          count={sheet.count}
+          plan={sheet.plan}
+          destination={sheet.destination}
+          from={sheet.from}
+          onCancel={() => setSheet({ kind: "none" })}
+          onMove={() => {
+            setSheet({ kind: "none" });
+            sheet.start();
+          }}
+        />
+      )}
+      {sheet.kind === "copyTo" && place && (
+        <CopySheet
+          connection={sheet.target}
+          names={sheet.keys.map((key) => key.split("/").filter(Boolean).pop() ?? key)}
+          onCancel={() => setSheet({ kind: "none" })}
+          onCopy={(bucket, prefix) => {
+            const keys = sheet.keys;
+            const to = sheet.target.id;
+            setSheet({ kind: "none" });
+            copyOrMove({ from: connection.id, fromBucket: place.bucket, keys, to, toBucket: bucket, prefix }, false);
+          }}
+        />
+      )}
+      {rowDrag.drag && <DragGhost drag={rowDrag.drag} />}
       {sheet.kind === "preview" && previewIndex >= 0 && place && (
         <Preview
           connectionId={connection.id}

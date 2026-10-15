@@ -45,7 +45,7 @@ function transfer(partial: Partial<Transfer>): Transfer {
   return {
     id: "t", direction: "upload", kind: "file", name: "a", destination: "d", status: "running", retryAt: null,
     total: 100, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
-    speed: null, sample: null, ...partial,
+    speed: null, sample: null, moving: false, ...partial,
   };
 }
 

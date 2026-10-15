@@ -117,6 +117,7 @@ pub struct TransferView {
     pub files_failed: u64,
     pub error: Option<String>,
     pub path: Option<String>,
+    pub moving: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -229,6 +230,7 @@ impl Transfer {
             files_failed: count(ItemState::is_failed),
             error: self.error.clone(),
             path,
+            moving: self.source.as_ref().is_some_and(|source| source.move_after),
         }
     }
 
@@ -331,6 +333,19 @@ pub mod tests {
             done_ranges: vec![0, 2],
         });
         assert_eq!(download.done_bytes(), 12 * mib);
+    }
+
+    #[test]
+    fn a_move_says_so_in_its_view() {
+        let mut copy = transfer(vec![item("cdn/a.jpg", 1)]);
+        copy.direction = Direction::Copy;
+        assert!(!copy.view(0).moving);
+        copy.source = Some(Source {
+            connection_id: Uuid::new_v4(),
+            bucket: "media".into(),
+            move_after: true,
+        });
+        assert!(copy.view(0).moving);
     }
 
     #[test]

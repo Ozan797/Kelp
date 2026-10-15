@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionProfile, FileDropEvent, ListPage, MenuEntry, TransferView } from "./lib/tauri";
@@ -27,6 +27,8 @@ const api = vi.hoisted(() => ({
   startUploads: vi.fn(),
   inspectDrop: vi.fn(),
   onFileDrop: vi.fn(),
+  planCopy: vi.fn(),
+  startCopy: vi.fn(),
   getSettings: vi.fn(),
   setSettings: vi.fn(),
   setWindowTheme: vi.fn(),
@@ -81,6 +83,8 @@ beforeEach(() => {
   api.listTransfers.mockResolvedValue([]);
   api.onFileDrop.mockResolvedValue(() => undefined);
   api.startUploads.mockResolvedValue(["t1"]);
+  api.planCopy.mockResolvedValue({ files: 1, bytes: 10, existing: 0, examples: [] });
+  api.startCopy.mockResolvedValue(["t2"]);
   api.getSettings.mockResolvedValue({ theme: "system" });
   api.setSettings.mockImplementation(async (settings: unknown) => settings);
   api.setWindowTheme.mockResolvedValue(undefined);
@@ -298,7 +302,7 @@ describe("App", () => {
     api.listObjects.mockResolvedValue(page([], ["a.jpg", "b.jpg", "c.jpg"]));
     const upload: TransferView = {
       id: "t9", direction: "upload", kind: "file", name: "a.jpg", destination: "archive/", status: "finished",
-      retryAt: null, total: 1, done: 1, filesTotal: 1, filesDone: 1, filesFailed: 0, error: null, path: null,
+      retryAt: null, total: 1, done: 1, filesTotal: 1, filesDone: 1, filesFailed: 0, error: null, path: null, moving: false,
     };
     act(() => emit(upload));
     await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
@@ -337,6 +341,28 @@ describe("App", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
   });
 
+  it("moves a dragged file into a folder after asking, and copies at once with Option", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.mp4"]));
+    render(<App />);
+    const row = await screen.findByText("a.mp4");
+    const drafts = screen.getByText("drafts");
+    document.elementFromPoint = vi.fn(() => drafts);
+    const drop = async (altKey: boolean) => {
+      fireEvent.pointerDown(row, { button: 0, clientX: 5, clientY: 5 });
+      fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+      fireEvent.pointerUp(window, { clientX: 40, clientY: 40, altKey });
+    };
+    const request = { from: "c1", fromBucket: "archive", keys: ["a.mp4"], to: "c1", toBucket: "archive", prefix: "drafts/" };
+    await act(async () => drop(false));
+    expect(await screen.findByRole("dialog", { name: "Move 1 item to drafts/?" })).toBeTruthy();
+    expect(api.planCopy).toHaveBeenCalledWith(request);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Move 1 item" }));
+    expect(api.startCopy).toHaveBeenCalledWith(request, false, true);
+    await act(async () => drop(true));
+    await waitFor(() => expect(api.startCopy).toHaveBeenLastCalledWith(request, false, false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);
@@ -359,7 +385,7 @@ describe("App", () => {
     await screen.findByText("This folder is empty");
     const running: TransferView = {
       id: "t1", direction: "download", kind: "file", name: "a.txt", destination: "/Users/me/Downloads/a.txt", status: "running",
-      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
+      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null, moving: false,
     };
     act(() => emit(running));
     act(() => emit({ ...running, status: "finished", done: 10, filesDone: 1, path: running.destination }));
