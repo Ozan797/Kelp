@@ -14,8 +14,6 @@ jobs:
     env:
       VERSION: ${{ github.ref_name }}
       R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
@@ -40,9 +38,13 @@ jobs:
         run: node app/scripts/version.mjs "$VERSION"
 
       - name: Refuse to rebuild a published version
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           aws --version
-          if aws s3 ls "s3://kelp-downloads/releases/$VERSION/" --endpoint-url "$R2_ENDPOINT" | grep -q .; then
+          count=$(aws s3api list-objects-v2 --bucket kelp-downloads --prefix "releases/$VERSION/" --max-keys 1 --query KeyCount --output text --endpoint-url "$R2_ENDPOINT")
+          if [ "$count" != "0" ] && [ "$count" != "None" ]; then
             echo "$VERSION is already built. Bump the version for a new build."
             exit 1
           fi
@@ -82,10 +84,13 @@ jobs:
 
       - name: Write the update manifest
         run: |
-          git tag -l --format='%(contents)' "v$VERSION" > "$RUNNER_TEMP/notes.txt"
+          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "v$VERSION" > "$RUNNER_TEMP/notes.txt"
           node app/scripts/manifest.mjs "$VERSION" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/notes.txt" > "$RUNNER_TEMP/latest.json"
 
       - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           for file in "$BUNDLE/dmg/Kelp_${VERSION}_aarch64.dmg" "$BUNDLE/macos/Kelp.app.tar.gz" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/latest.json"; do
             aws s3 cp "$file" "s3://kelp-downloads/releases/$VERSION/" --endpoint-url "$R2_ENDPOINT"
