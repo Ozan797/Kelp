@@ -30,15 +30,22 @@ Needs `app/src-tauri/Kelp.provisionprofile` first (README → Signing).
 - A build run without the profile embedded shows the "isn't signed to use the Keychain" message.
 - `tauri dev`: click Always Allow once, rebuild twice, no password prompt.
 
+## M5 part 2: signed releases, auto-update, website — built
+
+Spec: `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`. Needs the one-time setup in its section 8.
+
+### First release, by hand
+
+- [ ] Tag `v0.1.0`: the build passes, `releases/0.1.0/` has four files, a draft release exists.
+- [ ] The `.dmg` opens on a Mac that has never run Kelp, with no warning (`spctl -a -vv Kelp.app` says "Notarized Developer ID").
+- [ ] Publish `0.1.0`: `latest.json` and `Kelp_aarch64.dmg` are live; the site shows "Version 0.1.0" and a working button.
+- [ ] Install 0.1.0, then tag and publish `0.1.1`: 0.1.0 shows the banner, restarts into 0.1.1, keeps its connections.
+- [ ] With a transfer running, Restart asks first.
+
 ## M5: release (SPEC §4, §9)
 
-- Code signing and notarisation in `.github/workflows/release.yml` (certificate `.p12` and Apple ID details as
-  GitHub secrets).
 - `release.yml` fails on a `v*` tag until it gets `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and the provisioning
   profile (base64) as secrets.
-- Auto-update with `tauri-plugin-updater` (SPEC §9.1). The updater signing key is generated once and backed up in
-  a password manager. **No public build without the updater.**
-- Landing site live on a subdomain of `ozanai.dev`; `SITE.released` stays `false` until a `.dmg` is on a release.
 - Test the updater by installing v0.1.0 and then releasing v0.1.1.
 
 ## Still open

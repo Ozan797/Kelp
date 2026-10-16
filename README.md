@@ -76,9 +76,12 @@ Build with `npm run build` (it type-checks, prerenders every page and checks the
 
 ## Releasing
 
-1. Bump the version in `app/package.json` and `app/src-tauri/tauri.conf.json`.
-2. Push a tag: `git tag v0.1.0 && git push --tags`.
-3. GitHub Actions builds the `.dmg` and creates a draft release. Publish it.
-4. Set `released: true` in `website/src/config.ts` and redeploy the site.
+1. Bump `version` in `app/package.json`, `app/src-tauri/tauri.conf.json` and `app/src-tauri/Cargo.toml`.
+2. Tag with release notes and push: `git tag -a v0.2.0 -m "What changed" && git push origin v0.2.0`.
+3. The Release workflow builds, signs, notarises and uploads to `releases/0.2.0/` on `dl.kelp.ozanai.dev`.
+   Nobody sees it yet. Download the `.dmg` from there (or the draft GitHub release) and try it.
+4. Actions → Publish release → Run workflow → `0.2.0`. That updates `latest.json`, `Kelp_aarch64.dmg` and the
+   website. To roll back, publish the older version.
 
-For a `.dmg` that opens without Gatekeeper warnings, add the Apple signing secrets listed in `.github/workflows/release.yml`.
+One-time setup (Cloudflare, Apple, the updater key and the GitHub secrets) is in section 8 of
+`docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`.
