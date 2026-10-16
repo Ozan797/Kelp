@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use uuid::Uuid;
@@ -22,6 +23,7 @@ pub trait Vault: Send + Sync {
 pub struct ProtectedStore<V: Vault> {
     vault: V,
     secrets: Mutex<Option<Secrets>>,
+    main_missing: AtomicBool,
 }
 
 impl<V: Vault> ProtectedStore<V> {
@@ -29,6 +31,7 @@ impl<V: Vault> ProtectedStore<V> {
         Self {
             vault,
             secrets: Mutex::new(None),
+            main_missing: AtomicBool::new(false),
         }
     }
 
@@ -41,7 +44,11 @@ impl<V: Vault> ProtectedStore<V> {
     fn load(&self) -> Result<Secrets, AppError> {
         let contents = match self.vault.read(MAIN)? {
             Some(contents) => Some(contents),
-            None => self.vault.read(NEXT)?,
+            None => {
+                let next = self.vault.read(NEXT)?;
+                self.main_missing.store(next.is_some(), Ordering::SeqCst);
+                next
+            }
         };
         match contents {
             Some(contents) => {
@@ -68,10 +75,19 @@ impl<V: Vault> ProtectedStore<V> {
 
     fn persist(&self, secrets: &Secrets) -> Result<(), AppError> {
         let contents = serde_json::to_string(secrets).map_err(keychain_error)?;
+        if self.main_missing.load(Ordering::SeqCst) {
+            self.vault.add(MAIN, &contents)?;
+            self.main_missing.store(false, Ordering::SeqCst);
+            self.vault.remove(NEXT).ok();
+            return Ok(());
+        }
         self.vault.remove(NEXT)?;
         self.vault.add(NEXT, &contents)?;
         self.vault.remove(MAIN)?;
-        self.vault.add(MAIN, &contents)?;
+        if let Err(error) = self.vault.add(MAIN, &contents) {
+            self.main_missing.store(true, Ordering::SeqCst);
+            return Err(error);
+        }
         self.vault.remove(NEXT).ok();
         Ok(())
     }
@@ -147,6 +163,7 @@ mod tests {
         calls: Mutex<Vec<String>>,
         fail_next_read: Mutex<Option<AppError>>,
         fail_add_to: Mutex<Option<&'static str>>,
+        fail_add_once: Mutex<Option<&'static str>>,
     }
 
     impl FakeVault {
@@ -180,6 +197,12 @@ mod tests {
         }
         fn add(&self, account: &str, contents: &str) -> Result<(), AppError> {
             self.log(format!("add {account}"));
+            let mut once = self.fail_add_once.lock().unwrap();
+            if *once == Some(account) {
+                once.take();
+                return Err(AppError::Keychain("disk full".into()));
+            }
+            drop(once);
             if *self.fail_add_to.lock().unwrap() == Some(account) {
                 return Err(AppError::Keychain("disk full".into()));
             }
@@ -285,6 +308,52 @@ mod tests {
             ]
         );
         assert!(store.vault.item(NEXT).is_none());
+    }
+
+    #[test]
+    fn a_retry_after_a_failed_main_add_never_removes_the_only_copy() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let store = ProtectedStore::new(FakeVault::default());
+        *store.vault.fail_add_once.lock().unwrap() = Some(MAIN);
+        assert!(store.set(&a, "first").is_err());
+        *store.vault.fail_add_to.lock().unwrap() = Some(NEXT);
+        store.set(&b, "second").unwrap();
+        let held = store.vault.item(MAIN).or(store.vault.item(NEXT)).unwrap();
+        let map: HashMap<Uuid, String> = serde_json::from_str(&held).unwrap();
+        assert_eq!(map[&b], "second");
+        assert_eq!(store.vault.count("add secrets.next"), 1);
+        assert_eq!(store.vault.count("remove secrets.next"), 2);
+    }
+
+    #[test]
+    fn a_failed_main_add_then_a_retry_ends_with_main_and_no_next() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let store = ProtectedStore::new(FakeVault::default());
+        *store.vault.fail_add_once.lock().unwrap() = Some(MAIN);
+        assert!(store.set(&a, "first").is_err());
+        store.set(&b, "second").unwrap();
+        assert_eq!(written(&store.vault)[&b], "second");
+        assert!(store.vault.item(NEXT).is_none());
+    }
+
+    #[test]
+    fn writing_after_loading_from_next_adds_main_before_removing_next() {
+        let id = Uuid::new_v4();
+        let vault = FakeVault::default();
+        vault.put(NEXT, &saved(&[(id, "old")]));
+        let store = ProtectedStore::new(vault);
+        let other = Uuid::new_v4();
+        store.set(&other, "new").unwrap();
+        let writes: Vec<String> = store
+            .vault
+            .calls()
+            .into_iter()
+            .filter(|call| !call.starts_with("read"))
+            .collect();
+        assert_eq!(writes, ["add secrets", "remove secrets.next"]);
+        let map = written(&store.vault);
+        assert_eq!(map[&id], "old");
+        assert_eq!(map[&other], "new");
     }
 
     #[test]
