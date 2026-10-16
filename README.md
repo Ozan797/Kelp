@@ -80,6 +80,7 @@ Build with `npm run build` (it type-checks, prerenders every page and checks the
 2. Tag with release notes and push: `git tag -a v0.2.0 -m "What changed" && git push origin v0.2.0`.
 3. The Release workflow builds, signs, notarises and uploads to `releases/0.2.0/` on `dl.kelp.ozanai.dev`.
    Nobody sees it yet. Download the `.dmg` from there (or the draft GitHub release) and try it.
+   If the build fails after uploading, bump the patch version and tag again; a built version is never replaced.
 4. Actions → Publish release → Run workflow → `0.2.0`. That updates `latest.json`, `Kelp_aarch64.dmg` and the
    website. To roll back, publish the older version.
 
