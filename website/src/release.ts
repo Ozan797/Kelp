@@ -1,6 +1,6 @@
 export type Release = { version: string };
 
-const MANIFEST_URL = "https://dl.kelp.ozanai.dev/latest.json";
+const MANIFEST_URL = "https://kelp-dl.ozanai.dev/latest.json";
 
 export function parseRelease(json: unknown): Release | null {
   if (typeof json !== "object" || json === null) return null;

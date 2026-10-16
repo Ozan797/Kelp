@@ -47,7 +47,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://dl.kelp.ozanai.dev/latest.json"],
+      "endpoints": ["https://kelp-dl.ozanai.dev/latest.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3MjgwM0ExNUVBNjUzQ0IKUldUTFU2WmVvUU1vbHlSVzZzNENLQkVmU3UvR2E1VTlOQ2dScGZ3TVZ1SldsV0Y3RDh2THRuVlcK"
     }
   }

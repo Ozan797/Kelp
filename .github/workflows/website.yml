@@ -13,9 +13,9 @@ on:
         type: boolean
         default: false
     secrets:
-      CLOUDFLARE_API_TOKEN:
+      NETLIFY_AUTH_TOKEN:
         required: true
-      CLOUDFLARE_ACCOUNT_ID:
+      NETLIFY_SITE_ID:
         required: true
 
 concurrency:
@@ -45,11 +45,11 @@ jobs:
         if: inputs.require-release
         run: |
           if grep -q "Download coming soon" dist/index.html; then
-            echo "The site built without a release. Check https://dl.kelp.ozanai.dev/latest.json and run Deploy website again."
+            echo "The site built without a release. Check https://kelp-dl.ozanai.dev/latest.json and run Deploy website again."
             exit 1
           fi
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Netlify
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.151.1 pages deploy dist --project-name kelp --branch master
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: npx --yes netlify-cli@27.13.0 deploy --dir dist --prod --site "$NETLIFY_SITE_ID" --no-build

@@ -10,7 +10,7 @@ export const SITE = {
 
 export const RELEASE: Release | null = __KELP_RELEASE__;
 
-export const DOWNLOAD_URL = "https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg";
+export const DOWNLOAD_URL = "https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg";
 
 export type PageMeta = { path: string; title: string; description: string };
 
@@ -62,7 +62,7 @@ export const NOT_FOUND: PageMeta = {
   description: "This page doesn't exist.",
 };
 
-/** Link target for an internal page. Cloudflare Pages serves folders with a trailing slash. */
+/** Link target for an internal page. The host serves folders with a trailing slash. */
 export const hrefFor = (path: string) => (path === "/" ? "/" : `${path}/`);
 
 /** Absolute URL for canonical links and the sitemap. */

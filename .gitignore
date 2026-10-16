@@ -31,3 +31,6 @@ app/src-tauri/gen/
 .claude/
 app/src-tauri/Kelp.entitlements
 app/src-tauri/Kelp.provisionprofile
+
+# Local Netlify folder
+.netlify
