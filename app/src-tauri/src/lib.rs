@@ -16,7 +16,7 @@ pub mod validation;
 
 use std::sync::Arc;
 
-use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
@@ -69,6 +69,13 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| {
+            if event.id() == "check-updates" {
+                app.emit("menu://check-updates", ()).ok();
+            }
+        })
         .register_asynchronous_uri_scheme_protocol("kelp-preview", |context, request, responder| {
             let app = context.app_handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -76,8 +83,11 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            let check_updates =
+                MenuItemBuilder::with_id("check-updates", "Check for updates…").build(app)?;
             let kelp = SubmenuBuilder::new(app, "Kelp")
                 .about(None)
+                .item(&check_updates)
                 .separator()
                 .services()
                 .separator()
