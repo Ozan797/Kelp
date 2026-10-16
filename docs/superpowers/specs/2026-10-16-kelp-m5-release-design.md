@@ -97,7 +97,7 @@ The runner's temporary files (key file, profile, keychain) are deleted in an `al
 | Launch, then every 6 hours | Check silently. Found → download in the background → show the banner. Nothing new or offline → nothing |
 | "Check for updates…" (menu or ⌘K) | Same, but always answers: the banner, "Kelp is up to date (0.2.0).", or "Kelp couldn't check for updates. Check your internet connection and try again." |
 | Banner | Bottom of the window, non-blocking: "Kelp 0.2.0 is ready. Restart to update" · "Release notes" (expands the notes) · "Later" (hides it until next launch) · "Restart" |
-| Restart with transfers running | Confirm: "3 transfers are running. Restart now? They'll resume after Kelp reopens." · "Restart" / "Not now" |
+| Restart with transfers running | The existing `api.confirm` dialog: "3 transfers are running. Restart now? They'll resume after Kelp reopens." · "Restart" / "Cancel" |
 | Dev builds | Never check (`import.meta.env.DEV`); the menu item says "Updates are off in development builds." |
 
 A check already running makes another request wait for it rather than start a second one. A download that fails
@@ -131,8 +131,8 @@ new downloads get the older `.dmg`.
 
 - `website/src/release.ts`: `parseRelease(json: unknown): { version: string } | null` (pure, tested) and
   `fetchRelease()` that reads `https://dl.kelp.ozanai.dev/latest.json` with a 5 s timeout; any failure is `null`.
-- `vite.config.ts` awaits `fetchRelease()` and defines it for the build. `KELP_RELEASE=none` skips the fetch
-  (offline work and tests).
+- `vite.config.ts` awaits `fetchRelease()` and defines it for the build. Offline, the fetch times out after 5 s
+  and the site builds as "coming soon".
 - `config.ts`: `SITE.version` and `SITE.released` are removed; `RELEASE` (the fetched value or `null`) replaces
   them. `DOWNLOAD_URL` becomes `https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg`.
 - `DownloadButton`, `Landing` and `head.ts` read `RELEASE`: `null` → "Download coming soon" and no
