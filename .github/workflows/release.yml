@@ -82,6 +82,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build -- --target aarch64-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
+      - name: Check the update key matches the app
+        run: node app/scripts/keycheck.mjs "$BUNDLE/macos/Kelp.app.tar.gz.sig"
+
       - name: Write the update manifest
         run: |
           git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "v$VERSION" > "$RUNNER_TEMP/notes.txt"
