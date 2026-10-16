@@ -36,7 +36,8 @@ npm run dev
 
 Dev builds (`npm run tauri dev`) are signed with your "Apple Development" certificate if you have one, so the
 Keychain's "Always Allow" sticks across rebuilds. Pick a certificate with `KELP_DEV_SIGNING_IDENTITY`. Without
-one, dev builds run unsigned and ask for your password each launch.
+one, dev builds run unsigned and ask for your password each launch. The first signed dev build or `cargo test`
+may show a one-time macOS prompt asking to let `codesign` use your key; click Always Allow.
 
 Release builds keep secrets in one Keychain item unlocked with Touch ID. They need, once:
 
