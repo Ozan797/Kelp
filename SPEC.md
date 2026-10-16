@@ -279,7 +279,7 @@ Everyone who has installed Kelp gets new versions automatically.
 ## 12. Open questions
 
 1. ~~**Hetzner:** Object Storage or Storage Box?~~ **Decided 2026-10-14: Hetzner Object Storage (S3).** Storage Box over SFTP stays under "Later".
-2. **Name and domain:** final app name and the exact subdomain.
+2. ~~**Name and domain:** final app name and the exact subdomain.~~ **Decided 2026-10-16: Kelp, at `kelp.ozanai.dev`; downloads and updates at `dl.kelp.ozanai.dev`, which must stay up for as long as any install exists.**
 3. ~~**Open source or closed?**~~ **Decided 2026-10-16: open source.** Personal details (Team ID, signing identity, provisioning profile) stay out of the repo.
 4. **Apple Developer account:** needed for signing and notarisation before sharing widely.
 5. **S3 library:** `aws-sdk-s3` (full feature coverage, heavier build) vs OpenDAL (one API for many backends). Decide at the end of M1 after a small spike on each.

@@ -1,9 +1,8 @@
 import type { Release } from "./release";
 
-// One place to edit names, URLs, the version and the page list.
 export const SITE = {
   name: "Kelp",
-  domain: "kelp.ozanai.dev", // placeholder until SPEC.md open question 2 is settled
+  domain: "kelp.ozanai.dev",
   url: "https://kelp.ozanai.dev",
   repoUrl: "https://github.com/Ozan797/Kelp",
   minMacOS: "macOS 13",
