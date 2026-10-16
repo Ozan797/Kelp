@@ -42,18 +42,20 @@ export function SettingsSheet({ theme, onTheme, onClose }: SettingsSheetProps) {
         <p className="sheet-note">Saved on this Mac.</p>
         <fieldset className="segmented" role="radiogroup" aria-labelledby="appearance-label">
           <legend id="appearance-label">Appearance</legend>
-          {THEMES.map((option) => (
-            <label key={option.value} className={option.value === theme ? "segment selected" : "segment"}>
-              <input
-                type="radio"
-                name="theme"
-                value={option.value}
-                checked={option.value === theme}
-                onChange={() => onTheme(option.value)}
-              />
-              {option.label}
-            </label>
-          ))}
+          <div className="segments">
+            {THEMES.map((option) => (
+              <label key={option.value} className={option.value === theme ? "segment selected" : "segment"}>
+                <input
+                  type="radio"
+                  name="theme"
+                  value={option.value}
+                  checked={option.value === theme}
+                  onChange={() => onTheme(option.value)}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
         </fieldset>
         <div className="sheet-actions">
           <span className="spacer" />
