@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -5,6 +6,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 
 export type ProviderKind = "s3" | "r2" | "hetzner";
 
@@ -33,6 +36,8 @@ export type ConnectionDraft = {
   bucket: string | null;
   secret: string | null;
 };
+
+export type PendingUpdate = { version: string; notes: string; install: () => Promise<void> };
 
 export type CheckResult = { buckets: string[]; limitedToBucket: boolean };
 export type ObjectMeta = { key: string; size: number; lastModified: string | null };
@@ -180,6 +185,15 @@ export const api = {
     listen<TransferProgress>("transfer://progress", (event) => handler(event.payload)),
   onTransferState: (handler: (view: TransferView) => void): Promise<UnlistenFn> =>
     listen<TransferView>("transfer://state", (event) => handler(event.payload)),
+  checkForUpdate: async (): Promise<PendingUpdate | null> => {
+    const update = await check();
+    if (update === null) return null;
+    await update.download();
+    return { version: update.version, notes: update.body ?? "", install: () => update.install() };
+  },
+  appVersion: () => getVersion(),
+  restartApp: () => relaunch(),
+  onCheckForUpdates: (handler: () => void): Promise<UnlistenFn> => listen("menu://check-updates", () => handler()),
   pickFiles: async (): Promise<string[]> => {
     const picked = await open({ multiple: true, directory: false });
     if (picked === null) return [];

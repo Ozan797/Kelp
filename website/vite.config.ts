@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fetchRelease } from "./src/release";
 
-export default defineConfig({
+export default defineConfig(async () => ({
   plugins: [react()],
-  // Allow importing ../design (shared tokens, fonts, theme.ts) during development.
   server: { fs: { allow: [".."] } },
-});
+  define: { __KELP_RELEASE__: JSON.stringify(await fetchRelease()) },
+}));

@@ -5,51 +5,110 @@ on:
     tags:
       - "v*"
 
-jobs:
-  build-macos:
-    # macos-latest runners are Apple Silicon (arm64)
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
+permissions:
+  contents: write
 
-      - uses: actions/setup-node@v4
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ github.ref_name }}
+      R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read the version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)" fetch --force --tags
+          echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
+          echo "BUNDLE=app/src-tauri/target/aarch64-apple-darwin/release/bundle" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check the tag matches the app version
+        run: node app/scripts/version.mjs "$VERSION"
+
+      - name: Refuse to rebuild a published version
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws --version
+          count=$(aws s3api list-objects-v2 --bucket kelp-downloads --prefix "releases/$VERSION/" --max-keys 1 --query KeyCount --output text --endpoint-url "$R2_ENDPOINT")
+          if [ "$count" != "0" ] && [ "$count" != "None" ]; then
+            echo "$VERSION is already built. Bump the version for a new build."
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
           targets: aarch64-apple-darwin
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: "./app/src-tauri -> target"
 
       - run: npm ci
         working-directory: app
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Write signing files
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional until you have an Apple Developer account.
-          # Add these repository secrets to sign and notarise the app:
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # For auto-updates (tauri-plugin-updater):
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: app
-          tagName: ${{ github.ref_name }}
-          releaseName: "Kelp ${{ github.ref_name }}"
-          releaseBody: "Download the .dmg below, open it, and drag the app into Applications."
-          releaseDraft: true
-          prerelease: false
-          args: --target aarch64-apple-darwin
+          KELP_PROVISION_PROFILE: ${{ secrets.KELP_PROVISION_PROFILE }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          echo "$KELP_PROVISION_PROFILE" | base64 --decode > app/src-tauri/Kelp.provisionprofile
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Build, sign and notarise
+        working-directory: app
+        env:
+          KELP_TEAM_ID: ${{ secrets.KELP_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --target aarch64-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Check the update key matches the app
+        run: node app/scripts/keycheck.mjs "$BUNDLE/macos/Kelp.app.tar.gz.sig"
+
+      - name: Write the update manifest
+        run: |
+          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "v$VERSION" > "$RUNNER_TEMP/notes.txt"
+          node app/scripts/manifest.mjs "$VERSION" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/notes.txt" > "$RUNNER_TEMP/latest.json"
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          for file in "$BUNDLE/dmg/Kelp_${VERSION}_aarch64.dmg" "$BUNDLE/macos/Kelp.app.tar.gz" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/latest.json"; do
+            aws s3 cp "$file" "s3://kelp-downloads/releases/$VERSION/" --endpoint-url "$R2_ENDPOINT"
+          done
+
+      - name: Draft a GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" --draft --title "Kelp $VERSION" --notes-file "$RUNNER_TEMP/notes.txt" \
+            "$BUNDLE/dmg/Kelp_${VERSION}_aarch64.dmg" "$BUNDLE/macos/Kelp.app.tar.gz" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/latest.json"
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f app/src-tauri/Kelp.provisionprofile "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/latest.json"

@@ -886,6 +886,34 @@ button {
   font-size: 12px;
 }
 
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.update-banner .button {
+  min-height: 28px;
+  font: 600 12px / 1 var(--font-ui);
+}
+
+.update-text {
+  flex: 1 1 auto;
+}
+
+.update-notes {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .sheet-backdrop,
   .tile,

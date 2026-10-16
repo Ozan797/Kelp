@@ -70,17 +70,17 @@ Sentence case, active voice, plain words. Buttons say exactly what they do ("Del
 ## Website (`website/`)
 
 - Separate Vite + React + TS project; deployed as static files to a subdomain of `ozanai.dev`.
-- All names, versions and URLs live in `website/src/config.ts`. Change them there only.
+- All names and URLs live in `website/src/config.ts`. Change them there only.
 - Pages are prerendered. A new page needs a `PAGES` entry in `config.ts` and a `ROUTES` entry in `routes.tsx`.
 - After the first load, internal links navigate in place (`App.tsx`), so layouts stay mounted. Page functions return their layout and must not use hooks; put state in child components.
-- `SITE.released` must stay `false` until a `.dmg` is attached to a GitHub Release.
+- The site's version and download button come from the live `https://dl.kelp.ozanai.dev/latest.json` at build time. Never hard-code them.
 - The hero demo (`components/DemoWindow.tsx`) uses fake data in `src/data.ts`. It must never contain real bucket names or keys.
 
 ## Git
 
 - Small, focused commits with clear messages.
 - Never commit `.env` files, keys, `dist/`, `target/` or `node_modules/`.
-- Releases are cut by pushing a `v*` tag, which triggers `.github/workflows/release.yml`.
+- Pushing a `v*` tag builds a release onto R2 without publishing it; the "Publish release" workflow makes it live.
 
 ## When unsure
 
