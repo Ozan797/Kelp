@@ -106,6 +106,7 @@ pub fn run() {
                 window.set_theme(window_theme(settings.load().theme)).ok();
             }
             app.manage(settings);
+            app.manage(std::sync::Arc::new(preview::PreviewCache::default()));
             tauri::async_runtime::spawn(async move { manager.start().await });
             Ok(())
         })
