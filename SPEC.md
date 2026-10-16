@@ -102,7 +102,7 @@ kelp/
 │           ├── providers/    # StorageProvider trait + s3.rs (+ sftp.rs later)
 │           ├── transfers/    # model, queue, plan, retry, store, manager, worker
 │           ├── usage.rs      # bucket and folder size
-│           ├── credentials.rs  state.rs  error.rs  lib.rs  main.rs
+│           ├── secrets/  state.rs  error.rs  lib.rs  main.rs
 ├── website/              # landing site (separate Vite project)
 ├── design/               # shared tokens, components, fonts, brand
 ├── docs/                 # design specs and implementation plans
@@ -229,7 +229,7 @@ risk is total time, and blocking the UI while it runs. So:
 
 ## 7. Security
 
-- Secret keys only in macOS Keychain (`keyring` crate). Never in profile JSON, logs, or crash reports.
+- Secret keys only in the macOS Keychain: one Touch ID–protected item in release builds (`security-framework`), per-connection items in dev builds (`keyring`). Never in profile JSON, logs, or crash reports.
 - Logs redact keys, signatures and presigned URLs.
 - Tauri capabilities are minimal: no arbitrary shell, no arbitrary fs access beyond user-picked paths.
 - Strict Content Security Policy in `tauri.conf.json`.
@@ -247,6 +247,7 @@ These are goals to measure against, not promises.
 
 - Build on a `macos-latest` GitHub Actions runner (Apple Silicon) with `tauri-apps/tauri-action` on a `v*` tag.
 - Sign and notarise with an Apple Developer ID (needs a paid Apple Developer account).
+- Release builds need `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and `app/src-tauri/Kelp.provisionprofile` (see README).
 - Publish `Kelp_<version>_aarch64.dmg` to GitHub Releases.
 - Auto-update with `tauri-plugin-updater` using signed update manifests.
 
@@ -279,6 +280,6 @@ Everyone who has installed Kelp gets new versions automatically.
 
 1. ~~**Hetzner:** Object Storage or Storage Box?~~ **Decided 2026-10-14: Hetzner Object Storage (S3).** Storage Box over SFTP stays under "Later".
 2. **Name and domain:** final app name and the exact subdomain.
-3. **Open source or closed?** Affects the GitHub Releases plan and the website's source link.
+3. ~~**Open source or closed?**~~ **Decided 2026-10-16: open source.** Personal details (Team ID, signing identity, provisioning profile) stay out of the repo.
 4. **Apple Developer account:** needed for signing and notarisation before sharing widely.
 5. **S3 library:** `aws-sdk-s3` (full feature coverage, heavier build) vs OpenDAL (one API for many backends). Decide at the end of M1 after a small spike on each.
