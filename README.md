@@ -72,7 +72,7 @@ keys again: they're no longer in the old Keychain item it reads.
 ## Landing site
 
 Lives in `website/`. Names and URLs live in `website/src/config.ts`. The version and download button come from the live `latest.json` at build time.
-Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. `.github/workflows/website.yml` deploys the site on pushes to `master` that touch `website/` or `design/`, and after each Publish (one-time Pages setup is in spec §8).
+Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. `.github/workflows/website.yml` deploys the site on pushes to `master` that touch `website/` or `design/`, and after each Publish (one-time Pages setup is in section 8 of `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`).
 
 ## Releasing
 
