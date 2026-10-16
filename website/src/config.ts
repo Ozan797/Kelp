@@ -1,4 +1,4 @@
-import type { Release } from "./release";
+import { downloadUrl, type Release } from "./release";
 
 export const SITE = {
   name: "Kelp",
@@ -10,7 +10,7 @@ export const SITE = {
 
 export const RELEASE: Release | null = __KELP_RELEASE__;
 
-export const DOWNLOAD_URL = "https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg";
+export const DOWNLOAD_URL: string | null = RELEASE ? downloadUrl(RELEASE) : null;
 
 export type PageMeta = { path: string; title: string; description: string };
 

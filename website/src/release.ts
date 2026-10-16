@@ -1,6 +1,7 @@
 export type Release = { version: string };
 
-const MANIFEST_URL = "https://kelp-dl.ozanai.dev/latest.json";
+const DOWNLOADS = "https://kelp-dl.ozanai.dev";
+const MANIFEST_URL = `${DOWNLOADS}/latest.json`;
 
 export function parseRelease(json: unknown): Release | null {
   if (typeof json !== "object" || json === null) return null;
@@ -8,11 +9,20 @@ export function parseRelease(json: unknown): Release | null {
   return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version) ? { version } : null;
 }
 
+export const downloadUrl = ({ version }: Release) => `${DOWNLOADS}/releases/${version}/Kelp_${version}_aarch64.dmg`;
+
 export async function fetchRelease(): Promise<Release | null> {
   try {
     const response = await fetch(MANIFEST_URL, { signal: AbortSignal.timeout(5000) });
-    return response.ok ? parseRelease(await response.json()) : null;
-  } catch {
+    if (!response.ok) {
+      console.warn(`Couldn't read ${MANIFEST_URL}: HTTP ${response.status}. Building without a release.`);
+      return null;
+    }
+    const release = parseRelease(await response.json());
+    if (!release) console.warn(`${MANIFEST_URL} has no valid version. Building without a release.`);
+    return release;
+  } catch (error) {
+    console.warn(`Couldn't read ${MANIFEST_URL}: ${String(error)}. Building without a release.`);
     return null;
   }
 }
