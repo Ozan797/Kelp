@@ -52,7 +52,7 @@ Besides `secrets` and `lib.rs`, only `state.rs` and `commands/connections.rs` ch
 
 ### 3.3 Loading once
 
-`ProtectedStore` holds `Mutex<Option<HashMap<Uuid, String>>>`. `None` means not loaded yet.
+`ProtectedStore` holds a `Mutex` around one of three states: not loaded, loaded (the map), or damaged.
 
 - **First need of any secret** (`get`, `set` or `delete`): read the item. That read shows the Touch ID prompt.
   Item missing: start from an empty map, no prompt. Then keep the map in memory.
@@ -84,9 +84,10 @@ A Touch ID prompt holds the calling thread until the user answers. Today `AppSta
   `secrets` fails, the write still succeeds: `secrets.next` holds it. Kelp remembers that `secrets` is missing,
   and the next write rebuilds it first (remove `secrets`, add `secrets`, remove `secrets.next`) without touching
   `secrets.next` until `secrets` is back. The same happens after loading from `secrets.next`. Removing `secrets`
-  first clears an item that macOS wrote but reported as failed.
+  first clears an item that macOS wrote but reported as failed. A failed remove of `secrets` also sets this, since
+  it may have gone through. Loading a damaged `secrets` falls back to `secrets.next` the same way.
 - The in-memory map changes only after the write succeeds, so a failed write leaves memory unchanged.
-- `delete` also removes the connection's legacy item, if any. Deleting an id that isn't in the map writes nothing
+- `delete` also removes the connection's legacy item, if any; a failure there is ignored, as in 3.6. Deleting an id that isn't in the map writes nothing
   (today's behaviour: safe to repeat).
 
 ### 3.6 Moving old secrets over

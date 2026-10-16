@@ -12,6 +12,10 @@ pub const NEXT: &str = "secrets.next";
 
 type Secrets = HashMap<Uuid, String>;
 
+fn parse(contents: &str) -> Result<Secrets, AppError> {
+    serde_json::from_str(contents).map_err(|_| AppError::KeychainDamaged)
+}
+
 enum State {
     Unloaded,
     Loaded(Secrets),
@@ -48,18 +52,16 @@ impl<V: Vault> ProtectedStore<V> {
     }
 
     fn load(&self) -> Result<Secrets, AppError> {
-        let contents = match self.vault.read(MAIN)? {
-            Some(contents) => Some(contents),
-            None => {
-                let next = self.vault.read(NEXT)?;
-                self.main_missing.store(next.is_some(), Ordering::SeqCst);
-                next
+        let main = self.vault.read(MAIN)?;
+        if let Some(Ok(secrets)) = main.as_deref().map(parse) {
+            return Ok(secrets);
+        }
+        match self.vault.read(NEXT)? {
+            Some(next) => {
+                self.main_missing.store(true, Ordering::SeqCst);
+                parse(&next)
             }
-        };
-        match contents {
-            Some(contents) => {
-                serde_json::from_str(&contents).map_err(|_| AppError::KeychainDamaged)
-            }
+            None if main.is_some() => Err(AppError::KeychainDamaged),
             None => Ok(Secrets::new()),
         }
     }
@@ -97,7 +99,10 @@ impl<V: Vault> ProtectedStore<V> {
         }
         self.vault.remove(NEXT)?;
         self.vault.add(NEXT, &contents)?;
-        self.vault.remove(MAIN)?;
+        if let Err(error) = self.vault.remove(MAIN) {
+            self.main_missing.store(true, Ordering::SeqCst);
+            return Err(error);
+        }
         if self.vault.add(MAIN, &contents).is_err() {
             self.main_missing.store(true, Ordering::SeqCst);
             return Ok(());
@@ -151,7 +156,7 @@ impl<V: Vault> SecretStore for ProtectedStore<V> {
     fn delete(&self, id: &Uuid) -> Result<(), AppError> {
         let mut guard = self.lock()?;
         let mut next = self.working_copy(&mut guard)?;
-        self.vault.remove_legacy(id)?;
+        self.vault.remove_legacy(id).ok();
         if next.remove(id).is_none() {
             return Ok(());
         }
@@ -179,6 +184,8 @@ mod tests {
         fail_add_to: Mutex<Option<&'static str>>,
         fail_add_once: Mutex<Option<&'static str>>,
         write_then_fail_once: Mutex<Option<&'static str>>,
+        remove_then_fail_once: Mutex<Option<&'static str>>,
+        fail_remove_legacy: Mutex<bool>,
     }
 
     impl FakeVault {
@@ -235,6 +242,11 @@ mod tests {
         fn remove(&self, account: &str) -> Result<(), AppError> {
             self.log(format!("remove {account}"));
             self.items.lock().unwrap().remove(account);
+            let mut removed_then_failed = self.remove_then_fail_once.lock().unwrap();
+            if *removed_then_failed == Some(account) {
+                removed_then_failed.take();
+                return Err(AppError::Keychain("timed out".into()));
+            }
             Ok(())
         }
         fn read_legacy(&self, id: &Uuid) -> Result<Option<String>, AppError> {
@@ -243,6 +255,9 @@ mod tests {
         }
         fn remove_legacy(&self, id: &Uuid) -> Result<(), AppError> {
             self.log("remove_legacy".into());
+            if *self.fail_remove_legacy.lock().unwrap() {
+                return Err(AppError::Keychain("user denied".into()));
+            }
             self.legacy.lock().unwrap().remove(id);
             Ok(())
         }
@@ -500,6 +515,47 @@ mod tests {
             AppError::KeychainDamaged
         );
         assert_eq!(store.vault.item(MAIN).unwrap(), "not json");
+    }
+
+    #[test]
+    fn a_main_removal_that_reports_failure_never_costs_the_only_copy() {
+        let (a, b, c) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let store = ProtectedStore::new(FakeVault::default());
+        store.set(&a, "first").unwrap();
+        *store.vault.remove_then_fail_once.lock().unwrap() = Some(MAIN);
+        assert!(store.set(&b, "second").is_err());
+        *store.vault.fail_add_to.lock().unwrap() = Some(NEXT);
+        store.set(&c, "third").unwrap();
+        let map = written(&store.vault);
+        assert_eq!(map[&a], "first");
+        assert_eq!(map[&c], "third");
+        assert!(!map.contains_key(&b));
+    }
+
+    #[test]
+    fn a_damaged_main_item_falls_back_to_a_good_copy() {
+        let (id, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let vault = FakeVault::default();
+        vault.put(MAIN, "not json");
+        vault.put(NEXT, &saved(&[(id, "s3cret")]));
+        let store = ProtectedStore::new(vault);
+        assert_eq!(store.get(&id).unwrap(), "s3cret");
+        store.set(&other, "new").unwrap();
+        let map = written(&store.vault);
+        assert_eq!(map[&id], "s3cret");
+        assert_eq!(map[&other], "new");
+        assert!(store.vault.item(NEXT).is_none());
+    }
+
+    #[test]
+    fn a_failed_legacy_removal_does_not_block_a_delete() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let vault = FakeVault::default();
+        vault.put(MAIN, &saved(&[(a, "secret-a"), (b, "secret-b")]));
+        *vault.fail_remove_legacy.lock().unwrap() = true;
+        let store = ProtectedStore::new(vault);
+        store.delete(&a).unwrap();
+        assert!(!written(&store.vault).contains_key(&a));
     }
 
     #[test]
