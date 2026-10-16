@@ -57,7 +57,8 @@ Besides `secrets` and `lib.rs`, only `state.rs` and `commands/connections.rs` ch
 - **First need of any secret** (`get`, `set` or `delete`): read the item. That read shows the Touch ID prompt.
   Item missing: start from an empty map, no prompt. Then keep the map in memory.
 - **Later calls** use the map; no further prompts until quit.
-- **Read fails** (cancelled, denied, damaged): keep `None`, return the error. The next call tries again.
+- **Read fails** (cancelled, denied): keep nothing, return the error. The next call tries again.
+- **Item damaged**: remember that, and return `KeychainDamaged` without reading again until a save replaces it.
 - The lock is a `std::sync::Mutex`. Keychain calls are synchronous and no `.await` happens while it is held.
 
 ### 3.4 Off the async workers
@@ -79,6 +80,11 @@ A Touch ID prompt holds the calling thread until the user answers. Today `AppSta
   `secrets`, add `secrets`, remove `secrets.next` (this last failure is ignored). At every point one full copy
   exists; loading reads `secrets` and falls back to `secrets.next`. Only add and delete are used, so a write
   never needs Touch ID.
+- A write has succeeded once a copy that loading would read holds the new map. So if only the final add of
+  `secrets` fails, the write still succeeds: `secrets.next` holds it. Kelp remembers that `secrets` is missing,
+  and the next write rebuilds it first (remove `secrets`, add `secrets`, remove `secrets.next`) without touching
+  `secrets.next` until `secrets` is back. The same happens after loading from `secrets.next`. Removing `secrets`
+  first clears an item that macOS wrote but reported as failed.
 - The in-memory map changes only after the write succeeds, so a failed write leaves memory unchanged.
 - `delete` also removes the connection's legacy item, if any. Deleting an id that isn't in the map writes nothing
   (today's behaviour: safe to repeat).
