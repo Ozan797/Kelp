@@ -82,7 +82,16 @@ pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<Connection
         None => next.push(profile.clone()),
     }
 
-    let previous_secret = state.secret(id).await.ok();
+    let previous_secret = match draft.id {
+        Some(_) => match state.secret(id).await {
+            Ok(previous) => Some(previous),
+            Err(error @ (AppError::KeychainCancelled | AppError::KeychainNotSigned)) => {
+                return Err(error);
+            }
+            Err(_) => None,
+        },
+        None => None,
+    };
     state.set_secret(id, secret).await?;
     if let Err(error) = state.store.save(&next) {
         match previous_secret {
@@ -329,6 +338,68 @@ mod tests {
         fn delete(&self, _: &Uuid) -> Result<(), AppError> {
             Err(AppError::KeychainCancelled)
         }
+    }
+
+    #[derive(Default)]
+    struct CountingStore {
+        inner: MemoryStore,
+        cancel_gets: std::sync::atomic::AtomicBool,
+        gets: std::sync::atomic::AtomicUsize,
+        sets: std::sync::atomic::AtomicUsize,
+    }
+
+    impl SecretStore for CountingStore {
+        fn get(&self, id: &Uuid) -> Result<String, AppError> {
+            use std::sync::atomic::Ordering::SeqCst;
+            self.gets.fetch_add(1, SeqCst);
+            if self.cancel_gets.load(SeqCst) {
+                return Err(AppError::KeychainCancelled);
+            }
+            self.inner.get(id)
+        }
+        fn set(&self, id: &Uuid, secret: &str) -> Result<(), AppError> {
+            self.sets.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.set(id, secret)
+        }
+        fn delete(&self, id: &Uuid) -> Result<(), AppError> {
+            self.inner.delete(id)
+        }
+    }
+
+    fn counting_state(store: Arc<CountingStore>) -> AppState {
+        let connect: crate::state::Connect = Box::new(|_, _| {
+            Ok(Arc::new(FakeProvider::new(
+                Ok(vec!["media".into()]),
+                Ok(ListPage::default()),
+            )))
+        });
+        AppState::new(ProfileStore::new(&temp_dir()), store, connect)
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_read_of_the_old_secret_stops_an_edit_before_any_write() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let store = Arc::new(CountingStore::default());
+        let state = counting_state(store.clone());
+        let saved = save(&state, draft("media", Some("original")))
+            .await
+            .unwrap();
+        store.cancel_gets.store(true, SeqCst);
+        let sets_before = store.sets.load(SeqCst);
+        let mut edit = draft("renamed", Some("new"));
+        edit.id = Some(saved.id);
+        let error = save(&state, edit).await.unwrap_err();
+        assert_eq!(error, AppError::KeychainCancelled);
+        assert_eq!(store.sets.load(SeqCst), sets_before);
+        assert_eq!(list(&state).await.unwrap()[0].name, "media");
+    }
+
+    #[tokio::test]
+    async fn saving_a_new_connection_never_reads_the_store() {
+        let store = Arc::new(CountingStore::default());
+        let state = counting_state(store.clone());
+        save(&state, draft("media", Some("s3cret"))).await.unwrap();
+        assert_eq!(store.gets.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
