@@ -267,7 +267,7 @@ Everyone who has installed Kelp gets new versions automatically.
 - Separate Vite + React + TS project in `website/`, deployed as static files on a subdomain of `ozanai.dev`.
 - Content: hero with a live interactive preview of the app, feature list, download section with install steps.
 - The download button points at `https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg`, the file the Publish workflow makes live.
-- Cloudflare Pages project `kelp`, deployed by `.github/workflows/website.yml`. The version and download button come from the live `latest.json` at build time.
+- Netlify site at `kelp.ozanai.dev`, deployed by `.github/workflows/website.yml`. The version and download button come from the live `latest.json` at build time.
 
 ## 11. Testing
 

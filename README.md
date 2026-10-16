@@ -72,7 +72,7 @@ keys again: they're no longer in the old Keychain item it reads.
 ## Landing site
 
 Lives in `website/`. Names and URLs live in `website/src/config.ts`. The version and download button come from the live `latest.json` at build time.
-Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. `.github/workflows/website.yml` deploys the site on pushes to `master` that touch `website/` or `design/`, and after each Publish (one-time Pages setup is in section 8 of `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`).
+Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. `.github/workflows/website.yml` deploys the site on pushes to `master` that touch `website/` or `design/`, and after each Publish to Netlify (one-time setup is in section 8 of `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`).
 
 ## Releasing
 
@@ -84,5 +84,5 @@ Build with `npm run build` (it type-checks, prerenders every page and checks the
 4. Actions → Publish release → Run workflow → `0.2.0`. That updates `latest.json`, `Kelp_aarch64.dmg` and the
    website. To roll back, publish the older version.
 
-One-time setup (Cloudflare, Apple, the updater key and the GitHub secrets) is in section 8 of
+One-time setup (Cloudflare R2, Netlify, Apple, the updater key and the GitHub secrets) is in section 8 of
 `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`.

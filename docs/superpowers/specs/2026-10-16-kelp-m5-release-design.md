@@ -23,7 +23,7 @@ Builds on part 1 (`2026-10-16-kelp-keychain-touch-id-design.md`): the entitlemen
 | Build command | `npm run tauri build` in CI, the same as locally; no `tauri-action` |
 | Updater | `tauri-plugin-updater` + `tauri-plugin-process`, driven from the UI through `lib/tauri.ts` |
 | Release notes | The annotated tag's message (`git tag -a v0.2.0 -m "…"`) |
-| Website hosting | Cloudflare Pages project `kelp`, deployed by a GitHub workflow with `wrangler` |
+| Website hosting | Netlify, deployed by a GitHub workflow with `netlify-cli`; `kelp.ozanai.dev` is a CNAME in Cloudflare DNS (changed from Cloudflare Pages on 2026-10-16) |
 | Site version and download | Read from the live `latest.json` at build time; no hand edits to `SITE.version` / `SITE.released` |
 | Not in scope | Making the repo public, analytics, Intel builds, any host other than R2 |
 | Code comments | None (CLAUDE.md) |
@@ -141,8 +141,8 @@ new downloads get the older `.dmg`.
 ### 7.2 Deploying (`.github/workflows/website.yml`)
 
 Runs on pushes to `master` touching `website/**` or `design/**`, and when called by Publish. Steps: `npm ci`,
-`npm test`, `npm run build`, `npx wrangler pages deploy website/dist --project-name kelp --branch master`, with
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+`npm test`, `npm run build`, `npx netlify-cli deploy --dir dist --prod --site "$NETLIFY_SITE_ID" --no-build`, with
+`NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`.
 
 ## 8. One-time setup (the developer)
 
@@ -150,8 +150,13 @@ Runs on pushes to `master` touching `website/**` or `design/**`, and when called
 1. R2 → Create bucket `kelp-downloads` → Settings → Custom Domains → Connect `kelp-dl.ozanai.dev`.
 2. R2 → Manage API tokens → Create token, "Object Read & Write" on `kelp-downloads` → note the access key ID and
    secret.
-3. Workers & Pages → Create → Pages → Direct Upload → project name `kelp` → Custom domains → `kelp.ozanai.dev`.
-4. My Profile → API Tokens → Create token with "Cloudflare Pages: Edit" → note it, and the account ID.
+3. Note the Cloudflare account ID (R2 overview).
+
+**Netlify:**
+1. `cd website && npx netlify-cli login && npx netlify-cli sites:create --name kelp-ozanai` → note the site ID.
+2. Site → Domain management → Add a domain → `kelp.ozanai.dev`.
+3. Cloudflare DNS for `ozanai.dev`: CNAME `kelp` → `kelp-ozanai.netlify.app`, DNS only (grey cloud).
+4. User settings → Applications → Personal access tokens → create one.
 
 **Apple:**
 1. Keychain Access → "Developer ID Application: …" certificate → Export as `.p12` with a password.
@@ -176,7 +181,8 @@ password in a password manager **and** as GitHub secrets. Losing it means instal
 | `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/kelp.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | from Cloudflare step 2 |
-| `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` | from Cloudflare step 4 |
+| `CLOUDFLARE_ACCOUNT_ID` | from Cloudflare step 3 |
+| `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID` | from the Netlify steps |
 
 ## 9. Testing
 
