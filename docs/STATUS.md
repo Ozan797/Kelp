@@ -46,7 +46,6 @@ Spec: `docs/superpowers/specs/2026-10-16-kelp-m5-release-design.md`. Needs the o
 
 - `release.yml` fails on a `v*` tag until it gets `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and the provisioning
   profile (base64) as secrets.
-- Test the updater by installing v0.1.0 and then releasing v0.1.1.
 
 ## Still open
 

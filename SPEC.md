@@ -245,7 +245,7 @@ These are goals to measure against, not promises.
 
 ## 9. Distribution
 
-- Build on a `macos-latest` GitHub Actions runner (Apple Silicon) with `tauri-apps/tauri-action` on a `v*` tag.
+- Build on a `macos-latest` runner (Apple Silicon) with `npm run tauri build` on a `v*` tag.
 - Sign and notarise with an Apple Developer ID (needs a paid Apple Developer account).
 - Release builds need `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and `app/src-tauri/Kelp.provisionprofile` (see README).
 - Upload builds to Cloudflare R2 (`dl.kelp.ozanai.dev`); a Publish workflow makes one live.
@@ -256,7 +256,7 @@ These are goals to measure against, not promises.
 Everyone who has installed Kelp gets new versions automatically.
 
 - **Signing key.** Generate it once with `npm run tauri signer generate`. The public key goes in `tauri.conf.json` (`plugins.updater.pubkey`). The private key and its password go in the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. **Back the private key up in a password manager.** If it is lost, existing installs can never accept another update.
-- **Build.** Set `bundle.createUpdaterArtifacts: true`. On a `v*` tag, the release workflow builds, signs and uploads the `.dmg`, a signed `Kelp.app.tar.gz`, and a `latest.json` manifest to R2 under `releases/<version>/`. Nothing is live until the Publish workflow runs.
+- **Build.** The release workflow turns on `createUpdaterArtifacts` at build time with `--config`, so local builds don't need the updater key. On a `v*` tag, the release workflow builds, signs and uploads the `.dmg`, a signed `Kelp.app.tar.gz`, and a `latest.json` manifest to R2 under `releases/<version>/`. Nothing is live until the Publish workflow runs.
 - **Endpoint.** `https://dl.kelp.ozanai.dev/latest.json`, written only by the Publish workflow.
 - **In the app.** Check on launch and then every 6 hours. Download the update in the background. Then show a non-blocking banner, "Kelp 0.2.0 is ready. Restart to update", with the release notes and a "Later" option. Never restart while transfers are running: if the user clicks Restart then, ask them first and show how many transfers are in progress. Add a "Check for updates…" menu item.
 - **Capabilities.** Only `updater:default` and `process:allow-restart` (from `tauri-plugin-process`).

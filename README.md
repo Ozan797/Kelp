@@ -71,8 +71,8 @@ keys again: they're no longer in the old Keychain item it reads.
 
 ## Landing site
 
-Lives in `website/`. Edit names, version and the download link in `website/src/config.ts`.
-Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. Deploy to Cloudflare Pages (build command `npm run build`, root `website`, output `dist`) on a subdomain such as `kelp.ozanai.dev`.
+Lives in `website/`. Names and URLs live in `website/src/config.ts`. The version and download button come from the live `latest.json` at build time.
+Build with `npm run build` (it type-checks, prerenders every page and checks the output) and run `npm test` for the theme, path and contrast checks. `.github/workflows/website.yml` deploys the site on pushes to `master` that touch `website/` or `design/`, and after each Publish (one-time Pages setup is in spec §8).
 
 ## Releasing
 
