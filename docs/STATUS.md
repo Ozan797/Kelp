@@ -1,23 +1,8 @@
 # Where Kelp is (2026-10-16)
 
-## M4: built, not merged
+## M4: merged
 
-All M4 code is written, tested (Rust 195, frontend 199 passing) and pushed, but **none of it is on `master` yet**.
-The branches are stacked, each built on the one before. Open and merge the PRs **in this order**, waiting for CI on each:
-
-1. `m4-drop-polish`
-2. `m4-settings`
-3. `m4-palette`
-4. `m4-preview`
-5. `m4-tabs`
-6. `m4-copy-engine`
-7. `m4-row-drag`
-8. `m4-done` (SPEC and README say M4 is done)
-9. `m4-preview-refresh` (preview button, double-click preview, Refresh / ⌘R, preview fit, faster video)
-
-PR links: `https://github.com/Ozan797/Kelp/pull/new/<branch>`. After merging one, open the next against `master`.
-Merging the last one brings in everything, so merging only `m4-preview-refresh` into `master` also works if you
-prefer one big PR.
+M4 is on `master`. The checks below are still undone.
 
 ### Before calling M4 finished, try by hand
 
@@ -28,30 +13,29 @@ prefer one big PR.
 - Moving a folder of about 1,000 files.
 - R2 has never been tested by hand (needs access).
 
-## Next: Keychain with Touch ID (start of M5)
+## M5 part 1: Keychain with Touch ID and local signing — built
 
-Problem: the app asks for your Mac password on every launch, once per connection. Unsigned dev builds change on
-each rebuild, so "Always Allow" never sticks.
+Spec: `docs/superpowers/specs/2026-10-16-kelp-keychain-touch-id-design.md`.
 
-Plan:
-- **Release builds:** one data-protection Keychain item for all secrets, locked with "user presence" (Touch ID, or
-  your password without it). Needs Developer ID signing and a provisioning profile with `keychain-access-groups`.
-- **Dev builds** (`tauri dev` runs a bare binary that can't carry a profile): sign with your Apple Development
-  certificate and keep one legacy Keychain item, so "Always Allow" sticks across rebuilds.
-- Move existing per-connection items into the new one on first launch.
+Needs `app/src-tauri/Kelp.provisionprofile` first (README → Signing).
 
-What to have ready on the laptop you build on:
-1. Team ID (developer.apple.com → Account → Membership details).
-2. Certificates "Apple Development" and "Developer ID Application" installed. Check with
-   `security find-identity -v -p codesigning`.
-3. App ID `dev.ozanai.kelp` and a Developer ID provisioning profile for it (don't commit it yet).
+### Try by hand
 
-Then: short spec, plan, build on a new branch from `master` (after the M4 PRs are merged).
+- `codesign -d --entitlements - Kelp.app` lists `keychain-access-groups`.
+- Existing connections open after one Touch ID prompt (plus one Mac password prompt per old item, once); Keychain
+  Access no longer shows per-connection `dev.ozanai.kelp` items.
+- One prompt per launch, however many connections or tabs open.
+- Cancel the prompt: the "Touch ID was cancelled" message shows; open again, succeed.
+- Add, edit and delete a connection without a second prompt; relaunch; the right ones open.
+- A build run without the profile embedded shows the "isn't signed to use the Keychain" message.
+- `tauri dev`: click Always Allow once, rebuild twice, no password prompt.
 
 ## M5: release (SPEC §4, §9)
 
 - Code signing and notarisation in `.github/workflows/release.yml` (certificate `.p12` and Apple ID details as
   GitHub secrets).
+- `release.yml` fails on a `v*` tag until it gets `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and the provisioning
+  profile (base64) as secrets.
 - Auto-update with `tauri-plugin-updater` (SPEC §9.1). The updater signing key is generated once and backed up in
   a password manager. **No public build without the updater.**
 - Landing site live on a subdomain of `ozanai.dev`; `SITE.released` stays `false` until a `.dmg` is on a release.
@@ -60,7 +44,7 @@ Then: short spec, plan, build on a new branch from `master` (after the M4 PRs ar
 ## Still open
 
 - ⌘W on the last tab: do nothing (now) or close the window like Finder?
-- SPEC §12: final name and subdomain; open or closed source.
+- SPEC §12: final name and subdomain.
 - Analytics: decisions in §6 of `docs/superpowers/specs/2026-10-15-kelp-analytics-design.md` (after M5 or
   alongside it).
 - Real-bucket tests need a `.env.test` (never committed).

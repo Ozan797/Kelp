@@ -41,7 +41,8 @@ node design/brand/build.mjs                   # regenerate logo, app icon and fa
 
 ## Security rules (do not break)
 
-- Secret access keys live **only** in the macOS Keychain via `keyring`. Never in JSON files, logs, error messages, test fixtures or commit history.
+- Secret access keys live **only** in the macOS Keychain (`keyring` in dev builds, `security-framework` in release). Never in JSON files, logs, error messages, test fixtures or commit history.
+- Never commit the Team ID, signing identity, `Kelp.entitlements` or `Kelp.provisionprofile`.
 - Never log presigned URLs, signatures or secrets.
 - Keep Tauri capabilities minimal. Do not add shell access or broad filesystem scope.
 - Deleting or overwriting objects needs an explicit confirmation in the UI.

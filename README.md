@@ -32,6 +32,29 @@ npm install
 npm run dev
 ```
 
+## Signing
+
+Dev builds (`npm run tauri dev`) are signed with your "Apple Development" certificate if you have one, so the
+Keychain's "Always Allow" sticks across rebuilds. Pick a certificate with `KELP_DEV_SIGNING_IDENTITY`. Without
+one, dev builds run unsigned and ask for your password each launch. The first signed dev build or `cargo test`
+may show a one-time macOS prompt asking to let `codesign` use your key; click Always Allow.
+
+Release builds keep secrets in one Keychain item unlocked with Touch ID. They need, once:
+
+1. developer.apple.com → Certificates, IDs & Profiles → Identifiers → + → App IDs → App. Bundle ID
+   `dev.ozanai.kelp` (explicit), description "Kelp", no extra capabilities.
+2. Profiles → + → Developer ID → that App ID → your Developer ID Application certificate → Generate → Download.
+3. Save it as `app/src-tauri/Kelp.provisionprofile` (gitignored).
+
+Then:
+
+    export KELP_TEAM_ID=<your Team ID>
+    export APPLE_SIGNING_IDENTITY="Developer ID Application: <name> (<Team ID>)"
+    cd app && npm run tauri build
+
+After a release build has moved your secrets into the new item, `tauri dev` on the same Mac asks for the secret
+keys again: they're no longer in the old Keychain item it reads.
+
 ## Keyboard shortcuts
 
 | Keys | Does |

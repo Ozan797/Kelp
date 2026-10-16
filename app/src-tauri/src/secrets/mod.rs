@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
-const SERVICE: &str = "dev.ozanai.kelp";
+pub mod protected;
+pub mod vault;
+
+pub const SERVICE: &str = "dev.ozanai.kelp";
 
 pub trait SecretStore: Send + Sync {
     fn get(&self, id: &Uuid) -> Result<String, AppError>;
@@ -20,7 +23,7 @@ pub struct MemoryStore {
     secrets: Mutex<HashMap<Uuid, String>>,
 }
 
-fn keychain_error(error: impl std::fmt::Display) -> AppError {
+pub fn keychain_error(error: impl std::fmt::Display) -> AppError {
     AppError::Keychain(error.to_string())
 }
 

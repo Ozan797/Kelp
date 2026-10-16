@@ -29,6 +29,7 @@ jobs:
           workspaces: "./app/src-tauri -> target"
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --release -- -D warnings
       - run: cargo test
 
   app:

@@ -38,6 +38,19 @@ pub enum AppError {
     )]
     Keychain(String),
 
+    #[error(
+        "Kelp couldn't unlock your keys because Touch ID was cancelled. Open the connection again to try once more."
+    )]
+    KeychainCancelled,
+
+    #[error(
+        "This copy of Kelp isn't signed to use the Keychain. Install it from the .dmg, or run it with tauri dev while developing."
+    )]
+    KeychainNotSigned,
+
+    #[error("Kelp's saved keys can't be read. Re-enter the secret key for each connection.")]
+    KeychainDamaged,
+
     #[error("Kelp couldn't read or write a file on this Mac: {0}")]
     Io(String),
 
@@ -87,6 +100,9 @@ impl AppError {
             Self::Provider(_) => "provider",
             Self::NotListable => "notListable",
             Self::Keychain(_) => "keychain",
+            Self::KeychainCancelled => "keychainCancelled",
+            Self::KeychainNotSigned => "keychainNotSigned",
+            Self::KeychainDamaged => "keychainDamaged",
             Self::Io(_) => "io",
             Self::FileTooLarge => "fileTooLarge",
             Self::ConnectionNotFound => "connectionNotFound",
@@ -204,10 +220,29 @@ mod tests {
             (AppError::Busy, "busy"),
             (AppError::ObjectChanged, "objectChanged"),
             (AppError::UploadGone, "uploadGone"),
+            (AppError::KeychainCancelled, "keychainCancelled"),
+            (AppError::KeychainNotSigned, "keychainNotSigned"),
+            (AppError::KeychainDamaged, "keychainDamaged"),
         ];
         for (error, kind) in cases {
             assert_eq!(error.kind(), kind);
         }
+    }
+
+    #[test]
+    fn keychain_messages_say_what_to_do_without_the_generic_wrapper() {
+        assert_eq!(
+            AppError::KeychainCancelled.to_string(),
+            "Kelp couldn't unlock your keys because Touch ID was cancelled. Open the connection again to try once more."
+        );
+        assert_eq!(
+            AppError::KeychainNotSigned.to_string(),
+            "This copy of Kelp isn't signed to use the Keychain. Install it from the .dmg, or run it with tauri dev while developing."
+        );
+        assert_eq!(
+            AppError::KeychainDamaged.to_string(),
+            "Kelp's saved keys can't be read. Re-enter the secret key for each connection."
+        );
     }
 
     #[test]

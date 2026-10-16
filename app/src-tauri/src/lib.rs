@@ -24,12 +24,26 @@ use crate::commands::{
     transfers as transfer_commands, uploads as upload_commands, usage as usage_commands,
 };
 use crate::profiles::ProfileStore;
+#[cfg(debug_assertions)]
 use crate::secrets::KeychainStore;
+use crate::secrets::SecretStore;
+#[cfg(not(debug_assertions))]
+use crate::secrets::{protected::ProtectedStore, vault::KeychainVault};
 use crate::settings::{SettingsStore, window_theme};
 use crate::state::{AppState, real_connect};
 use crate::transfers::manager::{Event, ProviderFor, TransferManager};
 use crate::transfers::store::TransferStore;
 use crate::usage::{UsageCounts, UsageStore};
+
+#[cfg(debug_assertions)]
+fn secret_store() -> Arc<dyn SecretStore> {
+    Arc::new(KeychainStore)
+}
+
+#[cfg(not(debug_assertions))]
+fn secret_store() -> Arc<dyn SecretStore> {
+    Arc::new(ProtectedStore::new(KeychainVault))
+}
 
 fn transfer_manager(app: &AppHandle, dir: &std::path::Path) -> Arc<TransferManager> {
     let events = app.clone();
@@ -92,11 +106,7 @@ pub fn run() {
                     .build()?,
             )?;
             let dir = app.path().app_data_dir()?;
-            let state = AppState::new(
-                ProfileStore::new(&dir),
-                Box::new(KeychainStore),
-                real_connect(),
-            );
+            let state = AppState::new(ProfileStore::new(&dir), secret_store(), real_connect());
             app.manage(state);
             let manager = transfer_manager(app.handle(), &dir);
             app.manage(manager.clone());
