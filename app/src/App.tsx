@@ -7,10 +7,12 @@ import { Rail } from "./components/Rail";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { StatusBar } from "./components/StatusBar";
 import { TransferDrawer } from "./components/TransferDrawer";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { useConnections } from "./hooks/useConnections";
 import { useSettings } from "./hooks/useSettings";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useTransfers } from "./hooks/useTransfers";
+import { useUpdater } from "./hooks/useUpdater";
 import { newTabId, useTabs } from "./hooks/useTabs";
 import { TabStrip } from "./components/TabStrip";
 import type { Place } from "./lib/drop";
@@ -22,6 +24,8 @@ type Sheet = { kind: "none" } | { kind: "connection"; initial: ConnectionProfile
 export default function App() {
   const { connections, error: connectionsError, reload: reloadConnections } = useConnections();
   const { transfers, clearFinished } = useTransfers();
+  const updater = useUpdater(!import.meta.env.DEV);
+  const runningTransfers = transfers.filter((t) => t.status === "running" || t.status === "waiting" || t.status === "retrying").length;
   const { settings, setTheme } = useSettings();
   const [{ tabs, activeId }, dispatch] = useTabs();
   const [refresh, setRefresh] = useState({ connectionId: "", count: 0 });
@@ -95,6 +99,7 @@ export default function App() {
     }
     if (connection) action("new-tab", "New tab", () => dispatch({ type: "open", id: newTabId() }), "⌘T");
     if (tabs.length > 1) action("close-tab", "Close tab", () => dispatch({ type: "close", id: activeId }), "⌘W");
+    action("check-updates", "Check for updates…", updater.checkNow);
     action("settings", "Settings…", () => setSheet({ kind: "settings" }), "⌘,");
     return actions;
   };
@@ -119,6 +124,10 @@ export default function App() {
         pill.current?.focus();
       }}
     />
+  );
+
+  const updateBanner = (
+    <UpdateBanner state={updater.state} onRestart={() => void updater.restart(runningTransfers)} onLater={updater.later} onClose={updater.close} />
   );
 
   const errorBanner = actionError && (
@@ -164,6 +173,7 @@ export default function App() {
                 drawer={
                   active && (
                     <>
+                      {updateBanner}
                       {errorBanner}
                       {drawer}
                     </>
@@ -212,6 +222,7 @@ export default function App() {
               }
             />
           )}
+          {updateBanner}
           {errorBanner}
           {drawer}
           {transfers.length > 0 && (

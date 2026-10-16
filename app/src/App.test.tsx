@@ -36,6 +36,10 @@ const api = vi.hoisted(() => ({
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
   deleteConnection: vi.fn(),
+  checkForUpdate: vi.fn(async () => null),
+  appVersion: vi.fn(async () => "0.1.0"),
+  restartApp: vi.fn(async () => undefined),
+  onCheckForUpdates: vi.fn(async () => () => undefined),
 }));
 
 vi.mock("./lib/tauri", () => ({

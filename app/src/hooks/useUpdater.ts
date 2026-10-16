@@ -64,6 +64,8 @@ export function useUpdater(enabled: boolean) {
 
   const close = useCallback(() => setState({ kind: "idle" }), []);
 
+  const checkNow = useCallback(() => void check(true), [check]);
+
   const restart = useCallback(async (runningTransfers: number) => {
     const update = ready.current;
     if (!update) return;
@@ -76,5 +78,5 @@ export function useUpdater(enabled: boolean) {
     }
   }, []);
 
-  return { state, checkNow: () => void check(true), later, close, restart };
+  return { state, checkNow, later, close, restart };
 }
