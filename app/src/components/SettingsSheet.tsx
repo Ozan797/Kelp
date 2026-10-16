@@ -40,8 +40,10 @@ export function SettingsSheet({ theme, onTheme, onClose }: SettingsSheetProps) {
       <div ref={sheet} className="sheet small" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <h2 id="settings-title">Settings</h2>
         <p className="sheet-note">Saved on this Mac.</p>
-        <fieldset className="segmented" role="radiogroup" aria-labelledby="appearance-label">
-          <legend id="appearance-label">Appearance</legend>
+        <div className="segmented" role="radiogroup" aria-labelledby="appearance-label">
+          <div id="appearance-label" className="segmented-label">
+            Appearance
+          </div>
           <div className="segments">
             {THEMES.map((option) => (
               <label key={option.value} className={option.value === theme ? "segment selected" : "segment"}>
@@ -56,7 +58,7 @@ export function SettingsSheet({ theme, onTheme, onClose }: SettingsSheetProps) {
               </label>
             ))}
           </div>
-        </fieldset>
+        </div>
         <div className="sheet-actions">
           <span className="spacer" />
           <button type="button" ref={done} className="button button-primary" onClick={onClose}>
