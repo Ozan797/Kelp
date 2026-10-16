@@ -8,10 +8,18 @@ function pointAt(x: number, y: number): Element | null {
   return document.elementFromPoint(x, y);
 }
 
-export function useFileDrop(open: Place | null, onDrop: (paths: string[], target: Place) => void): Drag | null {
+function samePlace(current: Drag, next: Pick<Drag, "target" | "zone">): boolean {
+  return (
+    current.zone === next.zone &&
+    current.target?.bucket === next.target?.bucket &&
+    current.target?.prefix === next.target?.prefix
+  );
+}
+
+export function useFileDrop(open: Place | null, onDrop: (paths: string[], target: Place) => void, active = true): Drag | null {
   const [drag, setDrag] = useState<Drag | null>(null);
-  const latest = useRef({ open, onDrop });
-  latest.current = { open, onDrop };
+  const latest = useRef({ open, onDrop, active });
+  latest.current = { open, onDrop, active };
 
   useEffect(() => {
     let live = true;
@@ -20,13 +28,14 @@ export function useFileDrop(open: Place | null, onDrop: (paths: string[], target
       return { target: dropTarget(element, latest.current.open), zone: dropZone(element) };
     };
     const stop = api.onFileDrop((event) => {
-      if (!live) return;
+      if (!live || !latest.current.active) return;
       if (event.type === "leave") {
         setDrag(null);
         return;
       }
       if (event.type === "over") {
-        setDrag((current) => (current ? { ...current, ...place(event.x, event.y) } : current));
+        const next = place(event.x, event.y);
+        setDrag((current) => (current && !samePlace(current, next) ? { ...current, ...next } : current));
         return;
       }
       if (event.type === "drop") {
@@ -35,11 +44,12 @@ export function useFileDrop(open: Place | null, onDrop: (paths: string[], target
         if (target) latest.current.onDrop(event.paths, target);
         return;
       }
-      setDrag({ paths: event.paths, summary: null, ...place(event.x, event.y) });
+      const paths = event.paths;
+      setDrag({ paths, summary: null, ...place(event.x, event.y) });
       api
-        .inspectDrop(event.paths)
+        .inspectDrop(paths)
         .then((summary) => {
-          if (live) setDrag((current) => (current ? { ...current, summary } : current));
+          if (live) setDrag((current) => (current?.paths === paths ? { ...current, summary } : current));
         })
         .catch(() => undefined);
     });

@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import type { Row } from "../hooks/useListing";
 import { fileKind, formatBytes, formatModified, type FileKind } from "../lib/format";
+import { previewKind } from "../lib/preview";
 
 export type SortKey = "name" | "size" | "modified";
 export type Sort = { key: SortKey; ascending: boolean };
@@ -90,10 +91,12 @@ type FileListProps = {
   loading: boolean;
   onLoadMore: () => void;
   dropKey?: string | null;
+  onRowPointerDown?: (row: Row, x: number, y: number) => void;
+  onPreview?: (row: Row) => void;
 };
 
 export function FileList(props: FileListProps) {
-  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null } = props;
+  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null, onRowPointerDown, onPreview } = props;
   const visible = useMemo(() => sortRows(filterRows(rows, filter), sort), [rows, filter, sort]);
   const ordered = useMemo(() => visible.map((row) => row.key), [visible]);
   const scroller = useRef<HTMLDivElement>(null);
@@ -196,7 +199,10 @@ export function FileList(props: FileListProps) {
                 ].join(" ")}
                 style={{ height: item.size, transform: `translateY(${item.start}px)`, "--i": item.index } as CSSProperties}
                 onClick={(event) => click(row, item.index, event)}
-                onDoubleClick={() => onOpen(row)}
+                onPointerDown={(event) => {
+                  if (event.button === 0 && !event.metaKey && !event.shiftKey && !event.ctrlKey) onRowPointerDown?.(row, event.clientX, event.clientY);
+                }}
+                onDoubleClick={() => (row.isFolder ? onOpen(row) : onPreview?.(row))}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   const keys = isSelected ? selected : new Set([row.key]);
@@ -207,6 +213,25 @@ export function FileList(props: FileListProps) {
                 <span role="gridcell" className="cell-name">
                   <FileIcon kind={kind} />
                   <span className="name-text">{row.name}</span>
+                  {!row.isFolder && previewKind(row) !== "none" && (
+                    <button
+                      type="button"
+                      className="row-preview"
+                      aria-label={`Preview ${row.name}`}
+                      title="Preview (Space)"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onPreview?.(row);
+                      }}
+                    >
+                      <svg viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M10 4.5c4 0 7 3.2 8 5.5-1 2.3-4 5.5-8 5.5S3 12.3 2 10c1-2.3 4-5.5 8-5.5z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                        <circle cx="10" cy="10" r="2.4" fill="currentColor" />
+                      </svg>
+                    </button>
+                  )}
                 </span>
                 <span role="gridcell" className="cell-meta">
                   {row.isFolder ? "—" : formatBytes(row.size ?? 0)}

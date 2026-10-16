@@ -15,7 +15,7 @@ use crate::connection::{ConnectionSettings, ProviderKind};
 use crate::error::AppError;
 use crate::profiles::{ConnectionProfile, ProfileStore};
 use crate::providers::{
-    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, PartTarget, ProgressFn,
+    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, ObjectRef, PartTarget, ProgressFn,
     StorageProvider,
 };
 use crate::secrets::MemoryStore;
@@ -35,6 +35,8 @@ pub struct FakeProvider {
     etags: Mutex<HashMap<String, String>>,
     uploads: Mutex<HashMap<String, Upload>>,
     page_size: usize,
+    fail_on: Mutex<HashMap<&'static str, AppError>>,
+    content_types: Mutex<HashMap<String, String>>,
 }
 
 #[async_trait]
@@ -71,6 +73,7 @@ impl StorageProvider for FakeProvider {
         })
     }
     async fn delete(&self, _: &str, keys: &[String]) -> Result<(), AppError> {
+        self.enter("delete").await?;
         lock(&self.deleted).extend(keys.iter().cloned());
         let mut objects = lock(&self.objects);
         for key in keys {
@@ -103,9 +106,16 @@ impl StorageProvider for FakeProvider {
         Ok(ObjectInfo {
             size,
             etag: self.etag(key),
+            content_type: self.content_type_of(key),
         })
     }
-    async fn start_multipart(&self, _: &str, key: &str) -> Result<String, AppError> {
+    async fn start_multipart(
+        &self,
+        _: &str,
+        key: &str,
+        content_type: Option<&str>,
+    ) -> Result<String, AppError> {
+        self.remember_type(key, content_type);
         let upload_id = {
             let mut uploads = lock(&self.uploads);
             let upload_id = format!("up-{}", self.calls("start_multipart") + 1);
@@ -133,12 +143,7 @@ impl StorageProvider for FakeProvider {
         file.seek(SeekFrom::Start(offset))?;
         file.read_exact(&mut bytes)?;
         progress(len);
-        let mut uploads = lock(&self.uploads);
-        let (_, parts) = uploads
-            .get_mut(target.upload_id)
-            .ok_or(AppError::UploadGone)?;
-        parts.insert(number, bytes);
-        Ok(format!("\"p{number}\""))
+        self.store_part(target, number, bytes)
     }
     async fn complete_multipart(
         &self,
@@ -164,6 +169,87 @@ impl StorageProvider for FakeProvider {
         self.enter("abort_multipart").await?;
         lock(&self.uploads).remove(target.upload_id);
         Ok(())
+    }
+    async fn copy_object(
+        &self,
+        from: &ObjectRef<'_>,
+        to: &ObjectRef<'_>,
+        etag: &str,
+    ) -> Result<(), AppError> {
+        self.enter("copy_object").await?;
+        if self.etag(from.key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
+        let bytes = self
+            .object(from.key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        lock(&self.objects).insert(to.key.to_string(), bytes);
+        Ok(())
+    }
+    async fn copy_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        from: &ObjectRef<'_>,
+        range: Range<u64>,
+        etag: &str,
+    ) -> Result<String, AppError> {
+        self.enter("copy_part").await?;
+        if self.etag(from.key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
+        let bytes = self
+            .object(from.key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        let slice = bytes
+            .get(range.start as usize..range.end as usize)
+            .ok_or_else(|| AppError::Provider("InvalidRange".into()))?
+            .to_vec();
+        self.store_part(target, number, slice)
+    }
+    async fn put_part_bytes(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<String, AppError> {
+        self.enter("put_part_bytes").await?;
+        progress(bytes.len() as u64);
+        self.store_part(target, number, bytes.to_vec())
+    }
+    async fn put_bytes(
+        &self,
+        _: &str,
+        key: &str,
+        bytes: bytes::Bytes,
+        content_type: Option<&str>,
+        progress: ProgressFn,
+    ) -> Result<(), AppError> {
+        self.enter("put_bytes").await?;
+        self.remember_type(key, content_type);
+        progress(bytes.len() as u64);
+        lock(&self.objects).insert(key.to_string(), bytes.to_vec());
+        Ok(())
+    }
+    async fn get_bytes(
+        &self,
+        _: &str,
+        key: &str,
+        etag: &str,
+        range: Range<u64>,
+    ) -> Result<bytes::Bytes, AppError> {
+        self.enter("get_bytes").await?;
+        if self.etag(key) != etag {
+            return Err(AppError::ObjectChanged);
+        }
+        let bytes = self
+            .object(key)
+            .ok_or_else(|| AppError::Provider("NoSuchKey".into()))?;
+        let slice = bytes
+            .get(range.start as usize..range.end as usize)
+            .ok_or_else(|| AppError::Provider("InvalidRange".into()))?;
+        Ok(bytes::Bytes::copy_from_slice(slice))
     }
     async fn get_range(
         &self,
@@ -223,6 +309,8 @@ impl FakeProvider {
             etags: Mutex::new(HashMap::new()),
             uploads: Mutex::new(HashMap::new()),
             page_size: 1000,
+            fail_on: Mutex::new(HashMap::new()),
+            content_types: Mutex::new(HashMap::new()),
         }
     }
 
@@ -257,12 +345,45 @@ impl FakeProvider {
         lock(&self.objects).get(key).cloned()
     }
 
+    pub fn fail_on(&self, name: &'static str, error: AppError) {
+        lock(&self.fail_on).insert(name, error);
+    }
+
     pub fn fail_next(&self, count: usize, error: AppError) {
         lock(&self.failures).extend(std::iter::repeat_n(error, count));
     }
 
     pub fn calls(&self, name: &str) -> usize {
         lock(&self.calls).get(name).copied().unwrap_or(0)
+    }
+
+    fn store_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: Vec<u8>,
+    ) -> Result<String, AppError> {
+        let mut uploads = lock(&self.uploads);
+        let (_, parts) = uploads
+            .get_mut(target.upload_id)
+            .ok_or(AppError::UploadGone)?;
+        parts.insert(number, bytes);
+        Ok(format!("\"p{number}\""))
+    }
+
+    pub fn with_content_type(self, key: &str, content_type: &str) -> Self {
+        self.remember_type(key, Some(content_type));
+        self
+    }
+
+    pub fn content_type_of(&self, key: &str) -> Option<String> {
+        lock(&self.content_types).get(key).cloned()
+    }
+
+    fn remember_type(&self, key: &str, content_type: Option<&str>) {
+        if let Some(kind) = content_type {
+            lock(&self.content_types).insert(key.to_string(), kind.to_string());
+        }
     }
 
     pub fn set_etag(&self, key: &str, etag: &str) {
@@ -296,6 +417,9 @@ impl FakeProvider {
                 .await
                 .map_err(|_| AppError::Network)?;
         }
+        if let Some(error) = lock(&self.fail_on).remove(name) {
+            return Err(error);
+        }
         let mut failures = lock(&self.failures);
         if failures.is_empty() {
             Ok(())
@@ -303,6 +427,45 @@ impl FakeProvider {
             Err(failures.remove(0))
         }
     }
+}
+
+pub async fn state_with_two(
+    first: Arc<FakeProvider>,
+    second: Arc<FakeProvider>,
+) -> (AppState, Uuid, Uuid) {
+    let dir = std::env::temp_dir().join(format!("kelp-state-{}", Uuid::new_v4()));
+    let state = AppState::new(
+        ProfileStore::new(&dir),
+        Box::new(MemoryStore::default()),
+        Box::new(move |settings, _| {
+            let chosen = if settings.access_key_id == "FIRST" {
+                first.clone()
+            } else {
+                second.clone()
+            };
+            Ok(chosen)
+        }),
+    );
+    let mut ids = Vec::new();
+    for key in ["FIRST", "SECOND"] {
+        let id = Uuid::new_v4();
+        state.secrets.set(&id, "s").unwrap();
+        state.profiles.lock().await.push(ConnectionProfile {
+            id,
+            name: key.to_lowercase(),
+            settings: ConnectionSettings {
+                kind: ProviderKind::Hetzner,
+                endpoint: None,
+                region: "hel1".into(),
+                path_style: false,
+                access_key_id: key.into(),
+            },
+            bucket: None,
+            last_location: None,
+        });
+        ids.push(id);
+    }
+    (state, ids[0], ids[1])
 }
 
 pub async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppState, Uuid) {
@@ -392,7 +555,10 @@ mod tests {
     async fn multipart_parts_join_in_number_order() {
         let provider = fake();
         let source = part_file(b"aaabbbcc");
-        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "big.bin",
@@ -414,7 +580,10 @@ mod tests {
     #[tokio::test]
     async fn an_aborted_upload_is_gone() {
         let provider = fake();
-        let upload_id = provider.start_multipart("b", "big.bin").await.unwrap();
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
         let target = PartTarget {
             bucket: "b",
             key: "big.bin",
@@ -446,6 +615,155 @@ mod tests {
             .get_range("b", "a.bin", &info.etag, 0..5, &part, no_progress())
             .await;
         assert_eq!(stale, Err(AppError::ObjectChanged));
+    }
+
+    #[tokio::test]
+    async fn server_side_copies_and_part_copies_land_at_the_destination() {
+        let provider = fake().with_objects(vec![("a.bin", b"0123456789".to_vec())]);
+        let from = ObjectRef {
+            bucket: "b",
+            key: "a.bin",
+        };
+        provider
+            .copy_object(
+                &from,
+                &ObjectRef {
+                    bucket: "b",
+                    key: "copy.bin",
+                },
+                "\"v1\"",
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("copy.bin"), Some(b"0123456789".to_vec()));
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        let first = provider
+            .copy_part(&target, 1, &from, 0..4, "\"v1\"")
+            .await
+            .unwrap();
+        let second = provider
+            .copy_part(&target, 2, &from, 4..10, "\"v1\"")
+            .await
+            .unwrap();
+        provider
+            .complete_multipart(
+                &target,
+                &[
+                    CompletedPart {
+                        number: 1,
+                        etag: first,
+                    },
+                    CompletedPart {
+                        number: 2,
+                        etag: second,
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("big.bin"), Some(b"0123456789".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn server_side_copies_refuse_a_source_that_changed() {
+        let provider = fake().with_objects(vec![("a.bin", b"0123456789".to_vec())]);
+        let from = ObjectRef {
+            bucket: "b",
+            key: "a.bin",
+        };
+        let to = ObjectRef {
+            bucket: "b",
+            key: "c.bin",
+        };
+        assert_eq!(
+            provider.copy_object(&from, &to, "\"old\"").await,
+            Err(AppError::ObjectChanged)
+        );
+        let upload_id = provider
+            .start_multipart("b", "big.bin", None)
+            .await
+            .unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "big.bin",
+            upload_id: &upload_id,
+        };
+        assert_eq!(
+            provider.copy_part(&target, 1, &from, 0..4, "\"old\"").await,
+            Err(AppError::ObjectChanged)
+        );
+    }
+
+    #[tokio::test]
+    async fn content_types_travel_with_new_objects() {
+        let provider = fake()
+            .with_objects(vec![("a.jpg", b"x".to_vec())])
+            .with_content_type("a.jpg", "image/jpeg");
+        assert_eq!(
+            provider
+                .head("b", "a.jpg")
+                .await
+                .unwrap()
+                .content_type
+                .as_deref(),
+            Some("image/jpeg")
+        );
+        provider
+            .put_bytes(
+                "b",
+                "c.jpg",
+                bytes::Bytes::from_static(b"x"),
+                Some("image/jpeg"),
+                no_progress(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            provider.content_type_of("c.jpg").as_deref(),
+            Some("image/jpeg")
+        );
+    }
+
+    #[tokio::test]
+    async fn bytes_can_be_put_whole_or_as_parts() {
+        let provider = fake();
+        provider
+            .put_bytes(
+                "b",
+                "small.txt",
+                bytes::Bytes::from_static(b"hi"),
+                None,
+                no_progress(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(provider.object("small.txt"), Some(b"hi".to_vec()));
+        let upload_id = provider
+            .start_multipart("b", "two.bin", None)
+            .await
+            .unwrap();
+        let target = PartTarget {
+            bucket: "b",
+            key: "two.bin",
+            upload_id: &upload_id,
+        };
+        let etag = provider
+            .put_part_bytes(&target, 1, bytes::Bytes::from_static(b"xy"), no_progress())
+            .await
+            .unwrap();
+        provider
+            .complete_multipart(&target, &[CompletedPart { number: 1, etag }])
+            .await
+            .unwrap();
+        assert_eq!(provider.object("two.bin"), Some(b"xy".to_vec()));
     }
 
     #[tokio::test]

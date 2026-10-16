@@ -19,11 +19,12 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 use super::progress_body::with_progress;
 use super::{
-    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, PartTarget, ProgressFn,
+    CompletedPart, KeyPage, ListPage, ObjectInfo, ObjectMeta, ObjectRef, PartTarget, ProgressFn,
     StorageProvider,
 };
 use crate::connection::ConnectionSettings;
 use crate::error::AppError;
+use aws_smithy_types::body::SdkBody;
 
 pub const MAX_SINGLE_UPLOAD: u64 = 5 * 1024 * 1024 * 1024;
 
@@ -217,15 +218,22 @@ impl StorageProvider for S3Provider {
                 .and_then(|size| u64::try_from(size).ok())
                 .unwrap_or(0),
             etag: output.e_tag().unwrap_or_default().to_string(),
+            content_type: output.content_type().map(str::to_string),
         })
     }
 
-    async fn start_multipart(&self, bucket: &str, key: &str) -> Result<String, AppError> {
+    async fn start_multipart(
+        &self,
+        bucket: &str,
+        key: &str,
+        content_type: Option<&str>,
+    ) -> Result<String, AppError> {
         let output = self
             .client
             .create_multipart_upload()
             .bucket(bucket)
             .key(key)
+            .set_content_type(content_type.map(str::to_string))
             .send()
             .await
             .map_err(|error| classify(error, bucket))?;
@@ -311,6 +319,120 @@ impl StorageProvider for S3Provider {
         Ok(())
     }
 
+    async fn copy_object(
+        &self,
+        from: &ObjectRef<'_>,
+        to: &ObjectRef<'_>,
+        etag: &str,
+    ) -> Result<(), AppError> {
+        self.transfer_client
+            .copy_object()
+            .bucket(to.bucket)
+            .key(to.key)
+            .copy_source(copy_source(from.bucket, from.key))
+            .copy_source_if_match(etag)
+            .send()
+            .await
+            .map_err(|error| classify(error, to.bucket))?;
+        Ok(())
+    }
+
+    async fn copy_part(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        from: &ObjectRef<'_>,
+        range: Range<u64>,
+        etag: &str,
+    ) -> Result<String, AppError> {
+        let output = self
+            .transfer_client
+            .upload_part_copy()
+            .bucket(target.bucket)
+            .key(target.key)
+            .upload_id(target.upload_id)
+            .part_number(part_number(number)?)
+            .copy_source(copy_source(from.bucket, from.key))
+            .copy_source_range(range_header(&range))
+            .copy_source_if_match(etag)
+            .send()
+            .await
+            .map_err(|error| classify(error, target.bucket))?;
+        Ok(output
+            .copy_part_result()
+            .and_then(|result| result.e_tag())
+            .unwrap_or_default()
+            .to_string())
+    }
+
+    async fn put_part_bytes(
+        &self,
+        target: &PartTarget<'_>,
+        number: u32,
+        bytes: bytes::Bytes,
+        progress: ProgressFn,
+    ) -> Result<String, AppError> {
+        let len = i64::try_from(bytes.len()).map_err(|_| AppError::FileTooLarge)?;
+        let body = ByteStream::new(with_progress(SdkBody::from(bytes), progress));
+        let output = self
+            .transfer_client
+            .upload_part()
+            .bucket(target.bucket)
+            .key(target.key)
+            .upload_id(target.upload_id)
+            .part_number(part_number(number)?)
+            .content_length(len)
+            .body(body)
+            .send()
+            .await
+            .map_err(|error| classify(error, target.bucket))?;
+        Ok(output.e_tag().unwrap_or_default().to_string())
+    }
+
+    async fn put_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        bytes: bytes::Bytes,
+        content_type: Option<&str>,
+        progress: ProgressFn,
+    ) -> Result<(), AppError> {
+        let len = i64::try_from(bytes.len()).map_err(|_| AppError::FileTooLarge)?;
+        let body = ByteStream::new(with_progress(SdkBody::from(bytes), progress));
+        self.transfer_client
+            .put_object()
+            .bucket(bucket)
+            .key(key)
+            .set_content_type(content_type.map(str::to_string))
+            .content_length(len)
+            .body(body)
+            .send()
+            .await
+            .map_err(|error| classify(error, bucket))?;
+        Ok(())
+    }
+
+    async fn get_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        etag: &str,
+        range: Range<u64>,
+    ) -> Result<bytes::Bytes, AppError> {
+        let output = self
+            .transfer_client
+            .get_object()
+            .bucket(bucket)
+            .key(key)
+            .range(range_header(&range))
+            .if_match(etag)
+            .send()
+            .await
+            .map_err(|error| classify(error, bucket))?;
+        let body = output.body.collect().await.map_err(|_| AppError::Network)?;
+        Ok(body.into_bytes())
+    }
+
     async fn get_range(
         &self,
         bucket: &str,
@@ -350,6 +472,19 @@ impl StorageProvider for S3Provider {
 
 fn part_number(number: u32) -> Result<i32, AppError> {
     i32::try_from(number).map_err(|_| AppError::FileTooLarge)
+}
+
+fn copy_source(bucket: &str, key: &str) -> String {
+    let mut encoded = String::with_capacity(key.len());
+    for byte in key.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                encoded.push(byte as char)
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    format!("{bucket}/{encoded}")
 }
 
 fn range_header(range: &Range<u64>) -> String {
@@ -506,6 +641,18 @@ mod tests {
             .collect();
         assert_eq!(found, vec![("photos/", 0), ("photos/2026/beach.jpg", 10)]);
         assert_eq!(page.next_token, Some("more".into()));
+    }
+
+    #[test]
+    fn copy_sources_are_url_encoded_but_keep_slashes() {
+        assert_eq!(
+            copy_source("media", "a b/ü+&.txt"),
+            "media/a%20b/%C3%BC%2B%26.txt"
+        );
+        assert_eq!(
+            copy_source("media", "plain/key-1_2.~"),
+            "media/plain/key-1_2.~"
+        );
     }
 
     #[test]

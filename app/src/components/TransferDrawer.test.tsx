@@ -22,6 +22,7 @@ function transfer(partial: Partial<Transfer>): Transfer {
     path: null,
     speed: null,
     sample: null,
+    moving: false,
     ...partial,
   };
 }
@@ -174,6 +175,19 @@ describe("TransferDrawer", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry failed files in photos" }));
     expect(props.onRetry).toHaveBeenCalledWith("f");
     expect(screen.getByRole("button", { name: "Retry failed files in photos" }).textContent).toBe("Retry failed");
+  });
+
+  it("shows copies and moves", async () => {
+    renderDrawer({
+      transfers: [
+        transfer({ id: "c", direction: "copy", name: "a.jpg", destination: "cdn/web/", status: "finished", moving: true }),
+        transfer({ id: "d", direction: "copy", name: "b.jpg", destination: "cdn/web/", status: "finished" }),
+      ],
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Finished 2/ }));
+    expect(screen.getByText("Moved")).toBeTruthy();
+    expect(screen.getByText("Copied")).toBeTruthy();
+    expect(screen.getAllByText("to cdn/web/")).toHaveLength(2);
   });
 
   it("never shows more than 100 percent", () => {

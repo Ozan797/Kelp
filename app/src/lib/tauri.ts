@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -57,7 +58,7 @@ export type ErrorKind =
 
 export type AppError = { kind: ErrorKind; message: string };
 
-export type Direction = "upload" | "download";
+export type Direction = "upload" | "download" | "copy";
 export type TransferKind = "file" | "folder";
 export type TransferStatus = "waiting" | "running" | "retrying" | "paused" | "failed" | "finished" | "cancelled";
 export type TransferView = {
@@ -75,7 +76,10 @@ export type TransferView = {
   filesFailed: number;
   error: string | null;
   path: string | null;
+  moving: boolean;
 };
+
+export type CopyRequest = { from: string; fromBucket: string; keys: string[]; to: string; toBucket: string; prefix: string };
 export type TransferProgress = { id: string; done: number; total: number; filesDone: number };
 
 export type UsageView = {
@@ -91,7 +95,10 @@ export type UsageView = {
   error: string | null;
 };
 
-export type DropSummary = { files: number; folders: number; bytes: number };
+export type Theme = "system" | "light" | "dark";
+export type Settings = { theme: Theme };
+
+export type DropSummary = { files: number; folders: number; bytes: number; loose: number };
 
 export type FileDropEvent =
   | { type: "enter" | "drop"; paths: string[]; x: number; y: number }
@@ -153,6 +160,12 @@ export const api = {
     call<UsageView | null>("cancel_usage_count", { id, bucket, prefix }),
   onUsageProgress: (handler: (view: UsageView) => void): Promise<UnlistenFn> =>
     listen<UsageView>("usage://progress", (event) => handler(event.payload)),
+  getSettings: () => call<Settings>("get_settings"),
+  setSettings: (settings: Settings) => call<Settings>("set_settings", { settings }),
+  setWindowTheme: (theme: "light" | "dark" | null) => getCurrentWindow().setTheme(theme),
+  planCopy: (request: CopyRequest) => call<FolderPlan>("plan_copy", { request }),
+  startCopy: (request: CopyRequest, skipExisting: boolean, moveAfter: boolean) =>
+    call<string[]>("start_copy", { request, skipExisting, moveAfter }),
   listTransfers: () => call<TransferView[]>("list_transfers"),
   pauseTransfer: (transfer: string) => call<void>("pause_transfer", { transfer }),
   resumeTransfer: (transfer: string) => call<void>("resume_transfer", { transfer }),

@@ -39,7 +39,7 @@ impl TransferStore {
 mod tests {
     use super::*;
     use crate::transfers::model::tests::{item, transfer};
-    use crate::transfers::model::{CompletedPart, Resume};
+    use crate::transfers::model::{CompletedPart, Resume, Source};
     use uuid::Uuid;
 
     fn temp_dir() -> PathBuf {
@@ -78,6 +78,34 @@ mod tests {
         };
         store.save(&[finished, cancelled, failed.clone()]).unwrap();
         assert_eq!(store.load(), vec![failed]);
+    }
+
+    #[test]
+    fn a_queue_saved_before_copies_existed_still_loads() {
+        let dir = temp_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let saved = r#"[{"id":"7b1c2d3e-0000-4000-8000-000000000001","connectionId":"7b1c2d3e-0000-4000-8000-000000000002","direction":"upload","kind":"file","name":"a.txt","bucket":"media","localRoot":"/tmp/a.txt","remoteRoot":"2026/","status":"paused","error":null,"items":[{"local":"/tmp/a.txt","key":"2026/a.txt","size":5,"state":"pending","resume":null}]}]"#;
+        std::fs::write(dir.join("transfers.json"), saved).unwrap();
+        let loaded = TransferStore::new(&dir).load();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].source, None);
+        assert_eq!(loaded[0].items[0].source_key, None);
+    }
+
+    #[test]
+    fn a_copy_keeps_where_it_comes_from() {
+        let store = TransferStore::new(&temp_dir());
+        let mut copy = transfer(vec![item("cdn/a.jpg", 9)]);
+        copy.direction = crate::transfers::model::Direction::Copy;
+        copy.status = Status::Paused;
+        copy.source = Some(Source {
+            connection_id: Uuid::new_v4(),
+            bucket: "media".into(),
+            move_after: true,
+        });
+        copy.items[0].source_key = Some("vimeo/a.jpg".into());
+        store.save(std::slice::from_ref(&copy)).unwrap();
+        assert_eq!(store.load(), vec![copy]);
     }
 
     #[test]

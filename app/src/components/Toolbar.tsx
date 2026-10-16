@@ -17,7 +17,9 @@ type ToolbarProps = {
   filter: string;
   onFilter: (text: string) => void;
   onNewFolder: () => void;
+  onRefresh: () => void;
   onUpload: () => void;
+  dropKey?: string | null;
 };
 
 export function Toolbar(props: ToolbarProps) {
@@ -36,7 +38,14 @@ export function Toolbar(props: ToolbarProps) {
             const last = index === crumbs.length - 1;
             return (
               <li key={crumb.prefix}>
-                <button type="button" aria-current={last ? "page" : undefined} onClick={() => props.onNavigate(crumb.prefix)}>
+                <button
+                  type="button"
+                  aria-current={last ? "page" : undefined}
+                  data-drop="folder"
+                  data-key={crumb.prefix}
+                  className={crumb.prefix === props.dropKey ? "drop-target" : undefined}
+                  onClick={() => props.onNavigate(crumb.prefix)}
+                >
                   {crumb.label}
                 </button>
               </li>
@@ -53,6 +62,9 @@ export function Toolbar(props: ToolbarProps) {
         value={props.filter}
         onChange={(event) => props.onFilter(event.target.value)}
       />
+      <button type="button" className="toolbar-icon" aria-label="Refresh" title="Refresh (⌘R)" onClick={props.onRefresh}>
+        ↻
+      </button>
       <button type="button" className="button button-secondary" onClick={props.onNewFolder}>
         New folder
       </button>

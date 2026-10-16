@@ -2,9 +2,11 @@ pub mod commands;
 pub mod connection;
 pub mod error;
 pub mod json_file;
+pub mod preview;
 pub mod profiles;
 pub mod providers;
 pub mod secrets;
+pub mod settings;
 pub mod state;
 #[cfg(test)]
 pub mod testing;
@@ -14,14 +16,16 @@ pub mod validation;
 
 use std::sync::Arc;
 
+use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::{
-    browse, connections, transfers as transfer_commands, uploads as upload_commands,
-    usage as usage_commands,
+    browse, connections, copies as copy_commands, settings as settings_commands,
+    transfers as transfer_commands, uploads as upload_commands, usage as usage_commands,
 };
 use crate::profiles::ProfileStore;
 use crate::secrets::KeychainStore;
+use crate::settings::{SettingsStore, window_theme};
 use crate::state::{AppState, real_connect};
 use crate::transfers::manager::{Event, ProviderFor, TransferManager};
 use crate::transfers::store::TransferStore;
@@ -51,7 +55,42 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol("kelp-preview", |context, request, responder| {
+            let app = context.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                responder.respond(preview::handle(&app, request).await);
+            });
+        })
         .setup(|app| {
+            let kelp = SubmenuBuilder::new(app, "Kelp")
+                .about(None)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+            let edit = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+            let window = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .maximize()
+                .build()?;
+            app.set_menu(
+                MenuBuilder::new(app)
+                    .items(&[&kelp, &edit, &window])
+                    .build()?,
+            )?;
             let dir = app.path().app_data_dir()?;
             let state = AppState::new(
                 ProfileStore::new(&dir),
@@ -62,6 +101,12 @@ pub fn run() {
             let manager = transfer_manager(app.handle(), &dir);
             app.manage(manager.clone());
             app.manage(UsageCounts::new(UsageStore::new(&dir)));
+            let settings = SettingsStore::new(&dir);
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_theme(window_theme(settings.load().theme)).ok();
+            }
+            app.manage(settings);
+            app.manage(std::sync::Arc::new(preview::PreviewCache::default()));
             tauri::async_runtime::spawn(async move { manager.start().await });
             Ok(())
         })
@@ -77,6 +122,8 @@ pub fn run() {
             browse::delete_objects,
             transfer_commands::list_transfers,
             transfer_commands::start_download,
+            copy_commands::plan_copy,
+            copy_commands::start_copy,
             upload_commands::inspect_drop,
             upload_commands::plan_upload,
             upload_commands::start_uploads,
@@ -87,6 +134,8 @@ pub fn run() {
             transfer_commands::cancel_transfer,
             transfer_commands::pause_all,
             transfer_commands::resume_all,
+            settings_commands::get_settings,
+            settings_commands::set_settings,
             usage_commands::get_usage,
             usage_commands::start_usage_count,
             usage_commands::cancel_usage_count,

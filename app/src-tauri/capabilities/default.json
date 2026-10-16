@@ -7,6 +7,7 @@
     "core:default",
     "core:menu:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-theme",
     "dialog:allow-open",
     "dialog:allow-ask",
     "opener:allow-reveal-item-in-dir",

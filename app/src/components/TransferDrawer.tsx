@@ -30,7 +30,10 @@ function secondsUntil(at: number | null, now: number): number {
 function statusText(t: Transfer, now: number): string {
   if (t.status === "failed") return t.error ?? "Failed";
   if (t.status === "cancelled") return "Cancelled";
-  if (t.status === "finished") return t.direction === "download" ? "Downloaded" : "Uploaded";
+  if (t.status === "finished") {
+    if (t.direction === "copy") return t.moving ? "Moved" : "Copied";
+    return t.direction === "download" ? "Downloaded" : "Uploaded";
+  }
   if (t.status === "waiting") return "Waiting";
   if (t.status === "paused") return `Paused at ${percent(t)}%`;
   if (t.status === "retrying") {
@@ -56,7 +59,7 @@ function speedText(t: Transfer): string | null {
 }
 
 function destinationText(t: Transfer): string {
-  if (t.direction === "upload") return `to ${t.destination}`;
+  if (t.direction !== "download") return `to ${t.destination}`;
   const folder = (t.path ?? t.destination).split("/").slice(0, -1).pop();
   return `to ${folder || "Downloads"}`;
 }
@@ -181,7 +184,7 @@ export function TransferDrawer({
                   {items.map((t) => (
                     <li key={t.id} className="transfer-row" tabIndex={0}>
                       <span className={`direction ${t.status}`} aria-hidden="true">
-                        {t.status === "failed" ? "!" : t.status === "paused" ? "⏸" : t.status === "waiting" ? "·" : t.direction === "upload" ? "↑" : "↓"}
+                        {t.status === "failed" ? "!" : t.status === "paused" ? "⏸" : t.status === "waiting" ? "·" : t.direction === "upload" ? "↑" : t.direction === "copy" ? "→" : "↓"}
                       </span>
                       <span className="transfer-name">
                         <strong>{t.name}</strong>

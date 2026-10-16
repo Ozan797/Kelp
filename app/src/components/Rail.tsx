@@ -9,9 +9,11 @@ type RailProps = {
   onSelect: (id: string) => void;
   onAdd: () => void;
   onContextMenu: (connection: ConnectionProfile) => void;
+  onSettings: () => void;
+  dropConnection?: string | null;
 };
 
-export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu }: RailProps) {
+export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu, onSettings, dropConnection = null }: RailProps) {
   return (
     <nav className="rail" aria-label="Connections" data-tauri-drag-region>
       <ul role="list">
@@ -22,7 +24,9 @@ export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu }
             <li key={connection.id}>
               <button
                 type="button"
-                className={selected ? "tile selected" : "tile"}
+                className={["tile", selected ? "selected" : "", connection.id === dropConnection ? "drop-target" : ""].join(" ").trim()}
+                data-drop="connection"
+                data-connection={connection.id}
                 title={label}
                 aria-label={label}
                 aria-current={selected ? "true" : undefined}
@@ -43,6 +47,9 @@ export function Rail({ connections, selectedId, onSelect, onAdd, onContextMenu }
           </button>
         </li>
       </ul>
+      <button type="button" className="rail-settings" title="Settings" aria-label="Settings" onClick={onSettings}>
+        ⚙
+      </button>
     </nav>
   );
 }

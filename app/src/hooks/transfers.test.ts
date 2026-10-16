@@ -18,6 +18,7 @@ function view(partial: Partial<TransferView> = {}): TransferView {
     filesFailed: 0,
     error: null,
     path: null,
+    moving: false,
     ...partial,
   };
 }

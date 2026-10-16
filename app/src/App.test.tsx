@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionProfile, FileDropEvent, ListPage, MenuEntry, TransferView } from "./lib/tauri";
@@ -27,6 +27,11 @@ const api = vi.hoisted(() => ({
   startUploads: vi.fn(),
   inspectDrop: vi.fn(),
   onFileDrop: vi.fn(),
+  planCopy: vi.fn(),
+  startCopy: vi.fn(),
+  getSettings: vi.fn(),
+  setSettings: vi.fn(),
+  setWindowTheme: vi.fn(),
   openDocs: vi.fn(),
   testConnection: vi.fn(),
   saveConnection: vi.fn(),
@@ -78,6 +83,11 @@ beforeEach(() => {
   api.listTransfers.mockResolvedValue([]);
   api.onFileDrop.mockResolvedValue(() => undefined);
   api.startUploads.mockResolvedValue(["t1"]);
+  api.planCopy.mockResolvedValue({ files: 1, bytes: 10, existing: 0, examples: [] });
+  api.startCopy.mockResolvedValue(["t2"]);
+  api.getSettings.mockResolvedValue({ theme: "system" });
+  api.setSettings.mockImplementation(async (settings: unknown) => settings);
+  api.setWindowTheme.mockResolvedValue(undefined);
   api.getUsage.mockResolvedValue(null);
   api.onUsageProgress.mockResolvedValue(() => undefined);
   api.startUsageCount.mockResolvedValue(null);
@@ -215,6 +225,196 @@ describe("App", () => {
     expect(api.confirm.mock.calls[0][1]).toBe("Delete 2 items");
   });
 
+  it("applies the saved theme and changes it from Settings", async () => {
+    api.getSettings.mockResolvedValue({ theme: "light" });
+    render(<App />);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>},{/Meta}");
+    await user.click(await screen.findByRole("radio", { name: "Dark" }));
+    expect(api.setSettings).toHaveBeenCalledWith({ theme: "dark" });
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
+    delete document.documentElement.dataset.theme;
+  });
+
+  it("opens a folder from the command palette", async () => {
+    api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>
+      prefix === "" ? page(["drafts/"], ["a.txt"]) : page([], ["inside.txt"]),
+    );
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.type(screen.getByRole("combobox", { name: "Search commands and places" }), "dra");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("inside.txt")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Search commands and places" })).toBeNull();
+  });
+
+  it("offers Download only with a selection, and ⌘D downloads it but not while typing", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.startDownload.mockResolvedValue("t1");
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    await user.keyboard("{Meta>}k{/Meta}");
+    expect(screen.queryByRole("option", { name: /Download/ })).toBeNull();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByText("a.txt"));
+    await user.click(screen.getByLabelText("Filter this folder"));
+    await user.keyboard("{Meta>}d{/Meta}");
+    expect(api.startDownload).not.toHaveBeenCalled();
+    await user.clear(screen.getByLabelText("Filter this folder"));
+    await user.click(screen.getByText("a.txt"));
+    await user.keyboard("{Meta>}d{/Meta}");
+    await waitFor(() => expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10));
+  });
+
+  it("previews the selected file with Space and steps to the next one", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.jpg", "b.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.jpg"));
+    await user.keyboard(" ");
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+    await user.keyboard("{ArrowRight}");
+    expect(await screen.findByRole("dialog", { name: "b.jpg" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "b.jpg" })).toBeNull();
+  });
+
+  it("keeps previewing the same file when the folder reloads", async () => {
+    api.listObjects.mockResolvedValue(page([], ["b.jpg", "c.jpg"]));
+    let emit: (view: TransferView) => void = () => undefined;
+    api.onTransferState.mockImplementation(async (handler: (view: TransferView) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    await screen.findByText("b.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("b.jpg"));
+    await user.keyboard(" ");
+    await screen.findByRole("dialog", { name: "b.jpg" });
+    api.listObjects.mockResolvedValue(page([], ["a.jpg", "b.jpg", "c.jpg"]));
+    const upload: TransferView = {
+      id: "t9", direction: "upload", kind: "file", name: "a.jpg", destination: "archive/", status: "finished",
+      retryAt: null, total: 1, done: 1, filesTotal: 1, filesDone: 1, filesFailed: 0, error: null, path: null, moving: false,
+    };
+    act(() => emit(upload));
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+    await act(async () => undefined);
+    expect(screen.getByRole("dialog", { name: "b.jpg" })).toBeTruthy();
+  });
+
+  it("keeps a tab's place when its own connection is clicked again", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], []));
+    render(<App />);
+    await screen.findByText("docs");
+    const user = userEvent.setup();
+    await user.dblClick(screen.getByText("docs"));
+    await waitFor(() => expect(api.listObjects).toHaveBeenLastCalledWith("c1", "archive", "docs/", null));
+    await user.click(document.body);
+    await user.keyboard("{Meta>}t{/Meta}");
+    await user.click(screen.getAllByRole("button", { name: "Hetzner · media" })[0]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["archive / docs", "archive / docs"]);
+  });
+
+  it("opens tabs that keep their own filter", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt", "b.txt"]));
+    render(<App />);
+    await screen.findByText("b.txt");
+    expect(screen.queryByRole("tablist")).toBeNull();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Filter this folder"), "a");
+    await user.click(document.body);
+    await user.keyboard("{Meta>}t{/Meta}");
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    const visibleFilter = () => screen.getAllByLabelText("Filter this folder").find((field) => field.closest("[hidden]") === null) as HTMLInputElement;
+    await waitFor(() => expect(visibleFilter().value).toBe(""));
+    await user.keyboard("{Meta>}{Shift>}[[{/Shift}{/Meta}");
+    expect(visibleFilter().value).toBe("a");
+    await user.keyboard("{Meta>}w{/Meta}");
+    expect(screen.queryByRole("tablist")).toBeNull();
+  });
+
+  it("moves a dragged file into a folder after asking, and copies at once with Option", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.mp4"]));
+    render(<App />);
+    const row = await screen.findByText("a.mp4");
+    const drafts = screen.getByText("drafts");
+    document.elementFromPoint = vi.fn(() => drafts);
+    const drop = async (altKey: boolean) => {
+      fireEvent.pointerDown(row, { button: 0, clientX: 5, clientY: 5 });
+      fireEvent.pointerMove(window, { clientX: 40, clientY: 40, buttons: 1 });
+      fireEvent.pointerUp(window, { clientX: 40, clientY: 40, altKey });
+    };
+    const request = { from: "c1", fromBucket: "archive", keys: ["a.mp4"], to: "c1", toBucket: "archive", prefix: "drafts/" };
+    await act(async () => drop(false));
+    expect(await screen.findByRole("dialog", { name: "Move 1 item to drafts/?" })).toBeTruthy();
+    expect(api.planCopy).toHaveBeenCalledWith(request);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Move 1 item" }));
+    expect(api.startCopy).toHaveBeenCalledWith(request, false, true);
+    await act(async () => drop(true));
+    await waitFor(() => expect(api.startCopy).toHaveBeenLastCalledWith(request, false, false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("drags only the selected rows the filter still shows", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.mp4", "b.mp4"]));
+    render(<App />);
+    await screen.findByText("b.mp4");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("a.mp4"));
+    await user.keyboard("{Meta>}");
+    await user.click(screen.getByText("b.mp4"));
+    await user.keyboard("{/Meta}");
+    await user.type(screen.getByLabelText("Filter this folder"), "a.mp4");
+    await waitFor(() => expect(screen.queryByText("b.mp4")).toBeNull());
+    await user.clear(screen.getByLabelText("Filter this folder"));
+    await user.type(screen.getByLabelText("Filter this folder"), "a");
+    const row = screen.getByText("a.mp4");
+    document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
+    await act(async () => {
+      fireEvent.pointerDown(row, { button: 0, clientX: 5, clientY: 5 });
+      fireEvent.pointerMove(window, { clientX: 40, clientY: 40, buttons: 1 });
+      fireEvent.pointerUp(window, { clientX: 40, clientY: 40, altKey: true });
+    });
+    await waitFor(() => expect(api.planCopy).toHaveBeenCalled());
+    expect(api.planCopy.mock.calls[0][0].keys).toEqual(["a.mp4"]);
+  });
+
+  it("previews from the row button and the right-click menu", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Preview a.jpg" }));
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("a.jpg") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const preview = entries.find((entry) => entry !== "separator" && entry.label === "Preview");
+    if (!preview || preview === "separator") throw new Error("no preview entry");
+    act(() => preview.onSelect());
+    expect(await screen.findByRole("dialog", { name: "a.jpg" })).toBeTruthy();
+  });
+
+  it("refreshes the folder from the toolbar and with ⌘R", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+    await user.click(document.body);
+    await user.keyboard("{Meta>}r{/Meta}");
+    await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(3));
+  });
+
   it("shows connection errors from the backend", async () => {
     api.listConnections.mockRejectedValue({ kind: "io", message: "Kelp couldn't read or write a file on this Mac: connections.json is damaged" });
     render(<App />);
@@ -237,7 +437,7 @@ describe("App", () => {
     await screen.findByText("This folder is empty");
     const running: TransferView = {
       id: "t1", direction: "download", kind: "file", name: "a.txt", destination: "/Users/me/Downloads/a.txt", status: "running",
-      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null,
+      retryAt: null, total: 10, done: 0, filesTotal: 1, filesDone: 0, filesFailed: 0, error: null, path: null, moving: false,
     };
     act(() => emit(running));
     act(() => emit({ ...running, status: "finished", done: 10, filesDone: 1, path: running.destination }));
@@ -293,7 +493,7 @@ describe("App", () => {
 
   it("uploads what is dropped onto a folder row into that folder", async () => {
     api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5, loose: 1 });
     api.planUpload.mockResolvedValue({ files: 1, bytes: 5, existing: 0, examples: [] });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
@@ -304,16 +504,16 @@ describe("App", () => {
     await screen.findByText("a.txt");
     document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
     act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 10, y: 10 }));
-    expect((await screen.findByRole("status")).textContent).toBe("Upload 1 file · 5 B to drafts/");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Upload 1 file · 5 B to drafts/"));
     act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 10, y: 10 }));
     await waitFor(() => expect(api.startUploads).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"], false));
     expect(api.planUpload).toHaveBeenCalledWith("c1", "archive", "drafts/", ["/u/a.txt"]);
-    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(""));
   });
 
   it("aims a drop at the point the pointer is at, even on a Retina screen", async () => {
     api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 1, folders: 0, bytes: 5, loose: 1 });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
       emit = handler;
@@ -328,6 +528,63 @@ describe("App", () => {
     act(() => emit({ type: "enter", paths: ["/u/a.txt"], x: 900, y: 500 }));
     window.devicePixelRatio = ratio;
     expect(pick).toHaveBeenCalledWith(900, 500);
+  });
+
+  it("says it is checking between a drop and the upload, and announces it", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    let answer: (plan: { files: number; bytes: number; existing: number; examples: string[] }) => void = () => undefined;
+    api.planUpload.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    const { container } = render(<App />);
+    await screen.findByText("a.txt");
+    expect(screen.getByRole("status").className).toContain("visually-hidden");
+    expect(screen.getByRole("status").textContent).toBe("");
+    document.elementFromPoint = vi.fn(() => screen.getByText("drafts"));
+    act(() => emit({ type: "drop", paths: ["/u/a.txt"], x: 1, y: 1 }));
+    expect(await screen.findByText("Checking what's already in drafts/…", { selector: ".drop-pill" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Checking what's already in drafts/…");
+    expect(container.querySelector(".drop-pill")?.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => answer({ files: 1, bytes: 1, existing: 0, examples: [] }));
+    await waitFor(() => expect(container.querySelector(".drop-pill")).toBeNull());
+  });
+
+  it("says so when a drop has nothing to upload", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.planUpload.mockResolvedValue({ files: 0, bytes: 0, existing: 0, examples: [] });
+    api.startUploads.mockResolvedValue([]);
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    const row = await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => row);
+    act(() => emit({ type: "drop", paths: ["/u/empty"], x: 1, y: 1 }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Nothing to upload. The folder is empty or everything is already there.");
+    expect(screen.queryByRole("region", { name: "Transfers" })).toBeNull();
+  });
+
+  it("ignores a second drop while the first one is still being checked", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.txt"]));
+    api.planUpload.mockReturnValue(new Promise(() => undefined));
+    let emit: (event: FileDropEvent) => void = () => undefined;
+    api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {
+      emit = handler;
+      return () => undefined;
+    });
+    render(<App />);
+    const row = await screen.findByText("a.txt");
+    document.elementFromPoint = vi.fn(() => row);
+    act(() => emit({ type: "drop", paths: ["/u/slow"], x: 1, y: 1 }));
+    await screen.findByText("Checking what's already in archive…", { selector: ".drop-pill" });
+    act(() => emit({ type: "drop", paths: ["/u/other.txt"], x: 1, y: 1 }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.planUpload).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a second drop while the first one is still asking", async () => {
@@ -351,7 +608,7 @@ describe("App", () => {
 
   it("asks once when a drop would replace files", async () => {
     api.listObjects.mockResolvedValue(page([], ["a.txt"]));
-    api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5 });
+    api.inspectDrop.mockResolvedValue({ files: 5, folders: 0, bytes: 5, loose: 5 });
     api.planUpload.mockResolvedValue({ files: 5, bytes: 5, existing: 2, examples: ["a.txt", "b.txt"] });
     let emit: (event: FileDropEvent) => void = () => undefined;
     api.onFileDrop.mockImplementation(async (handler: (event: FileDropEvent) => void) => {

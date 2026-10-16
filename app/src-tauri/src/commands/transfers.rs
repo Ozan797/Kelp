@@ -58,6 +58,7 @@ pub async fn folder_download_transfer(
         status: Status::Waiting,
         error: None,
         items,
+        source: None,
     })
 }
 
@@ -86,6 +87,7 @@ pub fn download_transfer(
         status: Status::Waiting,
         error: None,
         items: vec![Item::pending(target, key.to_string(), size)],
+        source: None,
     })
 }
 
