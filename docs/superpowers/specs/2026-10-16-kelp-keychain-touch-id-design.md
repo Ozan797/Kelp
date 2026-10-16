@@ -73,53 +73,64 @@ A Touch ID prompt holds the calling thread until the user answers. Today `AppSta
 
 ### 3.5 Writing
 
-- `set` and `delete` load first (3.3), change the map, then write the whole item: delete the old item, add the
-  new one. Loading first means a write can never drop other connections' secrets.
-- The in-memory map changes only after the write succeeds, so a failed write leaves memory and Keychain in step.
-- `delete` of an id that isn't there succeeds without writing (today's behaviour: safe to repeat).
+- `set` and `delete` load first (3.3), change a copy of the map, then write it. Loading first means a write can
+  never drop other connections' secrets. If the item is damaged (4), `set` and `delete` start from an empty map.
+- A write never updates an item in place. It runs, in order: remove `secrets.next`, add `secrets.next`, remove
+  `secrets`, add `secrets`, remove `secrets.next` (this last failure is ignored). At every point one full copy
+  exists; loading reads `secrets` and falls back to `secrets.next`. Only add and delete are used, so a write
+  never needs Touch ID.
+- The in-memory map changes only after the write succeeds, so a failed write leaves memory unchanged.
+- `delete` also removes the connection's legacy item, if any. Deleting an id that isn't in the map writes nothing
+  (today's behaviour: safe to repeat).
 
 ### 3.6 Moving old secrets over
 
 When `get(id)` misses in the map:
 1. Read the legacy item for `id` (service `dev.ozanai.kelp`, account `<uuid>`, as `KeychainStore` writes it).
    macOS may ask for the Mac password, once per old item, once ever.
-2. Found: add it to the map, write the protected item, then delete the legacy item. If deleting fails, ignore
-   it; the next miss can't happen because the id is now in the map.
+2. Found: add it to a copy of the map and write it (3.5). Write succeeded: keep the map, delete the legacy item,
+   ignore a failed delete. Write failed: keep the legacy item and the old map. Either way, return the secret so
+   the connection opens.
 3. Not found: return today's "no secret is saved for this connection" error.
 
 Nothing runs at launch and no list of profiles is needed.
 
+A Mac that runs both `tauri dev` and a release build shares one profile file. Once the release build has moved a
+secret, the dev build no longer finds it and asks for the key again. This only affects the developer's Mac.
+
 ### 3.7 Testable seam
 
-`ProtectedStore` is generic over a small trait with four raw operations:
+`ProtectedStore` is generic over a small trait of raw Keychain operations:
 
 ```rust
-trait Vault: Send + Sync {
-    fn read(&self) -> Result<Option<String>, AppError>;
-    fn write(&self, contents: &str) -> Result<(), AppError>;
+pub trait Vault: Send + Sync {
+    fn read(&self, account: &str) -> Result<Option<String>, AppError>;
+    fn add(&self, account: &str, contents: &str) -> Result<(), AppError>;
+    fn remove(&self, account: &str) -> Result<(), AppError>;
     fn read_legacy(&self, id: &Uuid) -> Result<Option<String>, AppError>;
-    fn delete_legacy(&self, id: &Uuid) -> Result<(), AppError>;
+    fn remove_legacy(&self, id: &Uuid) -> Result<(), AppError>;
 }
 ```
 
 `KeychainVault` is the real one (`security-framework` for the item, `keyring` for legacy). A `FakeVault` in tests
-counts reads and can be told to fail. Files: `secrets.rs` keeps the trait, `KeychainStore` and `MemoryStore`;
-new `secrets/protected.rs` holds `ProtectedStore`, `Vault` and `KeychainVault` (`secrets.rs` becomes
-`secrets/mod.rs`).
+records every call and can be told to fail. Files: `secrets.rs` becomes `secrets/mod.rs` and keeps the trait,
+`KeychainStore` and `MemoryStore`; new `secrets/protected.rs` holds `Vault` and `ProtectedStore`; new
+`secrets/vault.rs` holds `KeychainVault`.
 
 ## 4. Errors
 
-All are `AppError::Keychain`, with text the UI can show and never a secret:
+Three new `AppError` variants, each with its own `kind`, because `AppError::Keychain` wraps its text in "Kelp
+couldn't use the macOS Keychain: …". None ever contains a secret.
 
-| Case | Message |
-|---|---|
-| Touch ID cancelled (`errSecUserCanceled`) | Kelp couldn't unlock your keys because Touch ID was cancelled. Open the connection again to try once more. |
-| Missing entitlement (`errSecMissingEntitlement`, -34018) | This copy of Kelp isn't signed to use the Keychain. Install it from the .dmg, or use `tauri dev` while developing. |
-| Item can't be parsed | Kelp's saved keys can't be read. Re-enter the secret key for each connection. |
-| Anything else | The macOS error text, as today |
+| Case | Variant (`kind`) | Message |
+|---|---|---|
+| Touch ID cancelled (`errSecUserCanceled`, -128) | `KeychainCancelled` (`keychainCancelled`) | Kelp couldn't unlock your keys because Touch ID was cancelled. Open the connection again to try once more. |
+| Missing entitlement (`errSecMissingEntitlement`, -34018) | `KeychainNotSigned` (`keychainNotSigned`) | This copy of Kelp isn't signed to use the Keychain. Install it from the .dmg, or run it with tauri dev while developing. |
+| Item can't be parsed | `KeychainDamaged` (`keychainDamaged`) | Kelp's saved keys can't be read. Re-enter the secret key for each connection. |
+| Anything else | `Keychain` (`keychain`) | The macOS error text, as today |
 
-A damaged item is not overwritten by a load. It is replaced only when the user saves a connection, which writes
-a fresh map holding just that secret; the spec accepts losing the unreadable rest, since it can't be read anyway.
+A damaged item is never overwritten by a load. Saving a connection replaces it with a map holding just that
+secret; the unreadable rest is lost, since it can't be read anyway.
 
 ## 5. Signing
 
@@ -175,7 +186,13 @@ Rust unit tests on `FakeVault`:
 - `set` on a store with one saved secret keeps it and adds the new one in the written JSON.
 - `delete` removes one id and keeps the others; deleting a missing id doesn't write.
 - A failed write leaves the in-memory map unchanged.
-- A legacy secret is returned, written into the item, then the legacy item is deleted, in that order.
+- A write runs remove next, add next, remove main, add main, remove next, in that order.
+- With `secrets` missing and `secrets.next` present (a write cut off half way), loading uses `secrets.next`.
+- Two threads asking at once read the item once.
+- Secrets with quotes, backslashes and non-ASCII text round-trip.
+- A legacy secret is returned, written into the item, then the legacy item is deleted, in that order; if the
+  write fails the secret is still returned and the legacy item kept.
+- `delete` removes the legacy item too.
 - A damaged item gives the "can't be read" error and isn't written by the load.
 - No error message contains the secret.
 
