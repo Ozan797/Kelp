@@ -12,6 +12,12 @@ pub const NEXT: &str = "secrets.next";
 
 type Secrets = HashMap<Uuid, String>;
 
+enum State {
+    Unloaded,
+    Loaded(Secrets),
+    Damaged,
+}
+
 pub trait Vault: Send + Sync {
     fn read(&self, account: &str) -> Result<Option<String>, AppError>;
     fn add(&self, account: &str, contents: &str) -> Result<(), AppError>;
@@ -22,7 +28,7 @@ pub trait Vault: Send + Sync {
 
 pub struct ProtectedStore<V: Vault> {
     vault: V,
-    secrets: Mutex<Option<Secrets>>,
+    state: Mutex<State>,
     main_missing: AtomicBool,
 }
 
@@ -30,13 +36,13 @@ impl<V: Vault> ProtectedStore<V> {
     pub fn new(vault: V) -> Self {
         Self {
             vault,
-            secrets: Mutex::new(None),
+            state: Mutex::new(State::Unloaded),
             main_missing: AtomicBool::new(false),
         }
     }
 
-    fn lock(&self) -> Result<MutexGuard<'_, Option<Secrets>>, AppError> {
-        self.secrets
+    fn lock(&self) -> Result<MutexGuard<'_, State>, AppError> {
+        self.state
             .lock()
             .map_err(|_| keychain_error("the secret store is unavailable"))
     }
@@ -58,15 +64,22 @@ impl<V: Vault> ProtectedStore<V> {
         }
     }
 
-    fn loaded<'a>(&self, slot: &'a mut Option<Secrets>) -> Result<&'a mut Secrets, AppError> {
-        if slot.is_none() {
-            *slot = Some(self.load()?);
+    fn loaded<'a>(&self, state: &'a mut State) -> Result<&'a mut Secrets, AppError> {
+        if matches!(state, State::Unloaded) {
+            *state = match self.load() {
+                Ok(secrets) => State::Loaded(secrets),
+                Err(AppError::KeychainDamaged) => State::Damaged,
+                Err(error) => return Err(error),
+            };
         }
-        Ok(slot.get_or_insert_with(Secrets::new))
+        match state {
+            State::Loaded(secrets) => Ok(secrets),
+            State::Unloaded | State::Damaged => Err(AppError::KeychainDamaged),
+        }
     }
 
-    fn working_copy(&self, slot: &mut Option<Secrets>) -> Result<Secrets, AppError> {
-        match self.loaded(slot) {
+    fn working_copy(&self, state: &mut State) -> Result<Secrets, AppError> {
+        match self.loaded(state) {
             Ok(secrets) => Ok(secrets.clone()),
             Err(AppError::KeychainDamaged) => Ok(Secrets::new()),
             Err(error) => Err(error),
@@ -76,6 +89,7 @@ impl<V: Vault> ProtectedStore<V> {
     fn persist(&self, secrets: &Secrets) -> Result<(), AppError> {
         let contents = serde_json::to_string(secrets).map_err(keychain_error)?;
         if self.main_missing.load(Ordering::SeqCst) {
+            self.vault.remove(MAIN)?;
             self.vault.add(MAIN, &contents)?;
             self.main_missing.store(false, Ordering::SeqCst);
             self.vault.remove(NEXT).ok();
@@ -84,23 +98,23 @@ impl<V: Vault> ProtectedStore<V> {
         self.vault.remove(NEXT)?;
         self.vault.add(NEXT, &contents)?;
         self.vault.remove(MAIN)?;
-        if let Err(error) = self.vault.add(MAIN, &contents) {
+        if self.vault.add(MAIN, &contents).is_err() {
             self.main_missing.store(true, Ordering::SeqCst);
-            return Err(error);
+            return Ok(());
         }
         self.vault.remove(NEXT).ok();
         Ok(())
     }
 
-    fn commit(&self, slot: &mut Option<Secrets>, next: Secrets) -> Result<(), AppError> {
+    fn commit(&self, state: &mut State, next: Secrets) -> Result<(), AppError> {
         self.persist(&next)?;
-        *slot = Some(next);
+        *state = State::Loaded(next);
         Ok(())
     }
 
     fn move_legacy(
         &self,
-        slot: &mut Option<Secrets>,
+        state: &mut State,
         mut next: Secrets,
         id: &Uuid,
     ) -> Result<String, AppError> {
@@ -109,7 +123,7 @@ impl<V: Vault> ProtectedStore<V> {
             .read_legacy(id)?
             .ok_or_else(|| keychain_error("no secret is saved for this connection"))?;
         next.insert(*id, secret.clone());
-        if self.commit(slot, next).is_ok() {
+        if self.commit(state, next).is_ok() {
             self.vault.remove_legacy(id).ok();
         }
         Ok(secret)
@@ -164,6 +178,7 @@ mod tests {
         fail_next_read: Mutex<Option<AppError>>,
         fail_add_to: Mutex<Option<&'static str>>,
         fail_add_once: Mutex<Option<&'static str>>,
+        write_then_fail_once: Mutex<Option<&'static str>>,
     }
 
     impl FakeVault {
@@ -206,7 +221,15 @@ mod tests {
             if *self.fail_add_to.lock().unwrap() == Some(account) {
                 return Err(AppError::Keychain("disk full".into()));
             }
+            if self.item(account).is_some() {
+                return Err(AppError::Keychain("duplicate item".into()));
+            }
             self.put(account, contents);
+            let mut written_then_failed = self.write_then_fail_once.lock().unwrap();
+            if *written_then_failed == Some(account) {
+                written_then_failed.take();
+                return Err(AppError::Keychain("timed out".into()));
+            }
             Ok(())
         }
         fn remove(&self, account: &str) -> Result<(), AppError> {
@@ -311,28 +334,57 @@ mod tests {
     }
 
     #[test]
-    fn a_retry_after_a_failed_main_add_never_removes_the_only_copy() {
-        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+    fn a_failed_main_add_still_saves_through_the_copy() {
+        let id = Uuid::new_v4();
         let store = ProtectedStore::new(FakeVault::default());
         *store.vault.fail_add_once.lock().unwrap() = Some(MAIN);
-        assert!(store.set(&a, "first").is_err());
-        *store.vault.fail_add_to.lock().unwrap() = Some(NEXT);
-        store.set(&b, "second").unwrap();
-        let held = store.vault.item(MAIN).or(store.vault.item(NEXT)).unwrap();
-        let map: HashMap<Uuid, String> = serde_json::from_str(&held).unwrap();
-        assert_eq!(map[&b], "second");
-        assert_eq!(store.vault.count("add secrets.next"), 1);
-        assert_eq!(store.vault.count("remove secrets.next"), 2);
+        store.set(&id, "s3cret").unwrap();
+        assert_eq!(store.get(&id).unwrap(), "s3cret");
+        assert!(store.vault.item(MAIN).is_none());
+        let restarted = ProtectedStore::new(FakeVault::default());
+        restarted.vault.put(NEXT, &store.vault.item(NEXT).unwrap());
+        assert_eq!(restarted.get(&id).unwrap(), "s3cret");
     }
 
     #[test]
-    fn a_failed_main_add_then_a_retry_ends_with_main_and_no_next() {
+    fn the_write_after_a_failed_main_add_rebuilds_main_without_touching_the_copy_first() {
         let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
         let store = ProtectedStore::new(FakeVault::default());
         *store.vault.fail_add_once.lock().unwrap() = Some(MAIN);
-        assert!(store.set(&a, "first").is_err());
+        store.set(&a, "first").unwrap();
         store.set(&b, "second").unwrap();
-        assert_eq!(written(&store.vault)[&b], "second");
+        let map = written(&store.vault);
+        assert_eq!(map[&a], "first");
+        assert_eq!(map[&b], "second");
+        assert!(store.vault.item(NEXT).is_none());
+        assert_eq!(store.vault.count("add secrets.next"), 1);
+    }
+
+    #[test]
+    fn a_failed_rebuild_of_main_keeps_the_copy() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let store = ProtectedStore::new(FakeVault::default());
+        *store.vault.fail_add_once.lock().unwrap() = Some(MAIN);
+        store.set(&a, "first").unwrap();
+        *store.vault.fail_add_to.lock().unwrap() = Some(MAIN);
+        assert!(store.set(&b, "second").is_err());
+        let copy: HashMap<Uuid, String> =
+            serde_json::from_str(&store.vault.item(NEXT).unwrap()).unwrap();
+        assert_eq!(copy, HashMap::from([(a, "first".to_string())]));
+        assert_eq!(store.get(&a).unwrap(), "first");
+        assert!(store.get(&b).is_err());
+    }
+
+    #[test]
+    fn a_main_item_written_despite_an_error_does_not_block_later_saves() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let store = ProtectedStore::new(FakeVault::default());
+        *store.vault.write_then_fail_once.lock().unwrap() = Some(MAIN);
+        store.set(&a, "first").unwrap();
+        store.set(&b, "second").unwrap();
+        let map = written(&store.vault);
+        assert_eq!(map[&a], "first");
+        assert_eq!(map[&b], "second");
         assert!(store.vault.item(NEXT).is_none());
     }
 
@@ -350,7 +402,10 @@ mod tests {
             .into_iter()
             .filter(|call| !call.starts_with("read"))
             .collect();
-        assert_eq!(writes, ["add secrets", "remove secrets.next"]);
+        assert_eq!(
+            writes,
+            ["remove secrets", "add secrets", "remove secrets.next"]
+        );
         let map = written(&store.vault);
         assert_eq!(map[&id], "old");
         assert_eq!(map[&other], "new");
@@ -369,7 +424,7 @@ mod tests {
     fn a_failed_write_leaves_memory_unchanged() {
         let id = Uuid::new_v4();
         let vault = FakeVault::default();
-        *vault.fail_add_to.lock().unwrap() = Some(MAIN);
+        *vault.fail_add_to.lock().unwrap() = Some(NEXT);
         let store = ProtectedStore::new(vault);
         assert!(store.set(&id, "s3cret").is_err());
         assert!(store.get(&id).is_err());
@@ -420,7 +475,7 @@ mod tests {
         let id = Uuid::new_v4();
         let vault = FakeVault::default();
         vault.legacy.lock().unwrap().insert(id, "s3cret".into());
-        *vault.fail_add_to.lock().unwrap() = Some(MAIN);
+        *vault.fail_add_to.lock().unwrap() = Some(NEXT);
         let store = ProtectedStore::new(vault);
         assert_eq!(store.get(&id).unwrap(), "s3cret");
         assert!(store.vault.legacy.lock().unwrap().contains_key(&id));
@@ -445,6 +500,16 @@ mod tests {
             AppError::KeychainDamaged
         );
         assert_eq!(store.vault.item(MAIN).unwrap(), "not json");
+    }
+
+    #[test]
+    fn a_damaged_item_is_read_once_per_launch() {
+        let vault = FakeVault::default();
+        vault.put(MAIN, "not json");
+        let store = ProtectedStore::new(vault);
+        assert!(store.get(&Uuid::new_v4()).is_err());
+        assert!(store.get(&Uuid::new_v4()).is_err());
+        assert_eq!(store.vault.count("read secrets"), 1);
     }
 
     #[test]
