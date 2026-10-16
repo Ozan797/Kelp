@@ -51,19 +51,19 @@ impl<V: Vault> ProtectedStore<V> {
         }
     }
 
-    fn loaded<'a>(
-        &self,
-        slot: &'a mut Option<Secrets>,
-        start_over_if_damaged: bool,
-    ) -> Result<&'a mut Secrets, AppError> {
+    fn loaded<'a>(&self, slot: &'a mut Option<Secrets>) -> Result<&'a mut Secrets, AppError> {
         if slot.is_none() {
-            let secrets = match self.load() {
-                Err(AppError::KeychainDamaged) if start_over_if_damaged => Secrets::new(),
-                other => other?,
-            };
-            *slot = Some(secrets);
+            *slot = Some(self.load()?);
         }
         Ok(slot.get_or_insert_with(Secrets::new))
+    }
+
+    fn working_copy(&self, slot: &mut Option<Secrets>) -> Result<Secrets, AppError> {
+        match self.loaded(slot) {
+            Ok(secrets) => Ok(secrets.clone()),
+            Err(AppError::KeychainDamaged) => Ok(Secrets::new()),
+            Err(error) => Err(error),
+        }
     }
 
     fn persist(&self, secrets: &Secrets) -> Result<(), AppError> {
@@ -76,20 +76,24 @@ impl<V: Vault> ProtectedStore<V> {
         Ok(())
     }
 
-    fn commit(&self, current: &mut Secrets, next: Secrets) -> Result<(), AppError> {
+    fn commit(&self, slot: &mut Option<Secrets>, next: Secrets) -> Result<(), AppError> {
         self.persist(&next)?;
-        *current = next;
+        *slot = Some(next);
         Ok(())
     }
 
-    fn move_legacy(&self, secrets: &mut Secrets, id: &Uuid) -> Result<String, AppError> {
+    fn move_legacy(
+        &self,
+        slot: &mut Option<Secrets>,
+        mut next: Secrets,
+        id: &Uuid,
+    ) -> Result<String, AppError> {
         let secret = self
             .vault
             .read_legacy(id)?
             .ok_or_else(|| keychain_error("no secret is saved for this connection"))?;
-        let mut next = secrets.clone();
         next.insert(*id, secret.clone());
-        if self.commit(secrets, next).is_ok() {
+        if self.commit(slot, next).is_ok() {
             self.vault.remove_legacy(id).ok();
         }
         Ok(secret)
@@ -99,31 +103,29 @@ impl<V: Vault> ProtectedStore<V> {
 impl<V: Vault> SecretStore for ProtectedStore<V> {
     fn get(&self, id: &Uuid) -> Result<String, AppError> {
         let mut guard = self.lock()?;
-        let secrets = self.loaded(&mut guard, false)?;
-        match secrets.get(id) {
-            Some(secret) => Ok(secret.clone()),
-            None => self.move_legacy(secrets, id),
+        let secrets = self.loaded(&mut guard)?;
+        if let Some(secret) = secrets.get(id) {
+            return Ok(secret.clone());
         }
+        let base = secrets.clone();
+        self.move_legacy(&mut guard, base, id)
     }
 
     fn set(&self, id: &Uuid, secret: &str) -> Result<(), AppError> {
         let mut guard = self.lock()?;
-        let secrets = self.loaded(&mut guard, true)?;
-        let mut next = secrets.clone();
+        let mut next = self.working_copy(&mut guard)?;
         next.insert(*id, secret.to_string());
-        self.commit(secrets, next)
+        self.commit(&mut guard, next)
     }
 
     fn delete(&self, id: &Uuid) -> Result<(), AppError> {
         let mut guard = self.lock()?;
-        let secrets = self.loaded(&mut guard, true)?;
+        let mut next = self.working_copy(&mut guard)?;
         self.vault.remove_legacy(id)?;
-        if !secrets.contains_key(id) {
+        if next.remove(id).is_none() {
             return Ok(());
         }
-        let mut next = secrets.clone();
-        next.remove(id);
-        self.commit(secrets, next)
+        self.commit(&mut guard, next)
     }
 }
 
@@ -374,6 +376,31 @@ mod tests {
             AppError::KeychainDamaged
         );
         assert_eq!(store.vault.item(MAIN).unwrap(), "not json");
+    }
+
+    #[test]
+    fn deleting_a_missing_id_from_a_damaged_item_keeps_it_reported() {
+        let vault = FakeVault::default();
+        vault.put(MAIN, "not json");
+        let store = ProtectedStore::new(vault);
+        store.delete(&Uuid::new_v4()).unwrap();
+        assert_eq!(
+            store.get(&Uuid::new_v4()).unwrap_err(),
+            AppError::KeychainDamaged
+        );
+    }
+
+    #[test]
+    fn a_failed_save_over_a_damaged_item_keeps_it_reported() {
+        let vault = FakeVault::default();
+        vault.put(MAIN, "not json");
+        *vault.fail_add_to.lock().unwrap() = Some(NEXT);
+        let store = ProtectedStore::new(vault);
+        assert!(store.set(&Uuid::new_v4(), "s3cret").is_err());
+        assert_eq!(
+            store.get(&Uuid::new_v4()).unwrap_err(),
+            AppError::KeychainDamaged
+        );
     }
 
     #[test]
