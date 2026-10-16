@@ -94,7 +94,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             let state = AppState::new(
                 ProfileStore::new(&dir),
-                Box::new(KeychainStore),
+                Arc::new(KeychainStore),
                 real_connect(),
             );
             app.manage(state);

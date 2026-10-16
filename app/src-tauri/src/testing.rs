@@ -436,7 +436,7 @@ pub async fn state_with_two(
     let dir = std::env::temp_dir().join(format!("kelp-state-{}", Uuid::new_v4()));
     let state = AppState::new(
         ProfileStore::new(&dir),
-        Box::new(MemoryStore::default()),
+        Arc::new(MemoryStore::default()),
         Box::new(move |settings, _| {
             let chosen = if settings.access_key_id == "FIRST" {
                 first.clone()
@@ -473,7 +473,7 @@ pub async fn state_with(fake: Arc<FakeProvider>, bucket: Option<&str>) -> (AppSt
     let shared = fake.clone();
     let state = AppState::new(
         ProfileStore::new(&dir),
-        Box::new(MemoryStore::default()),
+        Arc::new(MemoryStore::default()),
         Box::new(move |_, _| Ok(shared.clone())),
     );
     let id = Uuid::new_v4();

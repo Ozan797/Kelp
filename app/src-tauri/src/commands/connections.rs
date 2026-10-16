@@ -26,7 +26,7 @@ fn required(value: &str, message: &str) -> Result<String, AppError> {
     Ok(trimmed.to_string())
 }
 
-fn secret_for(state: &AppState, draft: &ConnectionDraft) -> Result<String, AppError> {
+async fn secret_for(state: &AppState, draft: &ConnectionDraft) -> Result<String, AppError> {
     let typed = draft
         .secret
         .as_deref()
@@ -34,7 +34,7 @@ fn secret_for(state: &AppState, draft: &ConnectionDraft) -> Result<String, AppEr
         .filter(|secret| !secret.is_empty());
     match (typed, draft.id) {
         (Some(secret), _) => Ok(secret.to_string()),
-        (None, Some(id)) => state.secrets.get(&id),
+        (None, Some(id)) => state.secret(id).await,
         (None, None) => Err(AppError::InvalidSettings("Enter the secret key.".into())),
     }
 }
@@ -47,7 +47,7 @@ pub async fn list(state: &AppState) -> Result<Vec<ConnectionProfile>, AppError> 
 pub async fn test(state: &AppState, draft: &ConnectionDraft) -> Result<CheckResult, AppError> {
     required(&draft.name, "Enter a name for this connection.")?;
     required(&draft.settings.access_key_id, "Enter the access key.")?;
-    let secret = secret_for(state, draft)?;
+    let secret = secret_for(state, draft).await?;
     let provider = (state.connect)(&draft.settings, &secret)?;
     check_connection(provider.as_ref(), draft.bucket.as_deref()).await
 }
@@ -56,7 +56,7 @@ pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<Connection
     state.ensure_loaded()?;
     let name = required(&draft.name, "Enter a name for this connection.")?;
     let check = test(state, &draft).await?;
-    let secret = secret_for(state, &draft)?;
+    let secret = secret_for(state, &draft).await?;
     let id = draft.id.unwrap_or_else(Uuid::new_v4);
 
     let mut profiles = state.profiles.lock().await;
@@ -82,12 +82,12 @@ pub async fn save(state: &AppState, draft: ConnectionDraft) -> Result<Connection
         None => next.push(profile.clone()),
     }
 
-    let previous_secret = state.secrets.get(&id).ok();
-    state.secrets.set(&id, &secret)?;
+    let previous_secret = state.secret(id).await.ok();
+    state.set_secret(id, secret).await?;
     if let Err(error) = state.store.save(&next) {
         match previous_secret {
-            Some(previous) => state.secrets.set(&id, &previous).ok(),
-            None => state.secrets.delete(&id).ok(),
+            Some(previous) => state.set_secret(id, previous).await.ok(),
+            None => state.delete_secret(id).await.ok(),
         };
         return Err(error);
     }
@@ -108,7 +108,7 @@ pub async fn delete(state: &AppState, id: Uuid) -> Result<(), AppError> {
     state.store.save(&next)?;
     *profiles = next;
     drop(profiles);
-    state.secrets.delete(&id)?;
+    state.delete_secret(id).await?;
     state.forget_provider(id).await;
     Ok(())
 }
@@ -199,7 +199,7 @@ mod tests {
         });
         AppState::new(
             ProfileStore::new(&dir),
-            Box::new(MemoryStore::default()),
+            Arc::new(MemoryStore::default()),
             connect,
         )
     }
@@ -317,18 +317,36 @@ mod tests {
         assert_eq!(list(&state).await.unwrap().len(), 1);
     }
 
-    struct SharedStore(Arc<MemoryStore>);
+    struct CancellingStore;
 
-    impl SecretStore for SharedStore {
-        fn get(&self, id: &Uuid) -> Result<String, AppError> {
-            self.0.get(id)
+    impl SecretStore for CancellingStore {
+        fn get(&self, _: &Uuid) -> Result<String, AppError> {
+            Err(AppError::KeychainCancelled)
         }
-        fn set(&self, id: &Uuid, secret: &str) -> Result<(), AppError> {
-            self.0.set(id, secret)
+        fn set(&self, _: &Uuid, _: &str) -> Result<(), AppError> {
+            Err(AppError::KeychainCancelled)
         }
-        fn delete(&self, id: &Uuid) -> Result<(), AppError> {
-            self.0.delete(id)
+        fn delete(&self, _: &Uuid) -> Result<(), AppError> {
+            Err(AppError::KeychainCancelled)
         }
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_touch_id_prompt_saves_nothing() {
+        let dir = temp_dir();
+        let connect: crate::state::Connect = Box::new(|_, _| {
+            Ok(Arc::new(FakeProvider::new(
+                Ok(vec!["media".into()]),
+                Ok(ListPage::default()),
+            )))
+        });
+        let state = AppState::new(ProfileStore::new(&dir), Arc::new(CancellingStore), connect);
+        let error = save(&state, draft("media", Some("s3cret")))
+            .await
+            .unwrap_err();
+        assert_eq!(error, AppError::KeychainCancelled);
+        assert!(list(&state).await.unwrap().is_empty());
+        assert!(!dir.join("connections.json").exists());
     }
 
     #[tokio::test]
@@ -343,7 +361,7 @@ mod tests {
         });
         let state = AppState::new(
             ProfileStore::new(&blocker.join("inside")),
-            Box::new(SharedStore(secrets.clone())),
+            secrets.clone(),
             connect,
         );
         std::fs::write(&blocker, "file in the way").unwrap();
