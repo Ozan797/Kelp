@@ -29,7 +29,7 @@ jobs:
             exit 1
           fi
           for file in "Kelp_${VERSION}_aarch64.dmg" Kelp.app.tar.gz Kelp.app.tar.gz.sig latest.json; do
-            if ! aws s3 ls "s3://kelp-downloads/releases/$VERSION/$file" --endpoint-url "$R2_ENDPOINT" > /dev/null; then
+            if ! aws s3api head-object --bucket kelp-downloads --key "releases/$VERSION/$file" --endpoint-url "$R2_ENDPOINT" > /dev/null; then
               echo "releases/$VERSION/$file is missing. Push the v$VERSION tag and wait for its build first."
               exit 1
             fi
@@ -48,6 +48,8 @@ jobs:
   website:
     needs: publish
     uses: ./.github/workflows/website.yml
+    with:
+      require-release: true
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
