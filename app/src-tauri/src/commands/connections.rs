@@ -114,10 +114,10 @@ pub async fn delete(state: &AppState, id: Uuid) -> Result<(), AppError> {
         .filter(|profile| profile.id != id)
         .cloned()
         .collect();
+    state.delete_secret(id).await?;
     state.store.save(&next)?;
     *profiles = next;
     drop(profiles);
-    state.delete_secret(id).await?;
     state.forget_provider(id).await;
     Ok(())
 }
@@ -344,6 +344,7 @@ mod tests {
     struct CountingStore {
         inner: MemoryStore,
         cancel_gets: std::sync::atomic::AtomicBool,
+        cancel_deletes: std::sync::atomic::AtomicBool,
         gets: std::sync::atomic::AtomicUsize,
         sets: std::sync::atomic::AtomicUsize,
     }
@@ -362,6 +363,12 @@ mod tests {
             self.inner.set(id, secret)
         }
         fn delete(&self, id: &Uuid) -> Result<(), AppError> {
+            if self
+                .cancel_deletes
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(AppError::KeychainCancelled);
+            }
             self.inner.delete(id)
         }
     }
@@ -392,6 +399,20 @@ mod tests {
         assert_eq!(error, AppError::KeychainCancelled);
         assert_eq!(store.sets.load(SeqCst), sets_before);
         assert_eq!(list(&state).await.unwrap()[0].name, "media");
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_touch_id_prompt_keeps_a_connection_being_deleted() {
+        let store = Arc::new(CountingStore::default());
+        let state = counting_state(store.clone());
+        let saved = save(&state, draft("media", Some("s3cret"))).await.unwrap();
+        store
+            .cancel_deletes
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let error = delete(&state, saved.id).await.unwrap_err();
+        assert_eq!(error, AppError::KeychainCancelled);
+        assert_eq!(list(&state).await.unwrap().len(), 1);
+        assert_eq!(state.secrets.get(&saved.id).unwrap(), "s3cret");
     }
 
     #[tokio::test]
