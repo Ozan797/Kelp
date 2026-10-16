@@ -11,7 +11,7 @@ export function manifest({ version, signature, notes, pubDate }) {
     platforms: {
       "darwin-aarch64": {
         signature: signature.trim(),
-        url: `https://dl.kelp.ozanai.dev/releases/${version}/Kelp.app.tar.gz`,
+        url: `https://kelp-dl.ozanai.dev/releases/${version}/Kelp.app.tar.gz`,
       },
     },
   };

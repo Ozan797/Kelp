@@ -10,7 +10,7 @@ test("builds the darwin-aarch64 manifest", () => {
     platforms: {
       "darwin-aarch64": {
         signature: "c2lnbmF0dXJl",
-        url: "https://dl.kelp.ozanai.dev/releases/0.2.0/Kelp.app.tar.gz",
+        url: "https://kelp-dl.ozanai.dev/releases/0.2.0/Kelp.app.tar.gz",
       },
     },
   });

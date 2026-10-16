@@ -45,7 +45,7 @@ jobs:
         if: inputs.require-release
         run: |
           if grep -q "Download coming soon" dist/index.html; then
-            echo "The site built without a release. Check https://dl.kelp.ozanai.dev/latest.json and run Deploy website again."
+            echo "The site built without a release. Check https://kelp-dl.ozanai.dev/latest.json and run Deploy website again."
             exit 1
           fi
       - name: Deploy to Cloudflare Pages

@@ -10,7 +10,7 @@ export const SITE = {
 
 export const RELEASE: Release | null = __KELP_RELEASE__;
 
-export const DOWNLOAD_URL = "https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg";
+export const DOWNLOAD_URL = "https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg";
 
 export type PageMeta = { path: string; title: string; description: string };
 

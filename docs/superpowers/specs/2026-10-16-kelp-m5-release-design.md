@@ -17,7 +17,7 @@ Builds on part 1 (`2026-10-16-kelp-keychain-touch-id-design.md`): the entitlemen
 
 | Topic | Decision |
 |---|---|
-| Where downloads live | Cloudflare R2 bucket `kelp-downloads` on `https://dl.kelp.ozanai.dev`. Works while the repo is private |
+| Where downloads live | Cloudflare R2 bucket `kelp-downloads` on `https://kelp-dl.ozanai.dev`. Works while the repo is private |
 | Going live | Tag builds and uploads to `releases/<version>/`; a manual "Publish release" workflow makes it live |
 | Notarisation sign-in | App Store Connect API key (key file, key ID, issuer ID) |
 | Build command | `npm run tauri build` in CI, the same as locally; no `tauri-action` |
@@ -31,7 +31,7 @@ Builds on part 1 (`2026-10-16-kelp-keychain-touch-id-design.md`): the entitlemen
 ## 3. Files on R2
 
 ```
-dl.kelp.ozanai.dev/
+kelp-dl.ozanai.dev/
 ├── latest.json                      live update manifest (written only by Publish)
 ├── Kelp_aarch64.dmg                 newest published .dmg (written only by Publish)
 └── releases/<version>/              written by the tag build, never changed after
@@ -51,7 +51,7 @@ dl.kelp.ozanai.dev/
   "platforms": {
     "darwin-aarch64": {
       "signature": "<contents of Kelp.app.tar.gz.sig>",
-      "url": "https://dl.kelp.ozanai.dev/releases/0.2.0/Kelp.app.tar.gz"
+      "url": "https://kelp-dl.ozanai.dev/releases/0.2.0/Kelp.app.tar.gz"
     }
   }
 }
@@ -85,7 +85,7 @@ The runner's temporary files (key file, profile, keychain) are deleted in an `al
 
 - Rust: register `tauri_plugin_updater` and `tauri_plugin_process` in `lib.rs`.
 - `tauri.conf.json`: `bundle.createUpdaterArtifacts: true`; `plugins.updater.endpoints:
-  ["https://dl.kelp.ozanai.dev/latest.json"]`; `plugins.updater.pubkey: "<public key>"` (public, committed).
+  ["https://kelp-dl.ozanai.dev/latest.json"]`; `plugins.updater.pubkey: "<public key>"` (public, committed).
 - Capabilities: add only `updater:default` and `process:allow-restart`.
 - `opener:allow-open-url` is unchanged; no new URLs open from the app.
 - Menu: "Check for updates…" in the Kelp menu emits `menu://check-updates` to the window.
@@ -130,11 +130,11 @@ new downloads get the older `.dmg`.
 ### 7.1 Live release at build time
 
 - `website/src/release.ts`: `parseRelease(json: unknown): { version: string } | null` (pure, tested) and
-  `fetchRelease()` that reads `https://dl.kelp.ozanai.dev/latest.json` with a 5 s timeout; any failure is `null`.
+  `fetchRelease()` that reads `https://kelp-dl.ozanai.dev/latest.json` with a 5 s timeout; any failure is `null`.
 - `vite.config.ts` awaits `fetchRelease()` and defines it for the build. Offline, the fetch times out after 5 s
   and the site builds as "coming soon".
 - `config.ts`: `SITE.version` and `SITE.released` are removed; `RELEASE` (the fetched value or `null`) replaces
-  them. `DOWNLOAD_URL` becomes `https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg`.
+  them. `DOWNLOAD_URL` becomes `https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg`.
 - `DownloadButton`, `Landing` and `head.ts` read `RELEASE`: `null` → "Download coming soon" and no
   `softwareVersion`; a release → the button and "Version 0.2.0 for Apple Silicon".
 
@@ -147,7 +147,7 @@ Runs on pushes to `master` touching `website/**` or `design/**`, and when called
 ## 8. One-time setup (the developer)
 
 **Cloudflare** (dash.cloudflare.com):
-1. R2 → Create bucket `kelp-downloads` → Settings → Custom Domains → Connect `dl.kelp.ozanai.dev`.
+1. R2 → Create bucket `kelp-downloads` → Settings → Custom Domains → Connect `kelp-dl.ozanai.dev`.
 2. R2 → Manage API tokens → Create token, "Object Read & Write" on `kelp-downloads` → note the access key ID and
    secret.
 3. Workers & Pages → Create → Pages → Direct Upload → project name `kelp` → Custom domains → `kelp.ozanai.dev`.
@@ -193,7 +193,7 @@ By hand (the first release):
 - [ ] Tag `v0.1.0` → the build passes, files appear under `releases/0.1.0/`, a draft release exists.
 - [ ] The `.dmg` from R2 opens on a Mac that has never seen Kelp, with no "unidentified developer" warning
       (`spctl -a -vv Kelp.app` says "Notarized Developer ID").
-- [ ] Publish `0.1.0` → `dl.kelp.ozanai.dev/latest.json` and `Kelp_aarch64.dmg` are live; the site shows
+- [ ] Publish `0.1.0` → `kelp-dl.ozanai.dev/latest.json` and `Kelp_aarch64.dmg` are live; the site shows
       "Version 0.1.0" and a working Download button.
 - [ ] Install 0.1.0, then build and publish `0.1.1` → 0.1.0 shows the banner, restarts into 0.1.1, and keeps its
       connections (same Keychain item, same signature).

@@ -8,7 +8,7 @@ A fast, modern desktop app for browsing and transferring files across object sto
 
 - **Platform:** macOS, Apple Silicon only (`aarch64-apple-darwin`), macOS 13+.
 - **Stack:** Rust core, Tauri 2 shell, React + TypeScript + Vite UI.
-- **Distribution:** signed `.dmg` on Cloudflare R2 (`dl.kelp.ozanai.dev`), linked from a landing site on a `*.ozanai.dev` subdomain.
+- **Distribution:** signed `.dmg` on Cloudflare R2 (`kelp-dl.ozanai.dev`), linked from a landing site on a `*.ozanai.dev` subdomain.
 
 ## 2. Goals and non-goals
 
@@ -248,7 +248,7 @@ These are goals to measure against, not promises.
 - Build on a `macos-latest` runner (Apple Silicon) with `npm run tauri build` on a `v*` tag.
 - Sign and notarise with an Apple Developer ID (needs a paid Apple Developer account).
 - Release builds need `KELP_TEAM_ID`, `APPLE_SIGNING_IDENTITY` and `app/src-tauri/Kelp.provisionprofile` (see README).
-- Upload builds to Cloudflare R2 (`dl.kelp.ozanai.dev`); a Publish workflow makes one live.
+- Upload builds to Cloudflare R2 (`kelp-dl.ozanai.dev`); a Publish workflow makes one live.
 - Auto-update with `tauri-plugin-updater` using signed update manifests.
 
 ### 9.1 Auto-update
@@ -257,7 +257,7 @@ Everyone who has installed Kelp gets new versions automatically.
 
 - **Signing key.** Generate it once with `npm run tauri signer generate`. The public key goes in `tauri.conf.json` (`plugins.updater.pubkey`). The private key and its password go in the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. **Back the private key up in a password manager.** If it is lost, existing installs can never accept another update.
 - **Build.** The release workflow turns on `createUpdaterArtifacts` at build time with `--config`, so local builds don't need the updater key. On a `v*` tag, the release workflow builds, signs and uploads the `.dmg`, a signed `Kelp.app.tar.gz`, and a `latest.json` manifest to R2 under `releases/<version>/`. Nothing is live until the Publish workflow runs.
-- **Endpoint.** `https://dl.kelp.ozanai.dev/latest.json`, written only by the Publish workflow.
+- **Endpoint.** `https://kelp-dl.ozanai.dev/latest.json`, written only by the Publish workflow.
 - **In the app.** Check on launch and then every 6 hours. Download the update in the background. Then show a non-blocking banner, "Kelp 0.2.0 is ready. Restart to update", with the release notes and a "Later" option. Never restart while transfers are running: if the user clicks Restart then, ask them first and show how many transfers are in progress. Add a "Check for updates…" menu item.
 - **Capabilities.** Only `updater:default` and `process:allow-restart` (from `tauri-plugin-process`).
 - **First release.** v0.1.0 must include the updater. Before publishing, test it by installing v0.1.0 and then releasing v0.1.1.
@@ -266,7 +266,7 @@ Everyone who has installed Kelp gets new versions automatically.
 
 - Separate Vite + React + TS project in `website/`, deployed as static files on a subdomain of `ozanai.dev`.
 - Content: hero with a live interactive preview of the app, feature list, download section with install steps.
-- The download button points at `https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg`, the file the Publish workflow makes live.
+- The download button points at `https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg`, the file the Publish workflow makes live.
 - Cloudflare Pages project `kelp`, deployed by `.github/workflows/website.yml`. The version and download button come from the live `latest.json` at build time.
 
 ## 11. Testing
@@ -279,7 +279,7 @@ Everyone who has installed Kelp gets new versions automatically.
 ## 12. Open questions
 
 1. ~~**Hetzner:** Object Storage or Storage Box?~~ **Decided 2026-10-14: Hetzner Object Storage (S3).** Storage Box over SFTP stays under "Later".
-2. ~~**Name and domain:** final app name and the exact subdomain.~~ **Decided 2026-10-16: Kelp, at `kelp.ozanai.dev`; downloads and updates at `dl.kelp.ozanai.dev`, which must stay up for as long as any install exists.**
+2. ~~**Name and domain:** final app name and the exact subdomain.~~ **Decided 2026-10-16: Kelp, at `kelp.ozanai.dev`; downloads and updates at `kelp-dl.ozanai.dev`, which must stay up for as long as any install exists.**
 3. ~~**Open source or closed?**~~ **Decided 2026-10-16: open source.** Personal details (Team ID, signing identity, provisioning profile) stay out of the repo.
 4. **Apple Developer account:** needed for signing and notarisation before sharing widely.
 5. **S3 library:** `aws-sdk-s3` (full feature coverage, heavier build) vs OpenDAL (one API for many backends). Decide at the end of M1 after a small spike on each.
