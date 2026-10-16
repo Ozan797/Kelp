@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 
 pub mod protected;
+pub mod vault;
 
 pub const SERVICE: &str = "dev.ozanai.kelp";
 

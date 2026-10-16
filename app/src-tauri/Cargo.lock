@@ -2577,6 +2577,7 @@ dependencies = [
  "bytes",
  "http-body 1.1.0",
  "keyring",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "tauri",
