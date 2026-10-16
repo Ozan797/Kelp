@@ -145,6 +145,11 @@ Runs on pushes to `master` touching `website/**` or `design/**`, and when called
 `npm test`, `npm run build`, `npx netlify-cli deploy --dir dist --prod --site "$NETLIFY_SITE_ID" --no-build`, with
 `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`.
 
+Before `npm ci`, it reads `latest.json` through R2's storage API (`<account>.r2.cloudflarestorage.com`, with the R2
+keys) and hands only the version to the build as `KELP_RELEASE_VERSION`. The public `kelp-dl.ozanai.dev` sits behind
+the domain's Cloudflare Bot Fight Mode, which the developer keeps on for other projects, and it returns 403 to GitHub's
+servers. Local builds without `KELP_RELEASE_VERSION` still fetch the public URL.
+
 ## 8. One-time setup (the developer)
 
 **Cloudflare** (dash.cloudflare.com):

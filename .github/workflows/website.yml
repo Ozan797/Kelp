@@ -17,6 +17,12 @@ on:
         required: true
       NETLIFY_SITE_ID:
         required: true
+      R2_ACCESS_KEY_ID:
+        required: true
+      R2_SECRET_ACCESS_KEY:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
 
 concurrency:
   group: website
@@ -38,6 +44,27 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - name: Read the live release from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          if ! aws s3 cp s3://kelp-downloads/latest.json "$RUNNER_TEMP/latest.json" --endpoint-url "$R2_ENDPOINT" --only-show-errors; then
+            echo "No live release on R2 yet. Building without one."
+            exit 0
+          fi
+          version=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version' "$RUNNER_TEMP/latest.json")
+          rm -f "$RUNNER_TEMP/latest.json"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The live latest.json has no valid version. Building without one."
+            exit 0
+          fi
+          echo "Live release: $version"
+          echo "KELP_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
       - run: npm run build
@@ -45,7 +72,7 @@ jobs:
         if: inputs.require-release
         run: |
           if grep -q "Download coming soon" dist/index.html; then
-            echo "The site built without a release. Check https://kelp-dl.ozanai.dev/latest.json and run Deploy website again."
+            echo "The site built without a release. Check the \"Read the live release from R2\" step above, then run Deploy website again."
             exit 1
           fi
       - name: Deploy to Netlify
