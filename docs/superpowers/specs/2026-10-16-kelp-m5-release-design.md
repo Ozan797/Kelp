@@ -134,7 +134,8 @@ new downloads get the older `.dmg`.
 - `vite.config.ts` awaits `fetchRelease()` and defines it for the build. Offline, the fetch times out after 5 s
   and the site builds as "coming soon".
 - `config.ts`: `SITE.version` and `SITE.released` are removed; `RELEASE` (the fetched value or `null`) replaces
-  them. `DOWNLOAD_URL` becomes `https://kelp-dl.ozanai.dev/Kelp_aarch64.dmg`.
+  them. `DOWNLOAD_URL` is the live release's own file, `releases/<version>/Kelp_<version>_aarch64.dmg`: each release has a new
+  address, so no cache can serve an old one (Cloudflare keeps `.dmg` files for 4 hours). A failed fetch logs why.
 - `DownloadButton`, `Landing` and `head.ts` read `RELEASE`: `null` → "Download coming soon" and no
   `softwareVersion`; a release → the button and "Version 0.2.0 for Apple Silicon".
 
