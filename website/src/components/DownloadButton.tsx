@@ -1,8 +1,8 @@
-import { DOWNLOAD_URL, SITE } from "../config";
+import { DOWNLOAD_URL, RELEASE } from "../config";
 
 export function DownloadButton({ large = false }: { large?: boolean }) {
   const size = large ? " button-lg" : "";
-  if (!SITE.released) {
+  if (!RELEASE) {
     return (
       <span className={`button button-secondary${size}`} aria-disabled="true">
         Download coming soon

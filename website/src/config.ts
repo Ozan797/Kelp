@@ -1,17 +1,17 @@
+import type { Release } from "./release";
+
 // One place to edit names, URLs, the version and the page list.
 export const SITE = {
   name: "Kelp",
   domain: "kelp.ozanai.dev", // placeholder until SPEC.md open question 2 is settled
   url: "https://kelp.ozanai.dev",
-  version: "0.1.0",
-  // Flip to true once the first .dmg is attached to a published GitHub Release.
-  released: false,
   repoUrl: "https://github.com/Ozan797/Kelp",
   minMacOS: "macOS 13",
 } as const;
 
-// Tauri names the file {productName}_{version}_{arch}.dmg. Check this against the first real release.
-export const DOWNLOAD_URL = `${SITE.repoUrl}/releases/download/v${SITE.version}/${SITE.name}_${SITE.version}_aarch64.dmg`;
+export const RELEASE: Release | null = __KELP_RELEASE__;
+
+export const DOWNLOAD_URL = "https://dl.kelp.ozanai.dev/Kelp_aarch64.dmg";
 
 export type PageMeta = { path: string; title: string; description: string };
 

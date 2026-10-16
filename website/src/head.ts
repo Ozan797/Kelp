@@ -1,4 +1,4 @@
-import { NOT_FOUND, PAGES, SITE, pageUrl, type PageMeta } from "./config";
+import { NOT_FOUND, PAGES, RELEASE, SITE, pageUrl, type PageMeta } from "./config";
 
 export const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -10,7 +10,7 @@ function softwareJsonLd(): string {
     name: SITE.name,
     operatingSystem: `${SITE.minMacOS}+`,
     applicationCategory: "DeveloperApplication",
-    softwareVersion: SITE.version,
+    ...(RELEASE ? { softwareVersion: RELEASE.version } : {}),
     url: pageUrl("/"),
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   };

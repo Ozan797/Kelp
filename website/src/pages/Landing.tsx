@@ -5,7 +5,7 @@ import DemoWindow from "../components/DemoWindow";
 import { DownloadButton } from "../components/DownloadButton";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
-import { SITE, hrefFor } from "../config";
+import { RELEASE, SITE, hrefFor } from "../config";
 import { InstallSteps } from "../content/install";
 
 const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
@@ -266,7 +266,7 @@ export default function Landing() {
           <div className="cta-card reveal">
             <h2 id="download-title">Get {SITE.name}</h2>
             <p className="download-meta">
-              Version {SITE.version} for Apple Silicon, {SITE.minMacOS} or later.
+              {RELEASE ? `Version ${RELEASE.version} for Apple Silicon, ${SITE.minMacOS} or later.` : `For Apple Silicon, ${SITE.minMacOS} or later.`}
             </p>
             <DownloadButton large />
             <div className="cta-steps">
