@@ -12,49 +12,49 @@ export const RELEASE: Release | null = __KELP_RELEASE__;
 
 export const DOWNLOAD_URL: string | null = RELEASE ? downloadUrl(RELEASE) : null;
 
-export type PageMeta = { path: string; title: string; description: string };
+export type PageMeta = { path: string; name: string; description: string };
 
-// Every prerendered page. Titles must not contain & < or ".
+// Every prerendered page. Every tab title is just the app name; `name` is announced on in-place navigation.
 export const PAGES = [
   {
     path: "/",
-    title: "Kelp – a fast Mac app for S3, R2 and Hetzner",
+    name: "Home",
     description:
       "Browse and transfer files across Amazon S3, Cloudflare R2 and Hetzner Object Storage from one fast Mac app.",
   },
   {
     path: "/docs",
-    title: "Getting started – Kelp docs",
+    name: "Getting started",
     description: "Install Kelp and connect your first Amazon S3, Cloudflare R2 or Hetzner bucket.",
   },
   {
     path: "/docs/s3",
-    title: "Connect Amazon S3 – Kelp docs",
+    name: "Connect Amazon S3",
     description: "Create an AWS access key and connect Amazon S3 to Kelp.",
   },
   {
     path: "/docs/r2",
-    title: "Connect Cloudflare R2 – Kelp docs",
+    name: "Connect Cloudflare R2",
     description: "Create an R2 API token and connect Cloudflare R2 to Kelp.",
   },
   {
     path: "/docs/hetzner",
-    title: "Connect Hetzner Object Storage – Kelp docs",
+    name: "Connect Hetzner Object Storage",
     description: "Generate S3 credentials and connect Hetzner Object Storage to Kelp.",
   },
   {
     path: "/docs/troubleshooting",
-    title: "Troubleshooting – Kelp docs",
+    name: "Troubleshooting",
     description: "Fix common connection errors in Kelp.",
   },
   {
     path: "/whats-new",
-    title: "What's new – Kelp",
+    name: "What's new",
     description: "What changed in each version of Kelp.",
   },
   {
     path: "/privacy",
-    title: "Privacy – Kelp",
+    name: "Privacy",
     description: "How Kelp handles your keys and files: Keychain only, no telemetry, no Kelp servers.",
   },
 ] as const satisfies readonly PageMeta[];
@@ -63,7 +63,7 @@ export type PagePath = (typeof PAGES)[number]["path"];
 
 export const NOT_FOUND: PageMeta = {
   path: "/404",
-  title: "Page not found – Kelp",
+  name: "Page not found",
   description: "This page doesn't exist.",
 };
 

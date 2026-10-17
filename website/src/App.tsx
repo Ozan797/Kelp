@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
-import { NOT_FOUND, PAGES, pageUrl, type PageMeta } from "./config";
+import { NOT_FOUND, PAGES, SITE, pageUrl, type PageMeta } from "./config";
 import { normalizePath } from "./path";
 import { isKnownPath, renderPage } from "./routes";
 
 /** Keeps the tab title, description and canonical link in step with the page shown. */
 function updateHead(path: string) {
   const page: PageMeta = PAGES.find((p) => p.path === normalizePath(path)) ?? NOT_FOUND;
-  document.title = page.title;
+  document.title = SITE.name;
   document.querySelector('meta[name="description"]')?.setAttribute("content", page.description);
   document.querySelector('link[rel="canonical"]')?.setAttribute("href", pageUrl(page.path));
-  return page.title;
+  return page.name;
 }
 
 /**

@@ -22,7 +22,7 @@ function softwareJsonLd(): string {
 export function headFor(path: string): string {
   const page: PageMeta = PAGES.find((p) => p.path === path) ?? NOT_FOUND;
   const isNotFound = page === NOT_FOUND;
-  const title = escapeHtml(page.title);
+  const title = escapeHtml(SITE.name);
   const description = escapeHtml(page.description);
 
   const tags = [
