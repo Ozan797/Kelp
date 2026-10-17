@@ -1,5 +1,4 @@
 import { DocsLayout } from "../../components/DocsLayout";
-import { SITE } from "../../config";
 
 export default function Troubleshooting() {
   return (
@@ -49,12 +48,6 @@ export default function Troubleshooting() {
       <p>
         If macOS says it can't check the app, open <strong>System Settings → Privacy &amp; Security</strong> and
         choose <strong>Open Anyway</strong>.
-      </p>
-
-      <h2>Still stuck?</h2>
-      <p>
-        <a href={`${SITE.repoUrl}/issues`}>Open an issue on GitHub</a> and include the message Kelp shows. Never
-        include your secret key.
       </p>
     </DocsLayout>
   );

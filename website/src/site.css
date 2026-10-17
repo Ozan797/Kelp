@@ -1752,11 +1752,6 @@ a:hover > .arrow {
   list-style: none;
 }
 
-/* GitHub's mark is black; use the text colour so it shows in both themes. */
-.provider-mark.github {
-  color: var(--text);
-}
-
 .site-note {
   max-width: 860px;
   margin: var(--space-5) auto 0;

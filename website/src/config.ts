@@ -4,7 +4,6 @@ export const SITE = {
   name: "Kelp",
   domain: "kelp.ozanai.dev",
   url: "https://kelp.ozanai.dev",
-  repoUrl: "https://github.com/Ozan797/Kelp",
   minMacOS: "macOS 13",
 } as const;
 

@@ -3,7 +3,6 @@ import { BrandLogo, type Brand } from "../components/BrandLogo";
 import { Bubbles } from "../components/Bubbles";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
-import { SITE } from "../config";
 
 const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 
@@ -62,7 +61,7 @@ const CONNECTS: { brand: Brand; name: string; why: string }[] = [
   { brand: "s3", name: "Amazon S3", why: "Only if you add an S3 connection." },
   { brand: "r2", name: "Cloudflare R2", why: "Only if you add an R2 connection." },
   { brand: "hetzner", name: "Hetzner", why: "Only if you add a Hetzner connection." },
-  { brand: "github", name: "GitHub", why: "To check for updates and download them." },
+  { brand: "r2", name: "Cloudflare", why: "To check for updates and download them, from kelp-dl.ozanai.dev." },
 ];
 
 export default function Privacy() {
@@ -135,18 +134,9 @@ export default function Privacy() {
             This website sets no cookies and has no analytics. It saves your theme choice in your browser, and nothing
             else.
           </p>
+          <p className="site-note reveal">Last updated 17 October 2026.</p>
         </section>
 
-        <section className="container section privacy-section" aria-labelledby="questions-title">
-          <div className="cta-card reveal">
-            <h2 id="questions-title">Questions?</h2>
-            <p className="download-meta">If anything here is unclear, ask in the open.</p>
-            <a className="button button-primary button-lg" href={`${SITE.repoUrl}/issues`}>
-              Open an issue on GitHub
-            </a>
-            <p className="download-meta">Last updated 14 October 2026.</p>
-          </div>
-        </section>
       </main>
       <Footer />
     </>

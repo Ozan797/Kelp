@@ -9,7 +9,6 @@ export function Footer() {
           <a href={hrefFor("/docs")}>Docs</a>
           <a href={hrefFor("/whats-new")}>What's new</a>
           <a href={hrefFor("/privacy")}>Privacy</a>
-          <a href={SITE.repoUrl}>Source on GitHub</a>
         </nav>
       </div>
     </footer>
