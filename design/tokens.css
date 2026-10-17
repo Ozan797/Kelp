@@ -103,6 +103,7 @@
   color-scheme: light;
   --bg: var(--sand-50);
   --surface: var(--sand-100);
+  --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
   --surface-raised: var(--white);
   --border: var(--sand-200);
   --text: var(--ink-900);
@@ -131,6 +132,7 @@
   color-scheme: dark;
   --bg: var(--navy-950);
   --surface: var(--navy-900);
+  --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
   --surface-raised: var(--navy-800);
   --border: var(--navy-700);
   --text: var(--navy-200);
@@ -160,6 +162,7 @@
     color-scheme: dark;
     --bg: var(--navy-950);
     --surface: var(--navy-900);
+    --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
     --surface-raised: var(--navy-800);
     --border: var(--navy-700);
     --text: var(--navy-200);

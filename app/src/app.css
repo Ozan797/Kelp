@@ -2,7 +2,8 @@
 @import "../../design/tokens.css";
 @import "../../design/components.css";
 
-html {
+:root {
+  background: transparent;
   overscroll-behavior: none;
 }
 
@@ -14,7 +15,6 @@ body,
 }
 
 body {
-  background: var(--bg);
   color: var(--text);
   font: 400 13px / 1.4 var(--font-ui);
   -webkit-font-smoothing: antialiased;
@@ -57,7 +57,7 @@ button {
   flex-direction: column;
   padding-top: 40px;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-sidebar);
 }
 
 .rail ul {
@@ -111,7 +111,7 @@ button {
   min-width: 0;
   padding-top: 34px;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-sidebar);
 }
 
 .buckets-head {
@@ -193,6 +193,7 @@ button {
 
 .main {
   position: relative;
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   min-width: 0;
