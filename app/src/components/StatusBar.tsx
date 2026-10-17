@@ -77,9 +77,10 @@ type StatusBarProps = {
   pillRef?: Ref<HTMLButtonElement>;
   size?: Size | null;
   update?: ReactNode;
+  note?: string | null;
 };
 
-export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size, update }: StatusBarProps) {
+export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size, update, note }: StatusBarProps) {
   const summary = transferSummary(transfers);
   const running = transfers.filter(inProgress);
   const total = running.reduce((sum, t) => sum + t.total, 0);
@@ -95,6 +96,12 @@ export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, 
           <>
             <span aria-hidden="true">·</span>
             <SizeText {...size} />
+          </>
+        )}
+        {note && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="statusbar-note">{note}</span>
           </>
         )}
       </span>

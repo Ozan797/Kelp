@@ -1517,3 +1517,17 @@ button {
 .toolbar-icon:hover {
   color: var(--text);
 }
+
+.refresh-glyph {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toolbar-icon[aria-busy="true"] .refresh-glyph {
+    animation: kelp-spin 0.8s linear infinite;
+  }
+}
+
+.statusbar-note {
+  color: var(--text-muted);
+}

@@ -40,6 +40,11 @@ function parentOf(prefix: string): string {
 const NOTHING_TO_COPY = "Nothing to copy. Everything is already there.";
 const NOTHING_TO_UPLOAD = "Nothing to upload. The folder is empty or everything is already there.";
 
+const MIN_REFRESH_SPIN_MS = 500;
+const REFRESHED_NOTE_MS = 3000;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 export type BrowserProps = {
@@ -93,6 +98,8 @@ export function Browser({
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [countOnOpen, setCountOnOpen] = useState<Place | null>(null);
   const [checking, setChecking] = useState<Place | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedPlace, setRefreshedPlace] = useState<Place | null>(null);
 
   const place = position >= 0 ? history[position] : null;
   const listing = useListing(connection.id, place?.bucket ?? null, place?.prefix ?? "");
@@ -356,10 +363,23 @@ export function Browser({
 
   const preview = (row: Row) => setSheet({ kind: "preview", key: row.key });
 
-  const reloadHere = () => {
-    if (place) listing.reload();
-    else setReload((n) => n + 1);
+  const reloadHere = async () => {
+    if (!place) return setReload((n) => n + 1);
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshedPlace(null);
+    const [refreshed] = await Promise.all([listing.reload(), wait(MIN_REFRESH_SPIN_MS)]);
+    setRefreshing(false);
+    if (refreshed) setRefreshedPlace(place);
   };
+
+  useEffect(() => {
+    if (!refreshedPlace) return;
+    const timer = setTimeout(() => setRefreshedPlace(null), REFRESHED_NOTE_MS);
+    return () => clearTimeout(timer);
+  }, [refreshedPlace]);
+
+  const showRefreshed = refreshedPlace !== null && refreshedPlace.bucket === place?.bucket && refreshedPlace.prefix === place.prefix;
 
   const openRow = (row: Row) => {
     if (place && row.isFolder) go({ bucket: place.bucket, prefix: row.key });
@@ -440,7 +460,13 @@ export function Browser({
   };
 
   const checkingText = checking ? `Checking what's already in ${destinationText(checking)}…` : "";
-  const liveText = checking ? checkingText : drag ? pillText(summaryText(drag.summary, drag.paths.length), drag.target) : "";
+  const liveText = checking
+    ? checkingText
+    : drag
+      ? pillText(summaryText(drag.summary, drag.paths.length), drag.target)
+      : showRefreshed
+        ? "Folder refreshed"
+        : "";
   const checkingPill = (
     <div className="drop-pill" aria-hidden="true">
       {checkingText}
@@ -577,6 +603,7 @@ export function Browser({
               onFilter={setFilter}
               onNewFolder={() => setSheet({ kind: "folder" })}
               onRefresh={reloadHere}
+              refreshing={refreshing}
               onUpload={chooseUpload}
               dropKey={rowPlace?.bucket === place.bucket ? rowPlace.prefix : null}
             />
@@ -609,6 +636,7 @@ export function Browser({
           onOpenTransfers={onOpenTransfers}
           pillRef={pillRef}
           update={update}
+          note={showRefreshed ? "Refreshed just now" : null}
           size={
             place
               ? {

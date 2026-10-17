@@ -68,23 +68,25 @@ export function useListing(connectionId: string | null, bucket: string | null, p
   }, []);
 
   const fetchPage = useCallback(
-    async (pageToken: string | null, replace: boolean) => {
+    async (pageToken: string | null, replace: boolean): Promise<boolean> => {
       const ticket = ++request.current;
       if (!connectionId || !bucket) {
         fetching.current = false;
         setLoading(false);
-        return;
+        return false;
       }
       fetching.current = true;
       setLoading(true);
       setError(null);
       try {
         const page = await api.listObjects(connectionId, bucket, prefix, pageToken);
-        if (ticket !== request.current) return;
+        if (ticket !== request.current) return false;
         const base = !replace && latest.current.key === key ? latest.current : empty(key);
         show({ key, rows: [...base.rows, ...pageToRows(page, prefix)], token: page.nextToken, pages: base.pages + 1 });
+        return true;
       } catch (caught) {
         if (ticket === request.current) setError(toAppError(caught));
+        return false;
       } finally {
         if (ticket === request.current) {
           fetching.current = false;

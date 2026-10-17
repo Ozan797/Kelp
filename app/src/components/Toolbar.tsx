@@ -18,6 +18,7 @@ type ToolbarProps = {
   onFilter: (text: string) => void;
   onNewFolder: () => void;
   onRefresh: () => void;
+  refreshing?: boolean;
   onUpload: () => void;
   dropKey?: string | null;
 };
@@ -62,8 +63,17 @@ export function Toolbar(props: ToolbarProps) {
         value={props.filter}
         onChange={(event) => props.onFilter(event.target.value)}
       />
-      <button type="button" className="toolbar-icon" aria-label="Refresh" title="Refresh (⌘R)" onClick={props.onRefresh}>
-        ↻
+      <button
+        type="button"
+        className="toolbar-icon"
+        aria-label="Refresh"
+        aria-busy={props.refreshing ?? false}
+        title="Refresh (⌘R)"
+        onClick={props.onRefresh}
+      >
+        <span className="refresh-glyph" aria-hidden="true">
+          ↻
+        </span>
       </button>
       <button type="button" className="button button-secondary" onClick={props.onNewFolder}>
         New folder
