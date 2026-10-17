@@ -20,8 +20,10 @@ export function useUpdater(enabled: boolean) {
   const dismissed = useRef<string | null>(null);
   const lastCheck = useRef(Date.now());
 
-  const find = useCallback(() => {
-    inFlight.current ??= api.checkForUpdate().finally(() => {
+  const pulsed = useRef(new Set<string>());
+
+  const find = useCallback((skip: string[]) => {
+    inFlight.current ??= api.checkForUpdate(skip).finally(() => {
       inFlight.current = null;
     });
     return inFlight.current;
@@ -40,7 +42,8 @@ export function useUpdater(enabled: boolean) {
       }
       lastCheck.current = Date.now();
       try {
-        const update = found.current ?? (await find());
+        const skip = [found.current?.version, manual ? null : dismissed.current].filter((v): v is string => typeof v === "string");
+        const update = (await find(skip)) ?? found.current;
         if (update) {
           found.current = update;
           if (manual) {
@@ -84,9 +87,14 @@ export function useUpdater(enabled: boolean) {
 
   const dismiss = useCallback(() => {
     dismissed.current = found.current?.version ?? null;
-    found.current = null;
     setReady(null);
     setCardOpen(false);
+  }, []);
+
+  const claimPulse = useCallback((version: string) => {
+    if (pulsed.current.has(version)) return false;
+    pulsed.current.add(version);
+    return true;
   }, []);
 
   const checkNow = useCallback(() => void check(true), [check]);
@@ -103,5 +111,5 @@ export function useUpdater(enabled: boolean) {
     }
   }, [say]);
 
-  return { ready, cardOpen, message, openCard, closeCard, dismiss, checkNow, restart };
+  return { ready, cardOpen, message, openCard, closeCard, dismiss, checkNow, restart, claimPulse };
 }

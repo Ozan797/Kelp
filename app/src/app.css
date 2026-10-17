@@ -983,7 +983,7 @@ button {
     animation: kelp-sheet-in var(--dur) var(--ease-out) backwards;
   }
 
-  .update-indicator {
+  .update-indicator.pulse {
     animation: update-pulse 1.2s var(--ease-out) 1;
   }
 

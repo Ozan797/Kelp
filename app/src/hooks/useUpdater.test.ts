@@ -130,6 +130,31 @@ describe("useUpdater", () => {
     expect(result.current.cardOpen).toBe(true);
   });
 
+  it("a_dismissed_version_is_never_downloaded_again", async () => {
+    const found = vi.spyOn(api, "checkForUpdate").mockImplementation(async (skip) => (skip.includes("0.2.0") ? null : pending("0.2.0")));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderHook(() => useUpdater(true));
+    await waitFor(() => expect(result.current.ready).not.toBeNull());
+    act(() => result.current.dismiss());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHECK_EVERY_MS);
+    });
+    expect(found).toHaveBeenLastCalledWith(expect.arrayContaining(["0.2.0"]));
+    expect(result.current.ready).toBeNull();
+  });
+
+  it("a_newer_release_replaces_the_ready_one", async () => {
+    const found = vi.spyOn(api, "checkForUpdate").mockResolvedValueOnce(pending("0.2.0")).mockResolvedValue(pending("0.2.1"));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderHook(() => useUpdater(true));
+    await waitFor(() => expect(result.current.ready?.version).toBe("0.2.0"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHECK_EVERY_MS);
+    });
+    await waitFor(() => expect(result.current.ready?.version).toBe("0.2.1"));
+    expect(found).toHaveBeenLastCalledWith(["0.2.0"]);
+  });
+
   it("a_newer_version_undoes_a_dismissal", async () => {
     vi.spyOn(api, "checkForUpdate").mockResolvedValueOnce(pending("0.2.0")).mockResolvedValue(pending("0.2.1"));
     vi.useFakeTimers({ shouldAdvanceTime: true });

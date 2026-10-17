@@ -185,9 +185,9 @@ export const api = {
     listen<TransferProgress>("transfer://progress", (event) => handler(event.payload)),
   onTransferState: (handler: (view: TransferView) => void): Promise<UnlistenFn> =>
     listen<TransferView>("transfer://state", (event) => handler(event.payload)),
-  checkForUpdate: async (): Promise<PendingUpdate | null> => {
+  checkForUpdate: async (skip: readonly string[]): Promise<PendingUpdate | null> => {
     const update = await check();
-    if (update === null) return null;
+    if (update === null || skip.includes(update.version)) return null;
     await update.download();
     return { version: update.version, notes: update.body ?? "", install: () => update.install() };
   },

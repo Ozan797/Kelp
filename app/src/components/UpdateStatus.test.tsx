@@ -16,6 +16,7 @@ const updater = (patch: Partial<Updater> = {}): Updater => ({
   dismiss: vi.fn(),
   checkNow: vi.fn(),
   restart: vi.fn(async () => undefined),
+  claimPulse: vi.fn(() => false),
   ...patch,
 });
 
@@ -76,6 +77,47 @@ describe("UpdateStatus", () => {
     expect(state.closeCard).toHaveBeenCalled();
     rerender(<UpdateStatus updater={{ ...state, cardOpen: false }} runningTransfers={0} />);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Update ready, Kelp 0.2.0" }));
+  });
+
+  it("escape_elsewhere_is_left_alone", async () => {
+    const state = updater({ ready: offered, cardOpen: true });
+    render(
+      <>
+        <input aria-label="Filter" />
+        <UpdateStatus updater={state} runningTransfers={0} />
+      </>,
+    );
+    screen.getByLabelText("Filter").focus();
+    await userEvent.keyboard("{Escape}");
+    expect(state.closeCard).not.toHaveBeenCalled();
+  });
+
+  it("closing_without_an_indicator_restores_the_previous_focus", async () => {
+    const state = updater({ message: "Kelp is up to date (0.1.0).", cardOpen: false });
+    const { rerender } = render(
+      <>
+        <button type="button">Before</button>
+        <UpdateStatus updater={state} runningTransfers={0} />
+      </>,
+    );
+    screen.getByRole("button", { name: "Before" }).focus();
+    const withCard = (open: boolean) => (
+      <>
+        <button type="button">Before</button>
+        <UpdateStatus updater={{ ...state, cardOpen: open }} runningTransfers={0} />
+      </>
+    );
+    rerender(withCard(true));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    rerender(withCard(false));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Before" }));
+  });
+
+  it("pulses_only_when_the_hook_says_so", () => {
+    const { rerender } = render(<UpdateStatus updater={updater({ ready: offered })} runningTransfers={0} />);
+    expect(screen.getByRole("button", { name: /Update ready/ }).className).not.toContain("pulse");
+    rerender(<UpdateStatus updater={updater({ ready: { ...offered, version: "0.2.1" }, claimPulse: () => true })} runningTransfers={0} />);
+    expect(screen.getByRole("button", { name: /Update ready/ }).className).toContain("pulse");
   });
 
   it("a_message_card_has_only_close", async () => {
