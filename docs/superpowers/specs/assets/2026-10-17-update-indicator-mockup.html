@@ -1,0 +1,73 @@
+<h2>Which status-bar indicator feels like part of Kelp?</h2>
+<p class="subtitle">Three quieter ways to show "an update is ready", all without a pill. The card (bottom) now has room for its buttons and an × to dismiss. Click the indicator you prefer.</p>
+
+<style>
+  .kw { --sand-50:#f5f2ea; --sand-200:#e0d9c9; --ink-900:#0f1d27; --ink-600:#4a5a65; --teal-600:#14806f;
+        --raised:#fff; --border:var(--sand-200); --text:var(--ink-900); --muted:var(--ink-600); --accent:var(--teal-600);
+        font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif; color:var(--text); background:var(--sand-50); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .kw .bar { height:30px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 14px; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .kw .link { color:var(--accent); }
+  .kw .sep { color:var(--border); }
+  .kw .ico { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; border-radius:6px; color:var(--accent); }
+  .kw .ico:hover { background:#d9efe9; }
+  .kw .fill { height:52px; }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="link" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content" style="width:100%">
+      <h3>A text link, like "Recalculate"</h3>
+      <p>Reads like the rest of the status bar. The link opens the card.</p>
+      <div class="kw"><div class="fill"></div>
+        <div class="bar"><span>4 items · 42 GB · 1,304 files · 21 h ago <span class="link">Recalculate</span></span><span>Kelp 0.2.0 is available <span class="sep">·</span> <span class="link">Update…</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="icon" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content" style="width:100%">
+      <h3>A small icon only</h3>
+      <p>A download-arrow icon in Kelp's teal at the end of the status bar, with a tooltip "Kelp 0.2.0 is ready". Quietest; easiest to miss.</p>
+      <div class="kw"><div class="fill"></div>
+        <div class="bar"><span>4 items · 42 GB · 1,304 files · 21 h ago <span class="link">Recalculate</span></span>
+          <span class="ico" title="Kelp 0.2.0 is ready"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.8v6"/><path d="M5.6 8.6 8 11l2.4-2.4"/></svg></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="text-only" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content" style="width:100%">
+      <h3>Icon and a few words</h3>
+      <p>The same icon followed by "Update ready" in muted text; the whole thing is one button.</p>
+      <div class="kw"><div class="fill"></div>
+        <div class="bar"><span>4 items · 42 GB · 1,304 files · 21 h ago <span class="link">Recalculate</span></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text)"><span class="ico" style="width:auto;height:auto"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.8v6"/><path d="M5.6 8.6 8 11l2.4-2.4"/></svg></span>Update ready</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:26px">The card, with room to breathe and an ×</h3>
+<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+  <div style="font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;width:320px;background:#fff;border:1px solid #e0d9c9;border-radius:12px;box-shadow:0 6px 20px rgba(15,29,39,.12);padding:16px 18px 14px;color:#0f1d27;position:relative">
+    <span style="position:absolute;top:10px;right:10px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:#4a5a65" title="Close">
+      <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg></span>
+    <div style="font-size:13px;font-weight:600;padding-right:24px">Kelp 0.2.0 is ready</div>
+    <div style="margin:4px 0 14px;font-size:12px;color:#4a5a65;line-height:1.45">Kelp now remembers where you were in each folder.</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <span style="font:600 12px/1 -apple-system,system-ui;white-space:nowrap;min-height:28px;display:inline-flex;align-items:center;padding:0 12px;border-radius:6px;border:1px solid #e0d9c9;color:#0f1d27">What's new</span>
+      <span style="font:600 12px/1 -apple-system,system-ui;white-space:nowrap;min-height:28px;display:inline-flex;align-items:center;padding:0 14px;border-radius:6px;background:#14806f;color:#fff">Restart to update</span>
+    </div>
+  </div>
+  <div style="font-size:13px;line-height:1.6;color:#4a5a65;max-width:380px">
+    <b style="color:#0f1d27">How it behaves</b>
+    <ul style="margin:6px 0 0 16px;padding:0">
+      <li><b>×</b> dismisses this update: the card closes and the indicator disappears until the next launch or a newer version. "Check for updates…" brings it back any time.</li>
+      <li>Clicking outside the card or pressing Escape just closes the card; the indicator stays.</li>
+      <li>Buttons never wrap or squash: the card is wider and the labels stay on one line.</li>
+    </ul>
+  </div>
+</div>

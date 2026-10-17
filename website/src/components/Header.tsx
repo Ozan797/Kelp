@@ -17,6 +17,9 @@ export function Header() {
         <div className="header-actions">
           <nav className="header-nav" aria-label="Main">
             <a href={hrefFor("/docs")}>Docs</a>
+            <a className="hide-xs" href={hrefFor("/whats-new")}>
+              What's new
+            </a>
             <a className="hide-xs" href={SITE.repoUrl}>
               GitHub
             </a>

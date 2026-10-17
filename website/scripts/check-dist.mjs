@@ -38,6 +38,23 @@ for (const page of PAGES) {
   if (!systemChecked(html)) problems.push(`${page.path}: theme switch must prerender with "system" checked (hydration)`);
 }
 
+const olderOrEqual = (a, b) => {
+  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0);
+  }
+  return true;
+};
+const whatsNew = read(join(dist, "whats-new", "index.html"));
+const liveVersion = process.env.KELP_RELEASE_VERSION;
+if (liveVersion && whatsNew === null) problems.push("/whats-new: no index.html in dist");
+if (whatsNew !== null && liveVersion) {
+  if (!whatsNew.includes(`id="${liveVersion}"`)) problems.push(`/whats-new: no section for ${liveVersion}`);
+  for (const [, id] of whatsNew.matchAll(/<section[^>]*\sid="(\d+(?:\.\d+)*)"/g)) {
+    if (!olderOrEqual(id, liveVersion)) problems.push(`/whats-new: section ${id} is newer than the live ${liveVersion}`);
+  }
+}
+
 const home = read(join(dist, "index.html")) ?? "";
 if (!home.includes('"@type":"SoftwareApplication"')) problems.push("/: no SoftwareApplication JSON-LD");
 

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build && vite build --ssr src/render.tsx --outDir dist-ssr && node scripts/prerender.mjs && node scripts/check-dist.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "node --test --experimental-strip-types tests/path.test.ts tests/release.test.ts ../design/theme.test.ts && node ../design/check-contrast.mjs"
+    "test": "node --test --experimental-strip-types tests/path.test.ts tests/release.test.ts tests/notes.test.ts ../design/theme.test.ts && node ../design/check-contrast.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

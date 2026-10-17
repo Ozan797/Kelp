@@ -255,7 +255,6 @@ button {
 .statusbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   height: 30px;
   padding: 0 var(--space-4);
@@ -263,6 +262,10 @@ button {
   color: var(--text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+.statusbar-info {
+  margin-right: auto;
 }
 
 .statusbar-info,
@@ -886,32 +889,89 @@ button {
   font-size: 12px;
 }
 
-.update-banner {
+.update-status {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  margin-left: var(--space-3);
+}
+
+.update-indicator {
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-top: 1px solid var(--border);
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.update-indicator:hover {
   background: var(--surface-raised);
+  color: var(--text);
+}
+
+.update-indicator svg {
+  color: var(--accent);
+}
+
+.update-indicator:focus-visible,
+.update-card-close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.update-card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: 10;
+  width: 320px;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
   color: var(--text);
   font-size: 12px;
 }
 
-.update-banner .button {
-  min-height: 28px;
-  font: 600 12px / 1 var(--font-ui);
-}
-
-.update-text {
-  flex: 1 1 auto;
-}
-
-.update-notes {
-  flex-basis: 100%;
+.update-card h2 {
   margin: 0;
+  padding-right: var(--space-5);
+  font-size: 15px;
+}
+
+.update-card-text {
+  margin: var(--space-1) 0 0;
+  padding-right: var(--space-5);
   color: var(--text-muted);
-  white-space: pre-wrap;
+}
+
+.update-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.update-card-actions .button {
+  white-space: nowrap;
+}
+
+.update-card-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -923,13 +983,24 @@ button {
     animation: kelp-fade-in var(--dur) var(--ease-out) backwards;
   }
 
-  .sheet {
+  .sheet,
+  .update-card {
     animation: kelp-sheet-in var(--dur) var(--ease-out) backwards;
+  }
+
+  .update-indicator.pulse {
+    animation: update-pulse 1.2s var(--ease-out) 1;
   }
 
   .file-row.intro {
     animation: kelp-row-in var(--dur) var(--ease-out) backwards;
     animation-delay: calc(var(--i, 0) * 15ms);
+  }
+}
+
+@keyframes update-pulse {
+  50% {
+    background: var(--accent-soft);
   }
 }
 

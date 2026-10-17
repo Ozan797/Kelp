@@ -1,0 +1,141 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { useUpdater } from "../hooks/useUpdater";
+import { api } from "../lib/tauri";
+import { UpdateStatus } from "./UpdateStatus";
+
+type Updater = ReturnType<typeof useUpdater>;
+
+const updater = (patch: Partial<Updater> = {}): Updater => ({
+  ready: null,
+  cardOpen: false,
+  message: null,
+  openCard: vi.fn(),
+  closeCard: vi.fn(),
+  dismiss: vi.fn(),
+  checkNow: vi.fn(),
+  restart: vi.fn(async () => undefined),
+  claimPulse: vi.fn(() => false),
+  ...patch,
+});
+
+const offered = { version: "0.2.0", notes: "Kelp now remembers where you were in each folder.", install: async () => undefined };
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("UpdateStatus", () => {
+  it("shows_nothing_without_an_update_or_message", () => {
+    const { container } = render(<UpdateStatus updater={updater()} runningTransfers={0} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(container.textContent).toBe("");
+  });
+
+  it("shows_the_indicator_when_an_update_is_ready", async () => {
+    const state = updater({ ready: offered });
+    render(<UpdateStatus updater={state} runningTransfers={0} />);
+    const button = screen.getByRole("button", { name: "Update ready, Kelp 0.2.0" });
+    expect(button.textContent).toBe("Update ready");
+    await userEvent.click(button);
+    expect(state.openCard).toHaveBeenCalled();
+  });
+
+  it("the_card_shows_the_offered_version", () => {
+    render(<UpdateStatus updater={updater({ ready: offered, cardOpen: true })} runningTransfers={0} />);
+    const card = screen.getByRole("dialog", { name: "Kelp 0.2.0 is ready" });
+    expect(card.textContent).toContain(offered.notes);
+    expect(screen.getByRole("button", { name: "What's new" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Restart to update" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+
+  it("whats_new_opens_the_offered_version", async () => {
+    const open = vi.spyOn(api, "openDocs").mockResolvedValue(undefined);
+    render(<UpdateStatus updater={updater({ ready: offered, cardOpen: true })} runningTransfers={0} />);
+    await userEvent.click(screen.getByRole("button", { name: "What's new" }));
+    expect(open).toHaveBeenCalledWith("/whats-new/#0.2.0");
+  });
+
+  it("restart_passes_the_running_transfers", async () => {
+    const state = updater({ ready: offered, cardOpen: true });
+    render(<UpdateStatus updater={state} runningTransfers={3} />);
+    await userEvent.click(screen.getByRole("button", { name: "Restart to update" }));
+    expect(state.restart).toHaveBeenCalledWith(3);
+  });
+
+  it("close_dismisses_the_update", async () => {
+    const state = updater({ ready: offered, cardOpen: true });
+    render(<UpdateStatus updater={state} runningTransfers={0} />);
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(state.dismiss).toHaveBeenCalled();
+  });
+
+  it("escape_closes_the_card_and_returns_focus", async () => {
+    const state = updater({ ready: offered, cardOpen: true });
+    const { rerender } = render(<UpdateStatus updater={state} runningTransfers={0} />);
+    await userEvent.keyboard("{Escape}");
+    expect(state.closeCard).toHaveBeenCalled();
+    rerender(<UpdateStatus updater={{ ...state, cardOpen: false }} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Update ready, Kelp 0.2.0" }));
+  });
+
+  it("escape_elsewhere_is_left_alone", async () => {
+    const state = updater({ ready: offered, cardOpen: true });
+    render(
+      <>
+        <input aria-label="Filter" />
+        <UpdateStatus updater={state} runningTransfers={0} />
+      </>,
+    );
+    screen.getByLabelText("Filter").focus();
+    await userEvent.keyboard("{Escape}");
+    expect(state.closeCard).not.toHaveBeenCalled();
+  });
+
+  it("does_not_take_focus_from_where_people_are_working", () => {
+    const state = updater({ ready: offered });
+    const tree = (open: boolean) => (
+      <>
+        <input aria-label="Filter" />
+        <UpdateStatus updater={{ ...state, cardOpen: open }} runningTransfers={0} />
+      </>
+    );
+    const { rerender } = render(tree(false));
+    screen.getByLabelText("Filter").focus();
+    rerender(tree(true));
+    expect(document.activeElement).toBe(screen.getByLabelText("Filter"));
+  });
+
+  it("opening_from_the_indicator_focuses_whats_new", () => {
+    const state = updater({ ready: offered });
+    const { rerender } = render(<UpdateStatus updater={state} runningTransfers={0} />);
+    screen.getByRole("button", { name: "Update ready, Kelp 0.2.0" }).focus();
+    rerender(<UpdateStatus updater={{ ...state, cardOpen: true }} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "What's new" }));
+  });
+
+  it("a_message_turning_into_an_update_moves_focus_to_whats_new", () => {
+    const state = updater({ ready: offered, message: "Kelp is up to date (0.1.0).", cardOpen: true });
+    const { rerender } = render(<UpdateStatus updater={state} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    rerender(<UpdateStatus updater={{ ...state, message: null }} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "What's new" }));
+  });
+
+  it("pulses_only_when_the_hook_says_so", () => {
+    const { rerender } = render(<UpdateStatus updater={updater({ ready: offered })} runningTransfers={0} />);
+    expect(screen.getByRole("button", { name: /Update ready/ }).className).not.toContain("pulse");
+    rerender(<UpdateStatus updater={updater({ ready: { ...offered, version: "0.2.1" }, claimPulse: () => true })} runningTransfers={0} />);
+    expect(screen.getByRole("button", { name: /Update ready/ }).className).toContain("pulse");
+  });
+
+  it("a_message_card_has_only_close", async () => {
+    const state = updater({ message: "Kelp is up to date (0.1.0).", cardOpen: true });
+    render(<UpdateStatus updater={state} runningTransfers={0} />);
+    expect(screen.getByText("Kelp is up to date (0.1.0).")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "What's new" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restart to update" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(state.closeCard).toHaveBeenCalled();
+  });
+});

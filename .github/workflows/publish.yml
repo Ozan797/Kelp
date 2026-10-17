@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  check:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ inputs.version }}
@@ -35,6 +35,30 @@ jobs:
             fi
           done
 
+  website:
+    needs: check
+    uses: ./.github/workflows/website.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  publish:
+    needs: website
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
       - name: Make the download live
         run: |
           aws s3 cp "s3://kelp-downloads/releases/$VERSION/Kelp_${VERSION}_aarch64.dmg" s3://kelp-downloads/Kelp_aarch64.dmg \
@@ -44,15 +68,3 @@ jobs:
         run: |
           aws s3 cp "s3://kelp-downloads/releases/$VERSION/latest.json" s3://kelp-downloads/latest.json \
             --endpoint-url "$R2_ENDPOINT" --metadata-directive REPLACE --cache-control no-cache --content-type application/json
-
-  website:
-    needs: publish
-    uses: ./.github/workflows/website.yml
-    with:
-      require-release: true
-    secrets:
-      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -7,7 +7,7 @@ import { Rail } from "./components/Rail";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { StatusBar } from "./components/StatusBar";
 import { TransferDrawer } from "./components/TransferDrawer";
-import { UpdateBanner } from "./components/UpdateBanner";
+import { UpdateStatus } from "./components/UpdateStatus";
 import { useConnections } from "./hooks/useConnections";
 import { useSettings } from "./hooks/useSettings";
 import { useShortcuts } from "./hooks/useShortcuts";
@@ -126,9 +126,7 @@ export default function App() {
     />
   );
 
-  const updateBanner = (
-    <UpdateBanner state={updater.state} onRestart={() => void updater.restart(runningTransfers)} onLater={updater.later} onClose={updater.close} />
-  );
+  const updateStatus = <UpdateStatus updater={updater} runningTransfers={runningTransfers} />;
 
   const errorBanner = actionError && (
     <div className="action-error" role="alert">
@@ -173,13 +171,13 @@ export default function App() {
                 drawer={
                   active && (
                     <>
-                      {updateBanner}
                       {errorBanner}
                       {drawer}
                     </>
                   )
                 }
                 pillRef={active ? pill : null}
+                update={active ? updateStatus : null}
                 appCommands={appCommands()}
                 lastPlaces={lastPlaces.current}
                 initialPlace={tab.place}
@@ -222,11 +220,18 @@ export default function App() {
               }
             />
           )}
-          {updateBanner}
           {errorBanner}
           {drawer}
-          {transfers.length > 0 && (
-            <StatusBar itemCount={null} selectedCount={0} selectedBytes={0} transfers={transfers} onOpenTransfers={() => setDrawerOpen(true)} pillRef={pill} />
+          {(transfers.length > 0 || updater.ready || updater.message) && (
+            <StatusBar
+              itemCount={null}
+              selectedCount={0}
+              selectedBytes={0}
+              transfers={transfers}
+              onOpenTransfers={() => setDrawerOpen(true)}
+              pillRef={pill}
+              update={updateStatus}
+            />
           )}
         </main>
       )}

@@ -24,10 +24,7 @@ jobs:
           persist-credentials: false
 
       - name: Read the version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64)" fetch --force --tags
           echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
           echo "BUNDLE=app/src-tauri/target/aarch64-apple-darwin/release/bundle" >> "$GITHUB_ENV"
 
@@ -39,6 +36,9 @@ jobs:
 
       - name: Check the tag matches the app version
         run: node app/scripts/version.mjs "$VERSION"
+
+      - name: Check the release notes
+        run: node --experimental-strip-types website/scripts/release-notes.ts "$VERSION" "$RUNNER_TEMP"
 
       - name: Refuse to rebuild a published version
         env:
@@ -90,8 +90,7 @@ jobs:
 
       - name: Write the update manifest
         run: |
-          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "v$VERSION" > "$RUNNER_TEMP/notes.txt"
-          node app/scripts/manifest.mjs "$VERSION" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/notes.txt" > "$RUNNER_TEMP/latest.json"
+          node app/scripts/manifest.mjs "$VERSION" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/summary.txt" > "$RUNNER_TEMP/latest.json"
 
       - name: Upload to R2
         env:
@@ -106,9 +105,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" --draft --title "Kelp $VERSION" --notes-file "$RUNNER_TEMP/notes.txt" \
+          gh release create "v$VERSION" --draft --title "Kelp $VERSION" --notes-file "$RUNNER_TEMP/body.md" \
             "$BUNDLE/dmg/Kelp_${VERSION}_aarch64.dmg" "$BUNDLE/macos/Kelp.app.tar.gz" "$BUNDLE/macos/Kelp.app.tar.gz.sig" "$RUNNER_TEMP/latest.json"
 
       - name: Remove signing files
         if: always()
-        run: rm -f app/src-tauri/Kelp.provisionprofile "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/latest.json"
+        run: rm -f app/src-tauri/Kelp.provisionprofile "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/summary.txt" "$RUNNER_TEMP/body.md"

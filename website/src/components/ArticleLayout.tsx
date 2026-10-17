@@ -10,15 +10,17 @@ export function ArticleLayout({
   title,
   intro,
   children,
+  centred = false,
 }: {
   title: string;
   intro: string;
   children: ReactNode;
+  centred?: boolean;
 }) {
   return (
     <>
       <Header />
-      <main id="main">
+      <main id="main" className={centred ? "centred" : undefined}>
         <div className="band theme-dark">
           <Bubbles />
           <div className="container band-title">
