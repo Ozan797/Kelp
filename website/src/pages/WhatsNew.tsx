@@ -1,9 +1,12 @@
 import type { ReactElement } from "react";
+import { FolderMemoryScene } from "../components/FolderMemoryScene";
 import { ArticleLayout } from "../components/ArticleLayout";
 import { RELEASE } from "../config";
 import { publishedNotes, type ReleaseNote } from "../notes";
 
-export const SCENES: Partial<Record<NonNullable<ReleaseNote["scene"]>, () => ReactElement>> = {};
+export const SCENES: Partial<Record<NonNullable<ReleaseNote["scene"]>, () => ReactElement>> = {
+  "folder-memory": FolderMemoryScene,
+};
 
 const formatDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {

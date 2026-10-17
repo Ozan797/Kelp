@@ -101,3 +101,26 @@ export const providers: Provider[] = [
     ],
   },
 ];
+
+export const memoryScene = {
+  endpoint: "eu-west-2",
+  folders: [
+    "acme-archive",
+    "acme-assets",
+    "acme-backups",
+    "acme-exports",
+    "acme-invoices",
+    "acme-logs",
+    "acme-media",
+    "acme-reports",
+    "acme-staging",
+    "acme-uploads",
+  ],
+  opened: "acme-logs",
+  inside: [
+    { name: "2026-08", size: "—", modified: "31 Aug" },
+    { name: "2026-09", size: "—", modified: "30 Sep" },
+    { name: "2026-10", size: "—", modified: "Today" },
+    { name: "index.json", size: "2 KB", modified: "Today" },
+  ],
+};

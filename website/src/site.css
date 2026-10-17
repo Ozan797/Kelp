@@ -1671,3 +1671,73 @@ a:hover > .arrow {
 .release li + li {
   margin-top: var(--space-2);
 }
+
+.scene .pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-viewport {
+  overflow: hidden;
+}
+
+.scene-list {
+  padding-block: 0;
+}
+
+.scene .row {
+  cursor: default;
+}
+
+.scene .row:hover {
+  background: none;
+}
+
+.scene .row.selected:hover {
+  background: var(--accent);
+}
+
+.scene-returned {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.scene-pressed {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.scene .pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-viewport {
+  overflow: hidden;
+}
+
+.scene-list {
+  padding-block: 0;
+}
+
+.scene .row {
+  cursor: default;
+}
+
+.scene .row:hover {
+  background: none;
+}
+
+.scene .row.selected:hover {
+  background: var(--accent);
+}
+
+.scene-returned {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.scene-pressed {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
