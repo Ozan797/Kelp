@@ -9,6 +9,7 @@ import S3 from "./pages/docs/S3";
 import Troubleshooting from "./pages/docs/Troubleshooting";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
+import WhatsNew from "./pages/WhatsNew";
 
 /**
  * A page is a plain function that returns its layout, e.g. <DocsLayout>…</DocsLayout>.
@@ -27,6 +28,7 @@ const ROUTES: Record<PagePath, Page> = {
   "/docs/r2": R2,
   "/docs/hetzner": Hetzner,
   "/docs/troubleshooting": Troubleshooting,
+  "/whats-new": WhatsNew,
   "/privacy": Privacy,
 };
 
