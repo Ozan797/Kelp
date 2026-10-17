@@ -150,7 +150,7 @@ a {
   view-transition-name: site-header;
 }
 
-/* Solid navy at the top of the page (glass over sand would look grey), fading to glass as you
+/* Solid navy at the top of the page (glass over mist would look grey), fading to glass as you
    scroll. Opacity only. Browsers without scroll-driven animations keep the solid header. */
 .site-header::before {
   content: "";
