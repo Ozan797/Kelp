@@ -92,25 +92,34 @@ describe("UpdateStatus", () => {
     expect(state.closeCard).not.toHaveBeenCalled();
   });
 
-  it("closing_without_an_indicator_restores_the_previous_focus", async () => {
-    const state = updater({ message: "Kelp is up to date (0.1.0).", cardOpen: false });
-    const { rerender } = render(
+  it("does_not_take_focus_from_where_people_are_working", () => {
+    const state = updater({ ready: offered });
+    const tree = (open: boolean) => (
       <>
-        <button type="button">Before</button>
-        <UpdateStatus updater={state} runningTransfers={0} />
-      </>,
-    );
-    screen.getByRole("button", { name: "Before" }).focus();
-    const withCard = (open: boolean) => (
-      <>
-        <button type="button">Before</button>
+        <input aria-label="Filter" />
         <UpdateStatus updater={{ ...state, cardOpen: open }} runningTransfers={0} />
       </>
     );
-    rerender(withCard(true));
+    const { rerender } = render(tree(false));
+    screen.getByLabelText("Filter").focus();
+    rerender(tree(true));
+    expect(document.activeElement).toBe(screen.getByLabelText("Filter"));
+  });
+
+  it("opening_from_the_indicator_focuses_whats_new", () => {
+    const state = updater({ ready: offered });
+    const { rerender } = render(<UpdateStatus updater={state} runningTransfers={0} />);
+    screen.getByRole("button", { name: "Update ready, Kelp 0.2.0" }).focus();
+    rerender(<UpdateStatus updater={{ ...state, cardOpen: true }} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "What's new" }));
+  });
+
+  it("a_message_turning_into_an_update_moves_focus_to_whats_new", () => {
+    const state = updater({ ready: offered, message: "Kelp is up to date (0.1.0).", cardOpen: true });
+    const { rerender } = render(<UpdateStatus updater={state} runningTransfers={0} />);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
-    rerender(withCard(false));
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Before" }));
+    rerender(<UpdateStatus updater={{ ...state, message: null }} runningTransfers={0} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "What's new" }));
   });
 
   it("pulses_only_when_the_hook_says_so", () => {

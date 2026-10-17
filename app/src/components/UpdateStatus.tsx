@@ -16,10 +16,17 @@ export function UpdateStatus({ updater, runningTransfers }: UpdateStatusProps) {
     setPulse(version !== undefined && claimPulse(version));
   }, [version, claimPulse]);
 
+  const showsMessage = message !== null;
+
   useEffect(() => {
     if (!cardOpen) return;
-    const opener = document.activeElement;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== indicator.current) return;
     wrapper.current?.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
+  }, [cardOpen, showsMessage]);
+
+  useEffect(() => {
+    if (!cardOpen) return;
     const insideWrapper = () => document.activeElement instanceof Node && !!wrapper.current?.contains(document.activeElement);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && insideWrapper()) closeCard();
@@ -33,8 +40,7 @@ export function UpdateStatus({ updater, runningTransfers }: UpdateStatusProps) {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onPointer);
       if (document.activeElement && document.activeElement !== document.body) return;
-      const target = indicator.current ?? (opener instanceof HTMLElement && opener.isConnected ? opener : null);
-      target?.focus();
+      indicator.current?.focus();
     };
   }, [cardOpen, closeCard]);
 
@@ -59,8 +65,8 @@ export function UpdateStatus({ updater, runningTransfers }: UpdateStatusProps) {
         </button>
       )}
       {cardOpen && message && (
-        <div className="update-card" role="dialog" aria-label="Updates">
-          <p className="update-card-text">{message}</p>
+        <div className="update-card" role="dialog" aria-label="Updates" aria-describedby="update-card-message">
+          <p id="update-card-message" className="update-card-text">{message}</p>
           {closeButton(closeCard, true)}
         </div>
       )}
@@ -69,10 +75,10 @@ export function UpdateStatus({ updater, runningTransfers }: UpdateStatusProps) {
           <h2 id="update-card-title">Kelp {ready.version} is ready</h2>
           {ready.notes && <p className="update-card-text">{ready.notes}</p>}
           <div className="update-card-actions">
-            <button type="button" className="button button-secondary" onClick={() => void api.openDocs(`/whats-new/#${ready.version}`)}>
+            <button type="button" className="button button-secondary" data-initial-focus="" onClick={() => void api.openDocs(`/whats-new/#${ready.version}`)}>
               What's new
             </button>
-            <button type="button" className="button button-primary" data-initial-focus="" onClick={() => void restart(runningTransfers)}>
+            <button type="button" className="button button-primary" onClick={() => void restart(runningTransfers)}>
               Restart to update
             </button>
           </div>
