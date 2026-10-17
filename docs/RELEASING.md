@@ -17,30 +17,37 @@ How a new version gets from `master` to people's Macs. Design and reasons: `docs
 
 ## Cut a release
 
-1. **Branch and bump the version** in all five places, on a branch from `master`:
+1. **Write the release notes** on a branch from `master`. Read what changed with `git log --oneline v<last>..master` and the merged PRs, then add the entry at the top of `website/src/notes.ts`:
+   - `version` and `date` (today, `YYYY-MM-DD`).
+   - `summary`: one plain sentence. The app's update card and `latest.json` show it.
+   - `changes`: 2–5 items, each a `title` and a one-sentence `body`. Sentence case, plain words.
+   - `scene`: only when the main change is visual. Add a component in `website/src/components/` that uses fake data from `website/src/data.ts` only, register it in `SCENES` in `website/src/pages/WhatsNew.tsx`, and set `scene` to its key.
+   - Show the entry to the developer and wait for approval.
+2. **Bump the version** in all five places, in the same branch as the notes:
    - `app/package.json` and `app/src-tauri/tauri.conf.json`: `"version": "0.2.0"`
    - `app/src-tauri/Cargo.toml`: the `version` line in `[package]` only (not a dependency's). macOS `sed` has no `0,/re/` form; edit it by hand or with a small script.
    - Refresh the lock files: `cd app && npm install --package-lock-only`, then `cd src-tauri && cargo check`.
    - Check: `node app/scripts/version.mjs 0.2.0` prints nothing and exits 0. It's the same check the release workflow runs.
    - Commit as `Release 0.2.0`, push, open a PR, merge it.
-2. **Tag `master` with release notes.** The tag message is what users read in the app's update banner, so write it for them:
+3. **Tag `master`.** The release notes come from `website/src/notes.ts` at the tagged commit, not from the tag message, so the message only names the version:
    ```
    git checkout master && git pull
-   git tag -a v0.2.0 -m "One plain sentence about what's new"
+   git tag -a v0.2.0 -m "Kelp 0.2.0"
    git push origin v0.2.0
    ```
-3. **Wait for Actions → Release** (about 15–20 minutes, mostly notarisation). It stops before uploading anything if:
+4. **Wait for Actions → Release** (about 15–20 minutes, mostly notarisation). It stops before uploading anything if:
    - the tag doesn't match the three version files,
+   - `website/src/notes.ts` has no entry for this version,
    - `releases/0.2.0/` already exists on R2 (built versions are never replaced: bump to 0.2.1 instead),
    - the updater signing key in GitHub doesn't match the public key in `tauri.conf.json`.
-4. **Try the build before anyone else sees it.** Download in Safari (so it's marked as downloaded):
+5. **Try the build before anyone else sees it.** Download in Safari (so it's marked as downloaded):
    `https://kelp-dl.ozanai.dev/releases/0.2.0/Kelp_0.2.0_aarch64.dmg`. Open it, install, run. The only prompt should be "downloaded from the internet, open it?". Optional: `spctl -a -vv /Applications/Kelp.app` says "Notarized Developer ID".
-5. **Publish:** Actions → **Publish release** → Run workflow → `0.2.0`
+6. **Publish:** Actions → **Publish release** → Run workflow → `0.2.0`
    (or `gh workflow run publish.yml -R Ozan797/Kelp -f version=0.2.0`). About 2 minutes. Afterwards:
    - `https://kelp-dl.ozanai.dev/latest.json` says `"version": "0.2.0"`,
    - `https://kelp.ozanai.dev` shows "Version 0.2.0" and its Download button links to `releases/0.2.0/…`,
    - installed copies offer the update on their next check.
-6. **Check an installed older copy updates:** open it → **Kelp → Check for updates…** → banner → **Restart** → **Kelp → About Kelp** shows the new version, connections still open.
+7. **Check an installed older copy updates:** open it → **Kelp → Check for updates…** → the **Update ready** indicator at the right end of the status bar → its card: **What's new** opens the notes on the website, **Restart to update** → **Kelp → About Kelp** shows the new version, connections still open.
 
 ## Roll back
 
@@ -50,6 +57,7 @@ Publish the older version: Actions → **Publish release** → `0.1.1`. New down
 
 | Symptom | Cause and fix |
 |---|---|
+| Release: "No release notes for 0.2.0. Add an entry to website/src/notes.ts before tagging." | The tag has no entry in `website/src/notes.ts`. Add the entry on `master` (step 1), merge, then delete the tag (`git push --delete origin v0.2.0 && git tag -d v0.2.0`), tag again and push. Nothing was uploaded. |
 | Release: "Tag v… doesn't match the app version in …" | A version file wasn't bumped. Fix it on `master`, delete the tag (`git push --delete origin v0.2.0 && git tag -d v0.2.0`), tag again. Nothing was uploaded. |
 | Release: "… is already built" | That version exists on R2. Bump the patch version and tag again. |
 | Release: "The update was signed with key … but the app trusts key …" | `TAURI_SIGNING_PRIVATE_KEY` in GitHub isn't the key matching `plugins.updater.pubkey`. Re-add the right one from the password manager. |

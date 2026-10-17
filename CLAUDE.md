@@ -75,6 +75,7 @@ Sentence case, active voice, plain words. Buttons say exactly what they do ("Del
 - After the first load, internal links navigate in place (`App.tsx`), so layouts stay mounted. Page functions return their layout and must not use hooks; put state in child components.
 - The site's version and download button come from the live `https://kelp-dl.ozanai.dev/latest.json` at build time. Never hard-code them.
 - The hero demo (`components/DemoWindow.tsx`) uses fake data in `src/data.ts`. It must never contain real bucket names or keys.
+- Release notes live in website/src/notes.ts (plain data, newest first); the What's new page and the release workflow both read them.
 
 ## Git
 
