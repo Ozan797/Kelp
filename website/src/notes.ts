@@ -21,6 +21,24 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: "0.2.1",
+    date: "2026-10-17",
+    title: "Room for long paths",
+    summary: "Deep folders no longer push the toolbar buttons out of the window.",
+    changes: [
+      {
+        title: "Long folder paths fit",
+        body: "In deep folders, earlier folders in the path shorten with \"…\" so the one you're in stays readable, and the filter and buttons stay put. Hover any folder in the path to see its full name.",
+        kind: "fixed",
+      },
+      {
+        title: "Small windows",
+        body: "When the window is narrow, the toolbar shows just the folder you're in, like Finder.",
+        kind: "improved",
+      },
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-10-17",
     title: "Feels at home on your Mac",
