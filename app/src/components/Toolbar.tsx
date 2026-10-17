@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export function crumbsFor(bucket: string, prefix: string): { label: string; prefix: string }[] {
   const folders = prefix.split("/").filter(Boolean);
   return [
@@ -19,6 +21,7 @@ type ToolbarProps = {
   onNewFolder: () => void;
   onRefresh: () => void;
   refreshing?: boolean;
+  transfers?: ReactNode;
   onUpload: () => void;
   dropKey?: string | null;
 };
@@ -75,6 +78,7 @@ export function Toolbar(props: ToolbarProps) {
           ↻
         </span>
       </button>
+      {props.transfers}
       <button type="button" className="button button-secondary" onClick={props.onNewFolder}>
         New folder
       </button>

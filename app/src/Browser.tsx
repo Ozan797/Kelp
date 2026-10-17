@@ -53,7 +53,9 @@ export type BrowserProps = {
   active: boolean;
   refresh: number;
   transfers: Transfer[];
-  drawer: ReactNode;
+  banner: ReactNode;
+  transfersButton: ReactNode;
+  transfersPanel: ReactNode;
   pillRef: Ref<HTMLButtonElement>;
   appCommands: Command[];
   lastPlaces: Record<string, Place>;
@@ -64,6 +66,7 @@ export type BrowserProps = {
   onSelectConnection: (id: string) => void;
   onEditConnection: (profile: ConnectionProfile) => void;
   onOpenTransfers: () => void;
+  onTransfersStarted: () => void;
   onDragConnection: (id: string | null) => void;
 };
 
@@ -73,7 +76,9 @@ export function Browser({
   active,
   refresh,
   transfers,
-  drawer,
+  banner,
+  transfersButton,
+  transfersPanel,
   pillRef,
   appCommands,
   lastPlaces,
@@ -84,6 +89,7 @@ export function Browser({
   onSelectConnection,
   onEditConnection,
   onOpenTransfers,
+  onTransfersStarted,
   onDragConnection,
 }: BrowserProps) {
   const [reload, setReload] = useState(0);
@@ -206,7 +212,7 @@ export function Browser({
       try {
         if (row.isFolder) await api.startFolderDownload(connection.id, place.bucket, row.key);
         else await api.startDownload(connection.id, place.bucket, row.key, row.size ?? 0);
-        onOpenTransfers();
+        onTransfersStarted();
       } catch (caught) {
         setActionError(toAppError(caught));
       }
@@ -236,7 +242,7 @@ export function Browser({
   const startUploads = async (paths: string[], target: Place, skipExisting: boolean) => {
     try {
       const started = await api.startUploads(connection.id, target.bucket, target.prefix, paths, skipExisting);
-      if (started.length > 0) onOpenTransfers();
+      if (started.length > 0) onTransfersStarted();
       else setActionError({ kind: "io", message: NOTHING_TO_UPLOAD });
     } catch (caught) {
       setActionError(toAppError(caught));
@@ -287,7 +293,7 @@ export function Browser({
   const startCopy = async (request: CopyRequest, skipExisting: boolean, moving: boolean) => {
     try {
       const started = await api.startCopy(request, skipExisting, moving);
-      if (started.length > 0) onOpenTransfers();
+      if (started.length > 0) onTransfersStarted();
       else setActionError({ kind: "io", message: NOTHING_TO_COPY });
     } catch (caught) {
       setActionError(toAppError(caught));
@@ -604,6 +610,12 @@ export function Browser({
               onNewFolder={() => setSheet({ kind: "folder" })}
               onRefresh={reloadHere}
               refreshing={refreshing}
+              transfers={
+                <span className="transfers-anchor">
+                  {transfersButton}
+                  {transfersPanel}
+                </span>
+              }
               onUpload={chooseUpload}
               dropKey={rowPlace?.bucket === place.bucket ? rowPlace.prefix : null}
             />
@@ -627,7 +639,8 @@ export function Browser({
             </button>
           </div>
         )}
-        {drawer}
+        {!place && <div className="transfers-floating">{transfersPanel}</div>}
+        {banner}
         <StatusBar
           itemCount={place ? listing.rows.length : null}
           selectedCount={place ? selectedRows.length : 0}

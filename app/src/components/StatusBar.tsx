@@ -7,6 +7,13 @@ const plural = (count: number) => `${count} ${count === 1 ? "file" : "files"}`;
 
 const inProgress = (t: Transfer) => t.status === "running" || t.status === "retrying" || t.status === "waiting";
 
+export function overallFraction(transfers: Transfer[]): number {
+  const running = transfers.filter(inProgress);
+  const total = running.reduce((sum, t) => sum + t.total, 0);
+  const done = running.reduce((sum, t) => sum + t.done, 0);
+  return total === 0 ? 0 : Math.min(done / total, 1);
+}
+
 export function transferSummary(transfers: Transfer[]): string | null {
   const running = transfers.filter(inProgress);
   const paused = transfers.filter((t) => t.status === "paused").length;
@@ -83,8 +90,6 @@ type StatusBarProps = {
 export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size, update, note }: StatusBarProps) {
   const summary = transferSummary(transfers);
   const running = transfers.filter(inProgress);
-  const total = running.reduce((sum, t) => sum + t.total, 0);
-  const done = running.reduce((sum, t) => sum + t.done, 0);
   return (
     <footer className="statusbar">
       <span className="statusbar-info">
@@ -106,12 +111,12 @@ export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, 
         )}
       </span>
       {summary && (
-        <button type="button" ref={pillRef} className="transfer-pill" onClick={onOpenTransfers}>
+        <button type="button" ref={pillRef} className="transfer-pill" onClick={onOpenTransfers} data-transfers-toggle>
           {running.length > 0 && <span className="spinner" aria-hidden="true" />}
           {summary}
           {running.length > 0 && (
             <span className="pill-bar" aria-hidden="true">
-              <span style={{ transform: `scaleX(${total === 0 ? 0 : done / total})` }} />
+              <span style={{ transform: `scaleX(${overallFraction(transfers)})` }} />
             </span>
           )}
         </button>

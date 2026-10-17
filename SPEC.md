@@ -220,7 +220,7 @@ risk is total time, and blocking the UI while it runs. So:
 
 ## 6. UI and UX
 
-- Layout: sidebar (connections and buckets), main file list, optional preview pane, transfer drawer at the bottom.
+- Layout: sidebar (connections and buckets), main file list, optional preview pane, transfers in a popover from a toolbar button.
 - File list is virtualised (TanStack Virtual) so 100k rows scroll smoothly.
 - Listing streams in page by page; the first page appears immediately.
 - ⌘K opens a command palette for navigation and actions.
@@ -274,7 +274,7 @@ Everyone who has installed Kelp gets new versions automatically.
 - Rust unit tests for pagination, key and prefix handling, retry logic.
 - Integration tests against a local S3-compatible server (MinIO) in CI.
 - Manual test pass against real S3, R2 and Hetzner buckets before each release.
-- Frontend: type-check plus component tests for the file list and transfer drawer.
+- Frontend: type-check plus component tests for the file list and transfers panel.
 
 ## 12. Open questions
 

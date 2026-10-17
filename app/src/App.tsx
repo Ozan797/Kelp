@@ -6,7 +6,7 @@ import { EmptyState } from "./components/EmptyState";
 import { Rail } from "./components/Rail";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { StatusBar } from "./components/StatusBar";
-import { TransferDrawer } from "./components/TransferDrawer";
+import { TransfersButton, TransfersPanel } from "./components/TransfersPanel";
 import { UpdateStatus } from "./components/UpdateStatus";
 import { useConnections } from "./hooks/useConnections";
 import { useSettings } from "./hooks/useSettings";
@@ -30,7 +30,8 @@ export default function App() {
   const [{ tabs, activeId }, dispatch] = useTabs();
   const [refresh, setRefresh] = useState({ connectionId: "", count: 0 });
   const [sheet, setSheet] = useState<Sheet>({ kind: "none" });
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [transfersOpen, setTransfersOpen] = useState(false);
+  const [transfersPulse, setTransfersPulse] = useState(0);
   const [actionError, setActionError] = useState<AppError | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
   const [dropConnection, setDropConnection] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export default function App() {
       action("pause-all", "Pause all transfers", () => api.pauseAll().catch(report));
     }
     if (transfers.some((t) => t.status === "paused")) action("resume-all", "Resume all transfers", () => api.resumeAll().catch(report));
-    if (transfers.length > 0) action("transfers", "Show transfers", () => setDrawerOpen(true));
+    if (transfers.length > 0) action("transfers", "Show transfers", () => setTransfersOpen(true));
     for (const [theme, label] of [["system", "System"], ["light", "Light"], ["dark", "Dark"]] as const) {
       if (theme !== settings.theme) action(`theme-${theme}`, `Theme: ${label}`, () => setTheme(theme).catch(report));
     }
@@ -108,8 +109,8 @@ export default function App() {
   const noConnections = (connections ?? []).length === 0;
   const addConnection = () => setSheet({ kind: "connection", initial: null });
 
-  const drawer = drawerOpen && (
-    <TransferDrawer
+  const transfersPanel = transfersOpen && (
+    <TransfersPanel
       transfers={transfers}
       onPause={(id) => api.pauseTransfer(id).catch(report)}
       onResume={(id) => api.resumeTransfer(id).catch(report)}
@@ -119,11 +120,12 @@ export default function App() {
       onResumeAll={() => api.resumeAll().catch(report)}
       onReveal={(path) => api.revealInFinder(path).catch(report)}
       onClearFinished={clearFinished}
-      onClose={() => {
-        setDrawerOpen(false);
-        pill.current?.focus();
-      }}
+      onClose={() => setTransfersOpen(false)}
     />
+  );
+
+  const transfersButton = (
+    <TransfersButton transfers={transfers} open={transfersOpen} pulse={transfersPulse} onToggle={() => setTransfersOpen((open) => !open)} />
   );
 
   const updateStatus = <UpdateStatus updater={updater} runningTransfers={runningTransfers} />;
@@ -168,14 +170,9 @@ export default function App() {
                 active={active && sheet.kind === "none"}
                 refresh={refresh.connectionId === tabConnection.id ? refresh.count : 0}
                 transfers={transfers}
-                drawer={
-                  active && (
-                    <>
-                      {errorBanner}
-                      {drawer}
-                    </>
-                  )
-                }
+                banner={active && errorBanner}
+                transfersButton={transfersButton}
+                transfersPanel={active && transfersPanel}
                 pillRef={active ? pill : null}
                 update={active ? updateStatus : null}
                 appCommands={appCommands()}
@@ -194,7 +191,8 @@ export default function App() {
                 onPlace={(place) => dispatch({ type: "update", id: tab.id, patch: { place } })}
                 onSelectConnection={(id) => dispatch({ type: "update", id: tab.id, patch: { connectionId: id, place: null } })}
                 onEditConnection={(profile) => setSheet({ kind: "connection", initial: profile })}
-                onOpenTransfers={() => setDrawerOpen(true)}
+                onOpenTransfers={() => setTransfersOpen(true)}
+                onTransfersStarted={() => setTransfersPulse((count) => count + 1)}
                 onDragConnection={setDropConnection}
               />
             </div>
@@ -221,14 +219,14 @@ export default function App() {
             />
           )}
           {errorBanner}
-          {drawer}
+          <div className="transfers-floating">{transfersPanel}</div>
           {(transfers.length > 0 || updater.ready || updater.message) && (
             <StatusBar
               itemCount={null}
               selectedCount={0}
               selectedBytes={0}
               transfers={transfers}
-              onOpenTransfers={() => setDrawerOpen(true)}
+              onOpenTransfers={() => setTransfersOpen(true)}
               pillRef={pill}
               update={updateStatus}
             />
