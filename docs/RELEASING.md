@@ -19,8 +19,9 @@ How a new version gets from `master` to people's Macs. Design and reasons: `docs
 
 1. **Write the release notes** on a branch from `master`. Read what changed with `git log --oneline v<last>..master` and the merged PRs, then add the entry at the top of `website/src/notes.ts`:
    - `version` and `date` (today, `YYYY-MM-DD`).
+   - `title`: a short headline for the release, like "Back where you were".
    - `summary`: one plain sentence. The app's update card and `latest.json` show it.
-   - `changes`: 2–5 items, each a `title` and a one-sentence `body`. Sentence case, plain words.
+   - `changes`: 2–5 items, each a `title`, a one-sentence `body` and a `kind` (`new`, `improved` or `fixed`). The page groups them under those labels. Sentence case, plain words.
    - `scene`: only when the main change is visual. Add a component in `website/src/components/` that uses fake data from `website/src/data.ts` only, register it in `SCENES` in `website/src/pages/WhatsNew.tsx`, and set `scene` to its key.
    - Show the entry to the developer and wait for approval.
    - The website's What's new page lists only versions up to the live release, so the entry appears there after Publish (step 6), not when the PR merges.

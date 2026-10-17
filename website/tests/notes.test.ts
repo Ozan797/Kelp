@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   RELEASE_NOTES,
+  changeGroups,
   compareVersions,
   noteFor,
   publishedNotes,
@@ -12,8 +13,9 @@ import {
 const entry = (version: string): ReleaseNote => ({
   version,
   date: "2026-01-01",
+  title: "T",
   summary: "s",
-  changes: [{ title: "t", body: "b." }],
+  changes: [{ title: "t", body: "b.", kind: "new" }],
 });
 
 test("entries_are_newest_first_and_complete", () => {
@@ -24,7 +26,9 @@ test("entries_are_newest_first_and_complete", () => {
     assert.match(note.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(!Number.isNaN(Date.parse(note.date)));
     assert.ok(note.summary.length > 0);
+    assert.ok(note.title.length > 0);
     assert.ok(note.changes.length > 0);
+    for (const change of note.changes) assert.ok(["new", "improved", "fixed"].includes(change.kind), change.title);
   }
   for (let i = 1; i < versions.length; i++) {
     assert.ok(compareVersions(versions[i - 1], versions[i]) > 0);
@@ -52,6 +56,23 @@ test("published_notes_stop_at_the_live_version", () => {
 });
 
 test("writes_markdown_for_the_draft_release", () => {
-  const note = { ...entry("1.0.0"), summary: "S", changes: [{ title: "A", body: "a." }] };
-  assert.equal(releaseMarkdown(note), "S\n\n- **A.** a.\n");
+  const note = { ...entry("1.0.0"), summary: "S", changes: [{ title: "A", body: "a.", kind: "new" as const }] };
+  assert.equal(releaseMarkdown(note), "S\n\n### New\n\n- **A.** a.\n");
+});
+
+test("groups_changes_new_improved_fixed_in_that_order", () => {
+  const note = {
+    ...entry("1.0.0"),
+    summary: "S",
+    changes: [
+      { title: "F", body: "f.", kind: "fixed" as const },
+      { title: "N", body: "n.", kind: "new" as const },
+      { title: "N2", body: "n2.", kind: "new" as const },
+    ],
+  };
+  assert.deepEqual(
+    changeGroups(note.changes).map((group) => [group.label, group.changes.map((c) => c.title)]),
+    [["New", ["N", "N2"]], ["Fixed", ["F"]]],
+  );
+  assert.equal(releaseMarkdown(note), "S\n\n### New\n\n- **N.** n.\n- **N2.** n2.\n\n### Fixed\n\n- **F.** f.\n");
 });
