@@ -439,9 +439,32 @@ describe("App", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
+    await screen.findByText("Refreshed just now");
     await user.click(document.body);
     await user.keyboard("{Meta>}r{/Meta}");
     await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(3));
+  });
+
+  it("spins the refresh button and then says the folder was refreshed", async () => {
+    api.listObjects.mockResolvedValue(page([], ["a.jpg"]));
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    const button = screen.getByRole("button", { name: "Refresh" });
+    await user.click(button);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(await screen.findByText("Refreshed just now")).toBeTruthy();
+    expect(button.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("doesn't say refreshed when the refresh fails", async () => {
+    api.listObjects.mockResolvedValueOnce(page([], ["a.jpg"])).mockRejectedValueOnce({ kind: "network", message: "Offline" });
+    render(<App />);
+    await screen.findByText("a.jpg");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText(/Offline/)).toBeTruthy();
+    expect(screen.queryByText("Refreshed just now")).toBeNull();
   });
 
   it("shows connection errors from the backend", async () => {
