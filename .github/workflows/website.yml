@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
-      require-release:
-        type: boolean
-        default: false
+      version:
+        type: string
+        default: ""
     secrets:
       NETLIFY_AUTH_TOKEN:
         required: true
@@ -52,7 +52,16 @@ jobs:
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
           R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          PINNED_VERSION: ${{ inputs.version }}
         run: |
+          if [[ -n "$PINNED_VERSION" ]]; then
+            if [[ ! "$PINNED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "\"$PINNED_VERSION\" isn't a version like 0.2.0."
+              exit 1
+            fi
+            echo "KELP_RELEASE_VERSION=$PINNED_VERSION" >> "$GITHUB_ENV"
+            exit 0
+          fi
           if ! aws s3 cp s3://kelp-downloads/latest.json "$RUNNER_TEMP/latest.json" --endpoint-url "$R2_ENDPOINT" --only-show-errors; then
             echo "No live release on R2 yet. Building without one."
             exit 0
@@ -69,7 +78,6 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Require a release in the build
-        if: inputs.require-release
         run: |
           if grep -q "Download coming soon" dist/index.html; then
             echo "The site built without a release. Check the \"Read the live release from R2\" step above, then run Deploy website again."
