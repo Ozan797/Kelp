@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { FolderMemoryScene } from "../components/FolderMemoryScene";
 import { ArticleLayout } from "../components/ArticleLayout";
+import { TransfersScene } from "../components/TransfersScene";
 import { UpdateReadyScene } from "../components/UpdateReadyScene";
 import { RELEASE } from "../config";
 import { changeGroups, publishedNotes, type ReleaseNote } from "../notes";
@@ -8,6 +9,7 @@ import { changeGroups, publishedNotes, type ReleaseNote } from "../notes";
 export const SCENES: Partial<Record<NonNullable<ReleaseNote["scene"]>, () => ReactElement>> = {
   "folder-memory": FolderMemoryScene,
   "update-ready": UpdateReadyScene,
+  transfers: TransfersScene,
 };
 
 const formatDate = (iso: string) =>
