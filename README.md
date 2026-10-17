@@ -48,7 +48,7 @@ Requires a Mac with Apple Silicon and macOS 13 or later.
 You need:
 
 - A Mac with Apple Silicon
-- [Rust](https://rustup.rs) 1.90 or newer
+- [Rust](https://rustup.rs) 1.94.1 or newer
 - Node.js 22 or newer
 - Xcode Command Line Tools: `xcode-select --install`
 
