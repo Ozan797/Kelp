@@ -103,7 +103,7 @@ export const providers: Provider[] = [
 ];
 
 export const memoryScene = {
-  endpoint: "eu-west-2",
+  endpoint: "Amazon S3",
   folders: [
     "acme-archive",
     "acme-assets",

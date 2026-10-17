@@ -36,8 +36,10 @@ function usePhase(): [Phase, RefObject<HTMLDivElement>] {
 
   useEffect(() => {
     const node = ref.current;
-    if (!node || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!node) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
     const timers: number[] = [];
+    let visible = false;
     const play = () => {
       STEP_MS.forEach((ms, i) => {
         timers.push(
@@ -56,13 +58,23 @@ function usePhase(): [Phase, RefObject<HTMLDivElement>] {
       timers.forEach(window.clearTimeout);
       timers.length = 0;
     };
-    const observer = new IntersectionObserver(([entry]) => {
+    const sync = () => {
       stop();
-      if (entry.isIntersecting) play();
+      if (reduce.matches) {
+        setPhase(0);
+      } else if (visible) {
+        play();
+      }
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      sync();
     });
     observer.observe(node);
+    reduce.addEventListener("change", sync);
     return () => {
       observer.disconnect();
+      reduce.removeEventListener("change", sync);
       stop();
     };
   }, []);
@@ -79,7 +91,7 @@ export function FolderMemoryScene(): ReactElement {
   const count = rows.length;
 
   return (
-    <div ref={ref} className="window scene" role="img" aria-label="Kelp returns to the same scroll position when you go back to a folder">
+    <div ref={ref} className="window scene" role="img" aria-label="Animation: a folder list scrolled down, a folder opens, and going back returns to the same scroll position.">
       <div className="titlebar">
         <span className="lights" aria-hidden="true">
           <i /> <i /> <i />
