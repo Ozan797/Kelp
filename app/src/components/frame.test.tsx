@@ -111,6 +111,7 @@ describe("drag targets in the frame", () => {
     expect(crumb.getAttribute("data-key")).toBe("vimeo/");
     expect(crumb.classList.contains("drop-target")).toBe(true);
     expect(screen.getByRole("button", { name: "media" }).getAttribute("data-key")).toBe("");
+    expect(crumb.getAttribute("title")).toBe("vimeo");
   });
 
   it("marks connection tiles as drop targets", () => {
