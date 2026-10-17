@@ -735,7 +735,7 @@ a:hover > .arrow {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-raised);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
   font-size: var(--text-sm);
 }
 
@@ -753,9 +753,36 @@ a:hover > .arrow {
 
 .viz-preview {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   width: 100%;
   margin: 0;
+}
+
+.viz-preview-window {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.viz-preview-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+
+.viz-preview-head small {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.viz-step {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .viz-image {
@@ -763,8 +790,50 @@ a:hover > .arrow {
   display: block;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: var(--radius-lg);
   background: var(--hero-gradient);
+}
+
+.viz-sun {
+  position: absolute;
+  top: 22%;
+  right: 22%;
+  width: 14%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 40px var(--glow);
+}
+
+.viz-hill {
+  position: absolute;
+  z-index: 1;
+  border-radius: 50% 50% 0 0;
+}
+
+.viz-hill-back {
+  bottom: -30%;
+  left: -10%;
+  width: 80%;
+  height: 70%;
+  background: var(--accent);
+  opacity: 0.35;
+}
+
+.viz-hill-front {
+  right: -15%;
+  bottom: -40%;
+  width: 90%;
+  height: 75%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.viz-preview figcaption kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font: inherit;
 }
 
 .viz-image::after {
@@ -779,7 +848,7 @@ a:hover > .arrow {
 
 .viz-preview figcaption {
   color: var(--text-muted);
-  font: 400 var(--text-xs) / 1.4 var(--font-mono);
+  font: 400 var(--text-xs) / 1.8 var(--font-body);
 }
 
 @media (prefers-reduced-motion: reduce) {
