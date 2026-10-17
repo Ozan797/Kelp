@@ -215,3 +215,42 @@ describe("FileList preview", () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ key: "drafts/" }));
   });
 });
+
+describe("FileList scroll memory", () => {
+  const rows = Array.from({ length: 500 }, (_, i) => file(`f${i}.txt`, 1));
+  const base = {
+    rows,
+    filter: "",
+    sort: { key: "name", ascending: true } as Sort,
+    onSort: () => undefined,
+    selected: new Set<string>(),
+    onSelectionChange: () => undefined,
+    onOpen: () => undefined,
+    onGoUp: () => undefined,
+    onContextMenu: () => undefined,
+    hasMore: false,
+    loading: false,
+    onLoadMore: () => undefined,
+  };
+
+  beforeAll(() => {
+    HTMLElement.prototype.scrollTo = function (this: HTMLElement, options?: ScrollToOptions | number) {
+      if (typeof options === "object" && options.top !== undefined) this.scrollTop = options.top;
+    } as typeof HTMLElement.prototype.scrollTo;
+  });
+
+  it("opens at the remembered position", () => {
+    render(<FileList {...base} initialScrollTop={4200} />);
+    expect(screen.getByRole("grid", { name: "Files" }).scrollTop).toBe(4200);
+  });
+
+  it("reports where it is scrolled", () => {
+    const report = vi.fn();
+    render(<FileList {...base} initialScrollTop={null} onScrollTopChange={report} />);
+    const grid = screen.getByRole("grid", { name: "Files" });
+    grid.scrollTop = 1234;
+    fireEvent.scroll(grid);
+    expect(report).toHaveBeenLastCalledWith(1234);
+  });
+});
+

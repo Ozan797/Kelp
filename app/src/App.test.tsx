@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionProfile, FileDropEvent, ListPage, MenuEntry, TransferView } from "./lib/tauri";
 import App from "./App";
+import { forgetRememberedFolders } from "./hooks/useListing";
 
 const api = vi.hoisted(() => ({
   listConnections: vi.fn(),
@@ -77,6 +78,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  forgetRememberedFolders();
   Object.values(api).forEach((fn) => fn.mockReset());
   api.listConnections.mockResolvedValue([media]);
   api.listBuckets.mockResolvedValue(["archive"]);
@@ -193,6 +195,28 @@ describe("App", () => {
     await screen.findByText("docs");
     expect((screen.getByLabelText("Filter this folder") as HTMLInputElement).value).toBe("");
     expect(screen.queryByText(/selected/)).toBeNull();
+  });
+
+  it("comes back to the same scroll position after opening a folder and going back", async () => {
+    const many = Array.from({ length: 300 }, (_, i) => `file${String(i).padStart(3, "0")}.txt`);
+    api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>
+      prefix === "" ? page(["docs/"], many) : page([], ["inside.txt"]),
+    );
+    HTMLElement.prototype.scrollTo = function (this: HTMLElement, options?: ScrollToOptions | number) {
+      if (typeof options === "object" && options.top !== undefined) this.scrollTop = options.top;
+    } as typeof HTMLElement.prototype.scrollTo;
+    render(<App />);
+    await screen.findByText("docs");
+    const user = userEvent.setup();
+    await user.click(screen.getByText("docs"));
+    const grid = screen.getByRole("grid", { name: "Files" });
+    grid.scrollTop = 2400;
+    fireEvent.scroll(grid);
+    await user.keyboard("{Enter}");
+    await screen.findByText("inside.txt");
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() => expect(screen.getByRole("grid", { name: "Files" }).scrollTop).toBe(2400));
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
   });
 
   it("goes up exactly one folder on Backspace", async () => {
