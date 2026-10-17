@@ -3,6 +3,7 @@ name = "kelp"
 version = "0.2.0"
 description = "A fast Mac app for browsing and transferring files across S3, R2 and Hetzner"
 authors = ["Ozan Gokberk"]
+license = "GPL-3.0-or-later"
 edition = "2024"
 # Tauri 2.12 needs Rust 1.90 or newer (`rustup update stable`). Cargo picks crate versions that
 # support this, so raising it is how the Rust crates stay in step with the npm @tauri-apps packages.
