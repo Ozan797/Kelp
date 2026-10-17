@@ -908,6 +908,11 @@ button {
   cursor: pointer;
 }
 
+.update-indicator:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
 .update-indicator svg {
   color: var(--accent);
 }
