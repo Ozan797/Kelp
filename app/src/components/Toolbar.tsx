@@ -45,6 +45,7 @@ export function Toolbar(props: ToolbarProps) {
                 <button
                   type="button"
                   aria-current={last ? "page" : undefined}
+                  title={crumb.label}
                   data-drop="folder"
                   data-key={crumb.prefix}
                   className={crumb.prefix === props.dropKey ? "drop-target" : undefined}

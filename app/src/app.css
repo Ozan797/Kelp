@@ -202,6 +202,7 @@ button {
 
 .toolbar {
   display: flex;
+  container-type: inline-size;
   align-items: center;
   gap: var(--space-2);
   height: 46px;
@@ -210,6 +211,7 @@ button {
 }
 
 .toolbar .nav {
+  flex: none;
   width: 22px;
   border: 0;
   background: none;
@@ -220,12 +222,29 @@ button {
   color: var(--border);
 }
 
+.crumbs {
+  min-width: 7em;
+}
+
 .crumbs ol {
   display: flex;
+  min-width: 0;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   list-style: none;
   white-space: nowrap;
+}
+
+.crumbs li {
+  display: flex;
+  flex: 0 10 auto;
+  align-items: center;
+  min-width: 3ch;
+}
+
+.crumbs li:last-child {
+  flex-shrink: 1;
 }
 
 .crumbs li + li::before {
@@ -235,11 +254,14 @@ button {
 }
 
 .crumbs button {
+  min-width: 0;
   padding: 2px 3px;
+  overflow: hidden;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-muted);
+  text-overflow: ellipsis;
 }
 
 .crumbs button[aria-current="page"] {
@@ -253,6 +275,7 @@ button {
 }
 
 .filter {
+  flex: none;
   width: 160px;
   padding: 4px 8px;
   border: 1px solid var(--border);
@@ -262,7 +285,23 @@ button {
   font: inherit;
 }
 
+@container (max-width: 720px) {
+  .crumbs li:not(:last-child) {
+    display: none;
+  }
+
+  .crumbs li:last-child::before {
+    content: none;
+  }
+
+  .filter {
+    flex: 0 1 160px;
+    min-width: 64px;
+  }
+}
+
 .toolbar .button {
+  flex: none;
   min-height: 26px;
   padding: 0 var(--space-3);
   font: 600 12px / 1 var(--font-ui);
@@ -655,6 +694,7 @@ button {
 .transfers-anchor {
   position: relative;
   display: flex;
+  flex: none;
 }
 
 .transfers-floating {
@@ -1590,6 +1630,7 @@ button {
 }
 
 .toolbar-icon {
+  flex: none;
   width: 28px;
   height: 28px;
   border: 1px solid var(--border);
