@@ -2611,7 +2611,7 @@ dependencies = [
 
 [[package]]
 name = "kelp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-sdk-s3",
