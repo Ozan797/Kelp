@@ -81,6 +81,7 @@ Sentence case, active voice, plain words. Buttons say exactly what they do ("Del
 - Small, focused commits with clear messages.
 - Never commit `.env` files, keys, `dist/`, `target/` or `node_modules/`.
 - Pushing a `v*` tag builds a release onto R2 without publishing it; the "Publish release" workflow makes it live.
+- To cut, publish, check or roll back a release, follow `docs/RELEASING.md` step by step. Never push a tag or run Publish without the developer asking.
 
 ## When unsure
 
