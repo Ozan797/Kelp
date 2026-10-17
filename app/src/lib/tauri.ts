@@ -194,6 +194,10 @@ export const api = {
   appVersion: () => getVersion(),
   restartApp: () => relaunch(),
   onCheckForUpdates: (handler: () => void): Promise<UnlistenFn> => listen("menu://check-updates", () => handler()),
+  onWindowFocus: (handler: () => void): Promise<UnlistenFn> =>
+    getCurrentWindow().onFocusChanged((event) => {
+      if (event.payload) handler();
+    }),
   pickFiles: async (): Promise<string[]> => {
     const picked = await open({ multiple: true, directory: false });
     if (picked === null) return [];

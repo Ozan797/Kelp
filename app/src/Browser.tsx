@@ -54,6 +54,7 @@ export type BrowserProps = {
   lastPlaces: Record<string, Place>;
   initialPlace: Place | null;
   strip: ReactNode;
+  update: ReactNode;
   onPlace: (place: Place | null) => void;
   onSelectConnection: (id: string) => void;
   onEditConnection: (profile: ConnectionProfile) => void;
@@ -73,6 +74,7 @@ export function Browser({
   lastPlaces,
   initialPlace,
   strip,
+  update,
   onPlace,
   onSelectConnection,
   onEditConnection,
@@ -606,6 +608,7 @@ export function Browser({
           transfers={transfers}
           onOpenTransfers={onOpenTransfers}
           pillRef={pillRef}
+          update={update}
           size={
             place
               ? {

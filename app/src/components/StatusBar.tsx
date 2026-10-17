@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import type { Transfer } from "../hooks/useTransfers";
 import { formatAge, formatBytes, formatCount } from "../lib/format";
 import type { UsageView } from "../lib/tauri";
@@ -76,9 +76,10 @@ type StatusBarProps = {
   onOpenTransfers: () => void;
   pillRef?: Ref<HTMLButtonElement>;
   size?: Size | null;
+  update?: ReactNode;
 };
 
-export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size }: StatusBarProps) {
+export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, onOpenTransfers, pillRef, size, update }: StatusBarProps) {
   const summary = transferSummary(transfers);
   const running = transfers.filter(inProgress);
   const total = running.reduce((sum, t) => sum + t.total, 0);
@@ -108,6 +109,7 @@ export function StatusBar({ itemCount, selectedCount, selectedBytes, transfers, 
           )}
         </button>
       )}
+      {update}
     </footer>
   );
 }
