@@ -124,3 +124,10 @@ export const memoryScene = {
     { name: "index.json", size: "2 KB", modified: "Today" },
   ],
 };
+
+export const updateScene = {
+  endpoint: "Cloudflare R2",
+  folders: ["acme-archive", "acme-assets", "acme-backups", "acme-exports", "acme-invoices", "acme-logs"],
+  version: "0.1.2",
+  summary: "Kelp now tells you about updates without getting in your way.",
+};

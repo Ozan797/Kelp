@@ -1,11 +1,13 @@
 import type { ReactElement } from "react";
 import { FolderMemoryScene } from "../components/FolderMemoryScene";
 import { ArticleLayout } from "../components/ArticleLayout";
+import { UpdateReadyScene } from "../components/UpdateReadyScene";
 import { RELEASE } from "../config";
 import { changeGroups, publishedNotes, type ReleaseNote } from "../notes";
 
 export const SCENES: Partial<Record<NonNullable<ReleaseNote["scene"]>, () => ReactElement>> = {
   "folder-memory": FolderMemoryScene,
+  "update-ready": UpdateReadyScene,
 };
 
 const formatDate = (iso: string) =>

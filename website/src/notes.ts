@@ -16,10 +16,34 @@ export type ReleaseNote = {
   title: string;
   summary: string;
   changes: readonly Change[];
-  scene?: "folder-memory";
+  scene?: "folder-memory" | "update-ready";
 };
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: "0.1.2",
+    date: "2026-10-17",
+    title: "Updates, quietly",
+    summary: "Kelp now tells you about updates without getting in your way.",
+    scene: "update-ready",
+    changes: [
+      {
+        title: "Update ready",
+        body: "When a new version has downloaded, a small \"Update ready\" shows at the end of the status bar. Click it to see what's new or restart to update.",
+        kind: "new",
+      },
+      {
+        title: "Finds updates sooner",
+        body: "Kelp checks every 30 minutes while it's open, and again when you come back to it after a while.",
+        kind: "improved",
+      },
+      {
+        title: "What's new on the website",
+        body: "Every version now has its own notes at kelp.ozanai.dev/whats-new, one click from the update card.",
+        kind: "improved",
+      },
+    ],
+  },
   {
     version: "0.1.1",
     date: "2026-10-17",
