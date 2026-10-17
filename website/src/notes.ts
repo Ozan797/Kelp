@@ -21,6 +21,24 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: "0.2.2",
+    date: "2026-10-17",
+    title: "Filters that stay",
+    summary: "Each folder keeps its filter when you come back to it, and connections use updated, more secure libraries.",
+    changes: [
+      {
+        title: "Filters stay put",
+        body: "Filter a folder, open one of the results and go back: the filter is still there, and so is the shorter list.",
+        kind: "improved",
+      },
+      {
+        title: "Security updates",
+        body: "Kelp's connections to S3, R2 and Hetzner use updated libraries that fix known security issues.",
+        kind: "fixed",
+      },
+    ],
+  },
+  {
     version: "0.2.1",
     date: "2026-10-17",
     title: "Room for long paths",

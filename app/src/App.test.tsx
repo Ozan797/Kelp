@@ -199,6 +199,25 @@ describe("App", () => {
     expect(screen.queryByText(/selected/)).toBeNull();
   });
 
+  it("keeps each folder's filter when going in and coming back", async () => {
+    api.listObjects.mockResolvedValue(page(["docs/"], ["a.txt"]));
+    render(<App />);
+    await screen.findByText("a.txt");
+    const user = userEvent.setup();
+    const filter = () => screen.getByLabelText("Filter this folder") as HTMLInputElement;
+    await user.type(filter(), "do");
+    await waitFor(() => expect(screen.queryByText("a.txt")).toBeNull());
+    await user.click(screen.getByText("docs"));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(api.listObjects).toHaveBeenLastCalledWith("c1", "archive", "docs/", null));
+    expect(filter().value).toBe("");
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() => expect(filter().value).toBe("do"));
+    expect(screen.queryByText("a.txt")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => expect(filter().value).toBe(""));
+  });
+
   it("comes back to the same scroll position after opening a folder and going back", async () => {
     const many = Array.from({ length: 300 }, (_, i) => `file${String(i).padStart(3, "0")}.txt`);
     api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>

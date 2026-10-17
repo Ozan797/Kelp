@@ -1,13 +1,13 @@
 [package]
 name = "kelp"
-version = "0.2.1"
+version = "0.2.2"
 description = "A fast Mac app for browsing and transferring files across S3, R2 and Hetzner"
 authors = ["Ozan Gokberk"]
 license = "GPL-3.0-or-later"
 edition = "2024"
 # Tauri 2.12 needs Rust 1.90 or newer (`rustup update stable`). Cargo picks crate versions that
 # support this, so raising it is how the Rust crates stay in step with the npm @tauri-apps packages.
-rust-version = "1.90"
+rust-version = "1.94.1"
 
 [lib]
 # The `_lib` suffix keeps the library name different from the binary name (a Cargo quirk on Windows).
@@ -19,8 +19,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 async-trait = "0.1.92"
-aws-sdk-s3 = "1.122.0"
-aws-smithy-types = { version = "1.4.3", features = ["http-body-1-x"] }
+aws-sdk-s3 = { version = "1.152.0", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
+aws-smithy-types = { version = "1.8.1", features = ["http-body-1-x"] }
 bytes = "1"
 http-body = "1"
 keyring = { version = "3", features = ["apple-native"] }
