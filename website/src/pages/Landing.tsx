@@ -49,7 +49,7 @@ const TILES: Tile[] = [
           <span className="bar">
             <span className="bar-fill slow" />
           </span>
-          <small>Retrying part 14</small>
+          <small>Retrying in 8 s</small>
         </li>
         <li>
           <span>q2-export.parquet</span>
@@ -90,7 +90,7 @@ const TILES: Tile[] = [
   },
   {
     title: "Folders that behave like folders",
-    body: "Create, rename and delete folders. Before a big move or delete, Kelp tells you how many files it will touch.",
+    body: "Create, move and delete folders. Before a big move or delete, Kelp tells you how many files it will touch.",
     wide: true,
     visual: (
       <div className="viz-dialog">

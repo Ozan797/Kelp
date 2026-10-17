@@ -1067,13 +1067,11 @@ a:hover > .arrow {
 
   .docs-nav {
     position: static;
-    overflow-x: auto;
-    /* Room for the 2px focus ring and its 2px offset; overflow would clip it otherwise. */
-    padding: var(--space-1);
   }
 
   .docs-nav .nav-list {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-1);
   }
 
@@ -1081,7 +1079,7 @@ a:hover > .arrow {
     white-space: nowrap;
   }
 
-  /* Links scroll sideways here and vary in width, so use the plain highlight instead of the pill. */
+  /* Links wrap here and vary in width, so use the plain highlight instead of the pill. */
   .nav-indicator {
     display: none;
   }
@@ -1367,10 +1365,77 @@ a:hover > .arrow {
   font-size: 12px;
 }
 
+.statusbar > span {
+  white-space: nowrap;
+}
+
 .transfer {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+}
+
+.transfer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demo-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.demo-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: -1px;
+}
+
+.demo-transfers svg {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  transform: rotate(-90deg);
+}
+
+.demo-transfers circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 10 100;
+  animation: demo-ring 6s var(--ease-out) infinite;
+}
+
+@keyframes demo-ring {
+  to {
+    stroke-dasharray: 100 100;
+  }
+}
+
+.demo-upload {
+  padding: 4px var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .bar {
@@ -1403,11 +1468,21 @@ a:hover > .arrow {
     animation: none;
     transform: scaleX(0.62);
   }
+
+  .demo-transfers circle {
+    animation: none;
+    stroke-dasharray: 62 100;
+  }
 }
 
 @media (max-width: 640px) {
   .window-body {
     grid-template-columns: 1fr;
+  }
+
+  .demo-upload,
+  .demo-tools .demo-icon:first-child {
+    display: none;
   }
 
   .sidebar {
@@ -1779,7 +1854,7 @@ a:hover > .arrow {
   bottom: calc(100% + var(--space-2));
   display: flex;
   flex-direction: column;
-  width: 320px;
+  width: min(320px, calc(100vw - 72px));
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -1788,6 +1863,7 @@ a:hover > .arrow {
   color: var(--text);
   font-size: var(--text-sm);
   text-align: left;
+  white-space: normal;
 }
 
 .scene-update-card strong {
@@ -1803,6 +1879,7 @@ a:hover > .arrow {
 
 .scene-update-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-3);
