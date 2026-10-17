@@ -11,7 +11,7 @@ How a new version gets from `master` to people's Macs. Design and reasons: `docs
 | `.github/workflows/website.yml` | pushes to `master` touching `website/` or `design/`, manual runs, and Publish | Reads the live release through R2's API, builds the site, deploys it to Netlify. |
 | Downloads and updates | Cloudflare R2 bucket `kelp-downloads` at `https://kelp-dl.ozanai.dev` | `latest.json` (update manifest), `Kelp_aarch64.dmg`, and `releases/<version>/…` |
 | Website | Netlify, `https://kelp.ozanai.dev` (CNAME in Cloudflare DNS, DNS only) | Shows the live version and links to that version's `.dmg`. |
-| In the app | `tauri-plugin-updater` | Checks `https://kelp-dl.ozanai.dev/latest.json` on launch, every 6 hours, and from **Kelp → Check for updates…** / ⌘K. |
+| In the app | `tauri-plugin-updater` | Checks `https://kelp-dl.ozanai.dev/latest.json` on launch, every 30 minutes, when it comes to the front after 30 minutes or more, and from **Kelp → Check for updates…** / ⌘K. |
 
 `https://kelp-dl.ozanai.dev/latest.json` is compiled into every installed copy. Never change that address.
 
@@ -23,6 +23,7 @@ How a new version gets from `master` to people's Macs. Design and reasons: `docs
    - `changes`: 2–5 items, each a `title` and a one-sentence `body`. Sentence case, plain words.
    - `scene`: only when the main change is visual. Add a component in `website/src/components/` that uses fake data from `website/src/data.ts` only, register it in `SCENES` in `website/src/pages/WhatsNew.tsx`, and set `scene` to its key.
    - Show the entry to the developer and wait for approval.
+   - The website's What's new page lists only versions up to the live release, so the entry appears there after Publish (step 6), not when the PR merges.
 2. **Bump the version** in all five places, in the same branch as the notes:
    - `app/package.json` and `app/src-tauri/tauri.conf.json`: `"version": "0.2.0"`
    - `app/src-tauri/Cargo.toml`: the `version` line in `[package]` only (not a dependency's). macOS `sed` has no `0,/re/` form; edit it by hand or with a small script.
@@ -46,6 +47,7 @@ How a new version gets from `master` to people's Macs. Design and reasons: `docs
    (or `gh workflow run publish.yml -R Ozan797/Kelp -f version=0.2.0`). About 2 minutes. Afterwards:
    - `https://kelp-dl.ozanai.dev/latest.json` says `"version": "0.2.0"`,
    - `https://kelp.ozanai.dev` shows "Version 0.2.0" and its Download button links to `releases/0.2.0/…`,
+   - `https://kelp.ozanai.dev/whats-new/#0.2.0` shows the new version's section,
    - installed copies offer the update on their next check.
 7. **Check an installed older copy updates:** open it → **Kelp → Check for updates…** → the **Update ready** indicator at the right end of the status bar → its card: **What's new** opens the notes on the website, **Restart to update** → **Kelp → About Kelp** shows the new version, connections still open.
 
@@ -57,7 +59,7 @@ Publish the older version: Actions → **Publish release** → `0.1.1`. New down
 
 | Symptom | Cause and fix |
 |---|---|
-| Release: "No release notes for 0.2.0. Add an entry to website/src/notes.ts before tagging." | The tag has no entry in `website/src/notes.ts`. Add the entry on `master` (step 1), merge, then delete the tag (`git push --delete origin v0.2.0 && git tag -d v0.2.0`), tag again and push. Nothing was uploaded. |
+| Release: "No release notes for 0.2.0. Add an entry to website/src/notes.ts before tagging." | The tag has no entry in `website/src/notes.ts`. Add the entry in a PR to `master` (step 1), merge, then delete the tag (`git push --delete origin v0.2.0 && git tag -d v0.2.0`), tag again and push. Nothing was uploaded. |
 | Release: "Tag v… doesn't match the app version in …" | A version file wasn't bumped. Fix it on `master`, delete the tag (`git push --delete origin v0.2.0 && git tag -d v0.2.0`), tag again. Nothing was uploaded. |
 | Release: "… is already built" | That version exists on R2. Bump the patch version and tag again. |
 | Release: "The update was signed with key … but the app trusts key …" | `TAURI_SIGNING_PRIVATE_KEY` in GitHub isn't the key matching `plugins.updater.pubkey`. Re-add the right one from the password manager. |
