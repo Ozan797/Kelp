@@ -93,17 +93,19 @@ type FileListProps = {
   dropKey?: string | null;
   onRowPointerDown?: (row: Row, x: number, y: number) => void;
   onPreview?: (row: Row) => void;
+  initialScrollTop?: number | null;
+  onScrollTopChange?: (scrollTop: number) => void;
 };
 
 export function FileList(props: FileListProps) {
-  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null, onRowPointerDown, onPreview } = props;
+  const { rows, filter, sort, onSort, selected, onSelectionChange, onOpen, onGoUp, onContextMenu, hasMore, loading, onLoadMore, dropKey = null, onRowPointerDown, onPreview, initialScrollTop = null, onScrollTopChange } = props;
   const visible = useMemo(() => sortRows(filterRows(rows, filter), sort), [rows, filter, sort]);
   const ordered = useMemo(() => visible.map((row) => row.key), [visible]);
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
   const [firstPage] = useState(visible);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled] = useState(initialScrollTop !== null);
   const introducing = !scrolled && visible === firstPage;
 
   const virtualizer = useVirtualizer({
@@ -112,6 +114,7 @@ export function FileList(props: FileListProps) {
     estimateSize: () => 28,
     overscan: 12,
     initialRect: { width: 800, height: 600 },
+    initialOffset: initialScrollTop ?? 0,
   });
   const items = virtualizer.getVirtualItems();
   const lastIndex = items.length > 0 ? items[items.length - 1].index : -1;
@@ -176,7 +179,10 @@ export function FileList(props: FileListProps) {
         aria-multiselectable="true"
         tabIndex={0}
         onKeyDown={keyDown}
-        onScroll={() => setScrolled(true)}
+        onScroll={(event) => {
+          setScrolled(true);
+          onScrollTopChange?.(event.currentTarget.scrollTop);
+        }}
       >
         <div className="list-canvas" style={{ height: virtualizer.getTotalSize() }}>
           {items.map((item) => {

@@ -511,6 +511,8 @@ export function Browser({
         hasMore={listing.hasMore}
         loading={listing.loading}
         onLoadMore={listing.loadMore}
+        initialScrollTop={listing.restore?.scrollTop ?? null}
+        onScrollTopChange={listing.rememberScroll}
         dropKey={
           drag?.zone === "folder" && drag.target?.bucket === place.bucket
             ? drag.target.prefix
