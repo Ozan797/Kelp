@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   cancelUsageCount: vi.fn(),
   confirm: vi.fn(),
   deleteObjects: vi.fn(),
+  planDelete: vi.fn(),
   showContextMenu: vi.fn(),
   startDownload: vi.fn(),
   startFolderDownload: vi.fn(),
@@ -252,6 +253,24 @@ describe("App", () => {
     remove.onSelect();
     await waitFor(() => expect(api.deleteObjects).toHaveBeenCalledWith("c1", "archive", ["a1.txt", "a2.txt"]));
     expect(api.confirm.mock.calls[0][1]).toBe("Delete 2 items");
+  });
+
+  it("counts the files inside a folder before asking to delete it", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    api.planDelete.mockResolvedValue(1284);
+    api.confirm.mockResolvedValue(false);
+    render(<App />);
+    await screen.findByText("drafts");
+    const user = userEvent.setup();
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("drafts") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const remove = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Delete"));
+    if (!remove || remove === "separator") throw new Error("no delete entry");
+    remove.onSelect();
+    await waitFor(() => expect(api.confirm).toHaveBeenCalled());
+    expect(api.planDelete).toHaveBeenCalledWith("c1", "archive", ["drafts/"]);
+    expect(api.confirm.mock.calls[0][0]).toBe("Delete drafts? 1,284 files will be deleted. This can't be undone.");
+    expect(api.deleteObjects).not.toHaveBeenCalled();
   });
 
   it("applies the saved theme and changes it from Settings", async () => {

@@ -158,7 +158,7 @@ next to them, per connection, bucket and prefix.
 ### 5.4 Tauri commands
 
 `list_connections`, `save_connection`, `delete_connection`, `test_connection`, `set_last_location`,
-`list_buckets`, `list_objects`, `delete_objects`, `create_folder`,
+`list_buckets`, `list_objects`, `plan_delete`, `delete_objects`, `create_folder`,
 `list_transfers`, `start_download`, `start_folder_download`, `inspect_drop`, `plan_upload`, `start_uploads`,
 `plan_copy`, `start_copy`,
 `pause_transfer`, `resume_transfer`, `retry_transfer`, `cancel_transfer`, `pause_all`, `resume_all`,

@@ -222,15 +222,21 @@ export function Browser({
   const remove = async (rows: Row[]) => {
     if (!place || rows.length === 0) return;
     const label = rows.length === 1 ? `Delete ${rows[0].name}` : `Delete ${plural(rows.length, "item")}`;
-    const folders = rows.some((r) => r.isFolder) ? " Folders are deleted with everything inside them." : "";
-    const confirmed = await api.confirm(`${label}?${folders} This can't be undone.`, label);
+    const keys = rows.map((r) => r.key);
+    let reach = "";
+    if (rows.some((r) => r.isFolder)) {
+      try {
+        const files = await api.planDelete(connection.id, place.bucket, keys);
+        reach = ` ${files.toLocaleString("en-GB")} ${files === 1 ? "file" : "files"} will be deleted.`;
+      } catch (caught) {
+        setActionError(toAppError(caught));
+        return;
+      }
+    }
+    const confirmed = await api.confirm(`${label}?${reach} This can't be undone.`, label);
     if (!confirmed) return;
     try {
-      await api.deleteObjects(
-        connection.id,
-        place.bucket,
-        rows.map((r) => r.key),
-      );
+      await api.deleteObjects(connection.id, place.bucket, keys);
       setSelected(new Set());
     } catch (caught) {
       setActionError(toAppError(caught));

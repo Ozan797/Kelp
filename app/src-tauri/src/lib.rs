@@ -140,6 +140,7 @@ pub fn run() {
             browse::list_objects,
             browse::create_folder,
             browse::delete_objects,
+            browse::plan_delete,
             transfer_commands::list_transfers,
             transfer_commands::start_download,
             copy_commands::plan_copy,

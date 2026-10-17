@@ -49,6 +49,24 @@ pub async fn list_all(
     }
 }
 
+async fn delete_targets(
+    provider: &dyn StorageProvider,
+    bucket: &str,
+    keys: Vec<String>,
+) -> Result<Vec<String>, AppError> {
+    let mut targets = Vec::new();
+    for key in keys {
+        if key.ends_with('/') {
+            let inside = list_all(provider, bucket, &key).await?;
+            targets.extend(inside.into_iter().map(|object| object.key));
+        }
+        targets.push(key);
+    }
+    targets.sort();
+    targets.dedup();
+    Ok(targets)
+}
+
 pub async fn delete_keys(
     state: &AppState,
     id: Uuid,
@@ -56,18 +74,20 @@ pub async fn delete_keys(
     keys: Vec<String>,
 ) -> Result<u64, AppError> {
     let provider = state.provider(id).await?;
-    let mut targets = Vec::new();
-    for key in keys {
-        if key.ends_with('/') {
-            let inside = list_all(provider.as_ref(), bucket, &key).await?;
-            targets.extend(inside.into_iter().map(|object| object.key));
-        }
-        targets.push(key);
-    }
-    targets.sort();
-    targets.dedup();
+    let targets = delete_targets(provider.as_ref(), bucket, keys).await?;
     provider.delete(bucket, &targets).await?;
     Ok(targets.len() as u64)
+}
+
+pub async fn count_delete(
+    state: &AppState,
+    id: Uuid,
+    bucket: &str,
+    keys: Vec<String>,
+) -> Result<u64, AppError> {
+    let provider = state.provider(id).await?;
+    let targets = delete_targets(provider.as_ref(), bucket, keys).await?;
+    Ok(targets.iter().filter(|key| !key.ends_with('/')).count() as u64)
 }
 
 #[tauri::command]
@@ -105,6 +125,16 @@ pub async fn create_folder(
         .create_folder(&bucket, &key)
         .await?;
     Ok(key)
+}
+
+#[tauri::command]
+pub async fn plan_delete(
+    state: State<'_, AppState>,
+    id: Uuid,
+    bucket: String,
+    keys: Vec<String>,
+) -> Result<u64, AppError> {
+    count_delete(&state, id, &bucket, keys).await
 }
 
 #[tauri::command]
@@ -212,5 +242,27 @@ mod tests {
                 "vimeo/notes.md"
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn counting_a_delete_counts_files_and_deletes_nothing() {
+        let fake = Arc::new(
+            FakeProvider::new(Ok(vec![]), Ok(ListPage::default())).with_keys(vec![
+                "vimeo/2025/".into(),
+                "vimeo/2025/a.mp4".into(),
+                "vimeo/2025/raw/b.mov".into(),
+            ]),
+        );
+        let (state, id) = state_with(fake.clone(), None).await;
+        let count = count_delete(
+            &state,
+            id,
+            "media",
+            vec!["vimeo/2025/".into(), "vimeo/notes.md".into()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(count, 3);
+        assert!(fake.deleted().is_empty());
     }
 }
