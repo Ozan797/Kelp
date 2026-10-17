@@ -146,6 +146,7 @@ export const api = {
     call<string>("create_folder", { id, bucket, prefix, name }),
   deleteObjects: (id: string, bucket: string, keys: string[]) =>
     call<number>("delete_objects", { id, bucket, keys }),
+  planDelete: (id: string, bucket: string, keys: string[]) => call<number>("plan_delete", { id, bucket, keys }),
   startDownload: (id: string, bucket: string, key: string, size: number) =>
     call<string>("start_download", { id, bucket, key, size }),
   inspectDrop: (paths: string[]) => call<DropSummary>("inspect_drop", { paths }),

@@ -1,8 +1,8 @@
 /* Kelp fonts. Latin subset, variable weight, licensed under the SIL Open Font License (see OFL-*.txt). */
 
 @font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("./bricolage-grotesque-latin.woff2") format("woff2");
+  font-family: "Manrope";
+  src: url("./manrope-latin.woff2") format("woff2");
   font-weight: 500 800;
   font-display: swap;
 }

@@ -13,7 +13,7 @@ const template = readFileSync(join(dist, "index.html"), "utf8");
 
 // Preload the two fonts that every page uses above the fold.
 const preload = readdirSync(join(dist, "assets"))
-  .filter((f) => /^(bricolage|hanken).*\.woff2$/.test(f))
+  .filter((f) => /^(manrope|hanken).*\.woff2$/.test(f))
   .map((f) => `<link rel="preload" href="/assets/${f}" as="font" type="font/woff2" crossorigin />`)
   .join("\n    ");
 

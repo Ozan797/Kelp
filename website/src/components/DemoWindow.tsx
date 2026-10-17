@@ -137,6 +137,16 @@ export default function DemoWindow() {
                 </li>
               ))}
             </ol>
+            <span className="demo-tools" aria-hidden="true">
+              <span className="demo-icon">↻</span>
+              <span className="demo-icon demo-transfers">
+                <svg viewBox="0 0 28 28">
+                  <circle cx="14" cy="14" r="12.5" pathLength="100" />
+                </svg>
+                ↓↑
+              </span>
+              <span className="demo-upload">Upload</span>
+            </span>
           </div>
 
           <div className="list-head" aria-hidden="true">
@@ -189,7 +199,7 @@ export default function DemoWindow() {
               </span>
             )}
             <span className="transfer">
-              <span className="transfer-name">launch-teaser.mp4</span>
+              <span className="transfer-name">Uploading 1 file</span>
               <span className="bar">
                 <span className="bar-fill" />
               </span>

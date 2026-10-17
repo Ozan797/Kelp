@@ -2,6 +2,11 @@
 @import "../../design/tokens.css";
 @import "../../design/components.css";
 
+:root {
+  background: transparent;
+  overscroll-behavior: none;
+}
+
 html,
 body,
 #root {
@@ -10,11 +15,26 @@ body,
 }
 
 body {
-  background: var(--bg);
   color: var(--text);
   font: 400 13px / 1.4 var(--font-ui);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+pre,
+[role="alert"],
+.empty.error p {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.button {
+  cursor: default;
 }
 
 button {
@@ -37,7 +57,7 @@ button {
   flex-direction: column;
   padding-top: 40px;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-sidebar);
 }
 
 .rail ul {
@@ -57,7 +77,6 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-raised);
-  cursor: pointer;
 }
 
 .tile.selected {
@@ -92,7 +111,7 @@ button {
   min-width: 0;
   padding-top: 34px;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-sidebar);
 }
 
 .buckets-head {
@@ -149,7 +168,6 @@ button {
   border-radius: var(--radius-md);
   background: none;
   text-align: left;
-  cursor: pointer;
 }
 
 .bucket svg {
@@ -175,6 +193,7 @@ button {
 
 .main {
   position: relative;
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -195,12 +214,10 @@ button {
   border: 0;
   background: none;
   font-size: 18px;
-  cursor: pointer;
 }
 
 .toolbar .nav:disabled {
   color: var(--border);
-  cursor: default;
 }
 
 .crumbs ol {
@@ -223,7 +240,6 @@ button {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-muted);
-  cursor: pointer;
 }
 
 .crumbs button[aria-current="page"] {
@@ -301,7 +317,6 @@ button {
   background: var(--surface-raised);
   color: var(--text);
   font-size: 11px;
-  cursor: pointer;
 }
 
 .transfer-pill .spinner {
@@ -401,7 +416,6 @@ button {
   font-size: 11px;
   font-weight: 600;
   text-align: left;
-  cursor: pointer;
 }
 
 .list-scroll {
@@ -542,7 +556,6 @@ button {
   border-radius: var(--radius-lg);
   background: var(--surface);
   font-weight: 600;
-  cursor: pointer;
 }
 
 .provider-picker label.selected {
@@ -603,7 +616,6 @@ button {
   background: none;
   color: var(--link);
   font-size: inherit;
-  cursor: pointer;
 }
 
 .advanced-toggle {
@@ -640,195 +652,277 @@ button {
   font: 600 12px / 1 var(--font-ui);
 }
 
-.drawer {
+.transfers-anchor {
   position: relative;
   display: flex;
-  flex: none;
-  flex-direction: column;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-md);
-  outline: none;
+}
+
+.transfers-floating {
+  position: absolute;
+  right: var(--space-3);
+  bottom: 34px;
+  z-index: 10;
+}
+
+.transfers-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.transfers-button:disabled {
+  opacity: 0.45;
+}
+
+.transfers-button[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.transfers-glyph {
+  font-size: 12px;
+  letter-spacing: -2px;
+}
+
+.transfers-ring {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.transfers-ring circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--dur-fast) linear;
+}
+
+.transfers-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--surface-raised);
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .drawer {
-    animation: drawer-up 180ms ease-out;
+  .transfers-glyph.pulse {
+    animation: transfers-pulse 600ms var(--ease-out);
+  }
+
+  .transfers-panel {
+    animation: transfers-panel-in 140ms var(--ease-out);
   }
 }
 
-@keyframes drawer-up {
+@keyframes transfers-pulse {
+  40% {
+    color: var(--accent);
+    transform: scale(1.35);
+  }
+}
+
+@keyframes transfers-panel-in {
   from {
-    transform: translateY(16px);
     opacity: 0;
+    transform: translateY(-4px) scale(0.98);
   }
 }
 
-.drawer-handle {
-  position: absolute;
-  top: -3px;
-  right: 0;
-  left: 0;
-  height: 6px;
-  cursor: ns-resize;
+.transfers-panel {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-height: min(420px, calc(100vh - 120px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  text-align: left;
 }
 
-.drawer-head {
+.transfers-anchor > .transfers-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -8px;
+  z-index: 10;
+  transform-origin: top right;
+}
+
+.transfers-anchor > .transfers-panel::before {
+  position: absolute;
+  top: -6px;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: var(--surface-raised);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.transfers-floating > .transfers-panel {
+  transform-origin: bottom right;
+}
+
+.transfers-head {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: var(--space-3);
-  height: 42px;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border);
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
-.drawer-head h2 {
+.transfers-head h2 {
   margin: 0;
   font-size: 13px;
 }
 
-.drawer-summary {
+.transfers-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.drawer-head .button {
-  min-height: 24px;
-  padding: 0 var(--space-3);
-  font: 500 12px / 1 var(--font-ui);
-}
-
-.drawer-close {
-  width: 22px;
-  border: 0;
-  background: none;
-  color: var(--text-muted);
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.drawer-scroll {
+.transfers-list {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: var(--space-1) 0 var(--space-3);
+  margin: 0;
+  padding: 0 var(--space-2);
+  overflow-y: auto;
+  list-style: none;
 }
 
-.group-toggle {
+.transfers-empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.transfers-foot {
   display: flex;
+  flex: none;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-3) var(--space-4) var(--space-2);
-  border: 0;
-  background: none;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
-  cursor: pointer;
 }
 
-.count {
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface-raised);
-  letter-spacing: 0;
-}
-
-.count.bad,
-.transfer-status.bad {
-  color: var(--danger);
-}
-
-.drawer-group ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.transfers-foot .link-button:disabled {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .transfer-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 170px 120px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
-  margin: 0 var(--space-2);
-  padding: 9px var(--space-2);
-  border-radius: var(--radius-lg);
-  outline: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
 }
 
 .transfer-row:hover,
-.transfer-row:focus-within,
-.transfer-row:focus-visible {
-  background: var(--surface-raised);
+.transfer-row:focus-within {
+  background: var(--surface);
 }
 
-.direction {
+.transfer-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--on-accent-soft);
+  width: 28px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
   font-weight: 700;
 }
 
-.direction.failed {
+.transfer-icon.running,
+.transfer-icon.retrying {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.transfer-icon.failed {
   background: var(--warning-soft);
   color: var(--danger);
 }
 
-.transfer-name {
+.transfer-body {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
-.transfer-name strong {
+.transfer-title {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.transfer-title strong {
   overflow: hidden;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transfer-name small,
-.transfer-status {
+.transfer-title small {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .transfer-status {
-  display: grid;
-  gap: 2px;
-  text-align: right;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+.transfer-status > span + span::before {
+  margin-right: var(--space-2);
+  content: "·";
+}
+
+.transfer-status.bad,
+.transfer-status .bad {
+  color: var(--danger);
 }
 
 .transfer-status.warn {
   color: var(--warning);
 }
 
-.direction.waiting,
-.direction.paused {
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
-  color: var(--text-muted);
-}
-
-.transfer-bar.paused span {
-  background: var(--text-muted);
-}
-
 .transfer-bar {
   display: block;
-  height: 3px;
-  margin-top: 5px;
+  height: 4px;
   overflow: hidden;
   border-radius: 2px;
   background: var(--border);
@@ -841,36 +935,39 @@ button {
   transform-origin: left;
 }
 
+.transfer-bar.paused span {
+  background: var(--text-muted);
+}
+
 .transfer-actions {
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-self: end;
-  opacity: 0;
+  gap: var(--space-1);
 }
 
-.transfer-row:hover .transfer-actions,
-.transfer-row:focus-within .transfer-actions,
-.transfer-row:focus-visible .transfer-actions {
-  opacity: 1;
-}
-
-.transfer-actions button:not(.button) {
+.round-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   border: 0;
-  background: none;
+  border-radius: 50%;
+  background: var(--surface);
   color: var(--text-muted);
-  cursor: pointer;
+  font-size: 10px;
 }
 
-.transfer-actions .button {
-  min-height: 22px;
-  padding: 0 var(--space-2);
-  font: 500 11px / 1 var(--font-ui);
+.transfer-row:hover .round-button {
+  background: var(--border);
 }
 
-.transfer-row:focus-visible {
+.round-button:hover {
+  color: var(--text);
+}
+
+.round-button:focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
 
 .sheet.small {
@@ -905,7 +1002,6 @@ button {
   background: none;
   color: var(--text-muted);
   font: inherit;
-  cursor: pointer;
 }
 
 .update-indicator:hover {
@@ -971,7 +1067,6 @@ button {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-muted);
-  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1116,7 +1211,6 @@ button {
   background: none;
   color: var(--text-muted);
   font-size: 16px;
-  cursor: pointer;
 }
 
 .rail-settings:hover {
@@ -1153,7 +1247,6 @@ button {
   background: var(--surface-raised);
   font-weight: 600;
   text-align: center;
-  cursor: pointer;
 }
 
 .segment input {
@@ -1213,7 +1306,6 @@ button {
   gap: var(--space-2);
   padding: 6px var(--space-3);
   border-radius: var(--radius-lg);
-  cursor: pointer;
 }
 
 .palette-item.active {
@@ -1286,12 +1378,10 @@ button {
   background: none;
   color: var(--text-muted);
   font-size: 15px;
-  cursor: pointer;
 }
 
 .preview-step:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 
 .preview-step:focus-visible,
@@ -1397,7 +1487,6 @@ button {
   color: inherit;
   font: inherit;
   font-size: 11px;
-  cursor: pointer;
 }
 
 .tab-select span {
@@ -1418,7 +1507,6 @@ button {
   background: none;
   color: var(--text-muted);
   font-size: 11px;
-  cursor: pointer;
 }
 
 .tab-close {
@@ -1462,7 +1550,6 @@ button {
 }
 
 .file-row {
-  user-select: none;
 }
 
 .row-preview {
@@ -1477,7 +1564,6 @@ button {
   background: none;
   color: var(--text-muted);
   opacity: 0.45;
-  cursor: pointer;
   flex: none;
 }
 
@@ -1511,7 +1597,6 @@ button {
   background: var(--surface-raised);
   color: var(--text-muted);
   font-size: 15px;
-  cursor: pointer;
 }
 
 .toolbar-icon:hover {

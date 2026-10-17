@@ -49,7 +49,7 @@ const TILES: Tile[] = [
           <span className="bar">
             <span className="bar-fill slow" />
           </span>
-          <small>Retrying part 14</small>
+          <small>Retrying in 8 s</small>
         </li>
         <li>
           <span>q2-export.parquet</span>
@@ -90,7 +90,7 @@ const TILES: Tile[] = [
   },
   {
     title: "Folders that behave like folders",
-    body: "Create, rename and delete folders. Before a big move or delete, Kelp tells you how many files it will touch.",
+    body: "Create, move and delete folders. Before a big move or delete, Kelp tells you how many files it will touch.",
     wide: true,
     visual: (
       <div className="viz-dialog">
@@ -108,8 +108,26 @@ const TILES: Tile[] = [
     body: "Look at images, text and video right in the app, without saving them to your Mac first.",
     visual: (
       <figure className="viz-preview">
-        <span className="viz-image" />
-        <figcaption>hero-v3.webp · 412 KB</figcaption>
+        <div className="viz-preview-window">
+          <div className="viz-preview-head">
+            <strong>hero-v3.webp</strong>
+            <small>412 KB · 2 of 6</small>
+            <span className="viz-step" aria-hidden="true">
+              ‹
+            </span>
+            <span className="viz-step" aria-hidden="true">
+              ›
+            </span>
+          </div>
+          <span className="viz-image">
+            <span className="viz-sun" />
+            <span className="viz-hill viz-hill-back" />
+            <span className="viz-hill viz-hill-front" />
+          </span>
+        </div>
+        <figcaption>
+          <kbd>Space</kbd> to open, <kbd>←</kbd> <kbd>→</kbd> for the next file
+        </figcaption>
       </figure>
     ),
   },

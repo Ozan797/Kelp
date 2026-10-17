@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
-const { PAGES, NOT_FOUND, pageUrl, escapeHtml } = await import(
+const { PAGES, NOT_FOUND, SITE, pageUrl, escapeHtml } = await import(
   pathToFileURL(join(root, "dist-ssr/render.js")).href
 );
 
@@ -27,7 +27,7 @@ for (const page of PAGES) {
   }
   const h1s = html.match(/<h1[\s>]/g) ?? [];
   if (h1s.length !== 1) problems.push(`${page.path}: expected 1 prerendered <h1>, found ${h1s.length}`);
-  if (!html.includes(`<title>${escapeHtml(page.title)}</title>`)) problems.push(`${page.path}: wrong <title>`);
+  if (!html.includes(`<title>${escapeHtml(SITE.name)}</title>`)) problems.push(`${page.path}: wrong <title>`);
   if (!html.includes(`<link rel="canonical" href="${pageUrl(page.path)}" />`)) problems.push(`${page.path}: no canonical`);
   if (html.includes("<!--app-->") || html.includes("<!--head-->")) problems.push(`${page.path}: template placeholder left`);
   if (!html.includes("kelp-theme")) problems.push(`${page.path}: no early theme script`);

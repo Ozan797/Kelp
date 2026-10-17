@@ -23,9 +23,9 @@
   --teal-100: #d9efe9;
   --teal-ink: #04140f;
 
-  --sand-50: #f5f2ea;
-  --sand-100: #ece6d8;
-  --sand-200: #e0d9c9;
+  --mist-50: #f6f8f9;
+  --mist-100: #eceff2;
+  --mist-200: #dde2e6;
   --ink-900: #0f1d27;
   --ink-600: #4a5a65;
   --white: #ffffff;
@@ -57,7 +57,7 @@
   --provider-hetzner: #d50c2d;
 
   /* Type */
-  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-display: "Manrope", system-ui, sans-serif;
   --font-body: "Hanken Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --font-ui: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -101,10 +101,11 @@
 /* 2. Semantic tokens: light (default) */
 :root, .theme-light {
   color-scheme: light;
-  --bg: var(--sand-50);
-  --surface: var(--sand-100);
+  --bg: var(--mist-50);
+  --surface: var(--mist-100);
+  --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
   --surface-raised: var(--white);
-  --border: var(--sand-200);
+  --border: var(--mist-200);
   --text: var(--ink-900);
   --text-muted: var(--ink-600);
   --accent: var(--teal-600);
@@ -122,7 +123,7 @@
   --shadow-lg: 0 30px 70px rgba(8, 17, 26, 0.28);
   --bubble-border: rgba(53, 194, 173, 0.6);
   --bubble-fill: rgba(53, 194, 173, 0.13);
-  --skeleton: var(--sand-100);
+  --skeleton: var(--mist-100);
   --skeleton-shine: rgba(255, 255, 255, 0.7);
 }
 
@@ -131,6 +132,7 @@
   color-scheme: dark;
   --bg: var(--navy-950);
   --surface: var(--navy-900);
+  --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
   --surface-raised: var(--navy-800);
   --border: var(--navy-700);
   --text: var(--navy-200);
@@ -160,6 +162,7 @@
     color-scheme: dark;
     --bg: var(--navy-950);
     --surface: var(--navy-900);
+    --surface-sidebar: color-mix(in srgb, var(--surface) 55%, transparent);
     --surface-raised: var(--navy-800);
     --border: var(--navy-700);
     --text: var(--navy-200);

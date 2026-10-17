@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   cancelUsageCount: vi.fn(),
   confirm: vi.fn(),
   deleteObjects: vi.fn(),
+  planDelete: vi.fn(),
   showContextMenu: vi.fn(),
   startDownload: vi.fn(),
   startFolderDownload: vi.fn(),
@@ -254,6 +255,24 @@ describe("App", () => {
     expect(api.confirm.mock.calls[0][1]).toBe("Delete 2 items");
   });
 
+  it("counts the files inside a folder before asking to delete it", async () => {
+    api.listObjects.mockResolvedValue(page(["drafts/"], ["a.txt"]));
+    api.planDelete.mockResolvedValue(1284);
+    api.confirm.mockResolvedValue(false);
+    render(<App />);
+    await screen.findByText("drafts");
+    const user = userEvent.setup();
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("drafts") });
+    const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
+    const remove = entries.find((entry) => entry !== "separator" && entry.label.startsWith("Delete"));
+    if (!remove || remove === "separator") throw new Error("no delete entry");
+    remove.onSelect();
+    await waitFor(() => expect(api.confirm).toHaveBeenCalled());
+    expect(api.planDelete).toHaveBeenCalledWith("c1", "archive", ["drafts/"]);
+    expect(api.confirm.mock.calls[0][0]).toBe("Delete drafts? 1,284 files will be deleted. This can't be undone.");
+    expect(api.deleteObjects).not.toHaveBeenCalled();
+  });
+
   it("applies the saved theme and changes it from Settings", async () => {
     api.getSettings.mockResolvedValue({ theme: "light" });
     render(<App />);
@@ -299,6 +318,8 @@ describe("App", () => {
     await user.click(screen.getByText("a.txt"));
     await user.keyboard("{Meta>}d{/Meta}");
     await waitFor(() => expect(api.startDownload).toHaveBeenCalledWith("c1", "archive", "a.txt", 10));
+    expect(screen.queryByRole("dialog", { name: "Transfers" })).toBeNull();
+    await waitFor(() => expect(document.querySelector(".transfers-glyph.pulse")).not.toBeNull());
   });
 
   it("previews the selected file with Space and steps to the next one", async () => {
@@ -497,9 +518,9 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Cloudflare · cdn" }));
     expect(await screen.findByText("Choose a bucket")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "1 finished" }));
-    await user.click(screen.getByRole("button", { name: /^Finished/ }));
     expect(screen.getByRole("button", { name: "Show a.txt in Finder" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Close transfers" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Transfers" })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "1 finished" }));
     await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Cloudflare · cdn" }) });
     const entries = api.showContextMenu.mock.calls[0][0] as MenuEntry[];
@@ -618,7 +639,7 @@ describe("App", () => {
     document.elementFromPoint = vi.fn(() => row);
     act(() => emit({ type: "drop", paths: ["/u/empty"], x: 1, y: 1 }));
     expect((await screen.findByRole("alert")).textContent).toContain("Nothing to upload. The folder is empty or everything is already there.");
-    expect(screen.queryByRole("region", { name: "Transfers" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Transfers" })).toBeNull();
   });
 
   it("ignores a second drop while the first one is still being checked", async () => {

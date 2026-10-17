@@ -1,5 +1,5 @@
 import { DocsLayout } from "../../components/DocsLayout";
-import { SITE, hrefFor } from "../../config";
+import { hrefFor } from "../../config";
 import { KeychainCallout } from "../../content/docs-shared";
 import { InstallSteps } from "../../content/install";
 
@@ -42,7 +42,7 @@ export default function GettingStarted() {
       <h2>Need help?</h2>
       <p>
         If a connection fails, the <a href={hrefFor("/docs/troubleshooting")}>troubleshooting guide</a> lists the
-        common errors and how to fix them. You can also <a href={`${SITE.repoUrl}/issues`}>open an issue on GitHub</a>.
+        common errors and how to fix them.
       </p>
     </DocsLayout>
   );

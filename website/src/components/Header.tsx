@@ -20,9 +20,6 @@ export function Header() {
             <a className="hide-xs" href={hrefFor("/whats-new")}>
               What's new
             </a>
-            <a className="hide-xs" href={SITE.repoUrl}>
-              GitHub
-            </a>
           </nav>
           <ThemeSwitch />
           {/* Jumps to the "Get Kelp" section; the download itself lives there. */}

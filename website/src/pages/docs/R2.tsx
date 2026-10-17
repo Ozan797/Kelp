@@ -25,7 +25,7 @@ export default function R2() {
         <li>
           <span>
             Give it the <strong>Object Read &amp; Write</strong> permission. If you limit it to specific buckets, see{" "}
-            <a href={hrefFor("/docs/troubleshooting")}>No buckets are listed</a>.
+            <a href={hrefFor("/docs/troubleshooting")}>This key can't list buckets</a>.
           </span>
         </li>
         <li>

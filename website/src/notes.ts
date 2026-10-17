@@ -16,10 +16,44 @@ export type ReleaseNote = {
   title: string;
   summary: string;
   changes: readonly Change[];
-  scene?: "folder-memory" | "update-ready";
+  scene?: "folder-memory" | "update-ready" | "transfers";
 };
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: "0.2.0",
+    date: "2026-10-17",
+    title: "Feels at home on your Mac",
+    summary: "Kelp now looks and behaves more like a Mac app, with transfers one click away in the toolbar.",
+    scene: "transfers",
+    changes: [
+      {
+        title: "Transfers in the toolbar",
+        body: "A transfers button next to Refresh shows progress at a glance. Click it to see every upload, download and copy, and click anywhere else to close it.",
+        kind: "new",
+      },
+      {
+        title: "More like a Mac app",
+        body: "A frosted sidebar, the normal arrow cursor, and no stray text selection or web menus.",
+        kind: "improved",
+      },
+      {
+        title: "A calmer light theme",
+        body: "Light mode uses cool greys instead of a warm sand tint.",
+        kind: "improved",
+      },
+      {
+        title: "Refresh you can see",
+        body: "The refresh button spins while the folder reloads, and the status bar says when it's done.",
+        kind: "improved",
+      },
+      {
+        title: "Know what a delete will remove",
+        body: "Deleting a folder now tells you how many files are inside before you confirm.",
+        kind: "improved",
+      },
+    ],
+  },
   {
     version: "0.1.2",
     date: "2026-10-17",

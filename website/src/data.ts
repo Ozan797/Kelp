@@ -131,3 +131,22 @@ export const updateScene = {
   version: "0.1.2",
   summary: "Kelp now tells you about updates without getting in your way.",
 };
+
+export const transfersScene = {
+  endpoint: "Hetzner",
+  bucket: "acme-media",
+  files: [
+    { name: "launch-teaser.mp4", size: "184 MB", modified: "Today" },
+    { name: "walkthrough.mp4", size: "512 MB", modified: "11 Oct" },
+    { name: "poster.jpg", size: "2.1 MB", modified: "11 Oct" },
+    { name: "credits.txt", size: "2 KB", modified: "3 Oct" },
+    { name: "logo-dark.svg", size: "6 KB", modified: "1 Oct" },
+    { name: "press-kit.zip", size: "48 MB", modified: "28 Sep" },
+    { name: "subtitles-en.vtt", size: "14 KB", modified: "28 Sep" },
+  ],
+  transfers: [
+    { name: "launch-teaser.mp4", glyph: "↑", progress: 0.64, status: "118 MB of 184 MB · 24 MB/s · 3 s left" },
+    { name: "q2-export.parquet", glyph: "↓", progress: 0.22, status: "682 MB of 3.1 GB · 48 MB/s · 51 s left" },
+    { name: "poster.jpg", glyph: "↑", progress: null, status: "Uploaded" },
+  ],
+};
