@@ -53,5 +53,5 @@ test("published_notes_stop_at_the_live_version", () => {
 
 test("writes_markdown_for_the_draft_release", () => {
   const note = { ...entry("1.0.0"), summary: "S", changes: [{ title: "A", body: "a." }] };
-  assert.equal(releaseMarkdown(note), "S\n\n- **A** a.\n");
+  assert.equal(releaseMarkdown(note), "S\n\n- **A.** a.\n");
 });

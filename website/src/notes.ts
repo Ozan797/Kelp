@@ -76,6 +76,6 @@ export function publishedNotes(
 }
 
 export function releaseMarkdown(note: ReleaseNote): string {
-  const lines = note.changes.map((c) => `- **${c.title}** ${c.body}`);
+  const lines = note.changes.map((c) => `- **${c.title}.** ${c.body}`);
   return `${note.summary}\n\n${lines.join("\n")}\n`;
 }
