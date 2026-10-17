@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { BucketColumn } from "./components/BucketColumn";
 import { CommandPalette } from "./components/CommandPalette";
 import { DropOverlay } from "./components/DropOverlay";
@@ -98,6 +98,7 @@ export function Browser({
   const [history, setHistory] = useState<Place[]>([]);
   const [position, setPosition] = useState(-1);
   const [filter, setFilter] = useState("");
+  const filters = useRef(new Map<string, string>());
   const [sort, setSort] = useState<Sort>({ key: "name", ascending: true });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState<Sheet>({ kind: "none" });
@@ -176,20 +177,24 @@ export function Browser({
     seenUploads.current = finishedUploads;
   }, [finishedUploads, listing.reload]);
 
-  const go = useCallback(
-    (next: Place) => {
-      setHistory((current) => [...current.slice(0, position + 1), next]);
-      setPosition((current) => current + 1);
-      setSelected(new Set());
-      setFilter("");
-    },
-    [position],
-  );
+  const filterKey = (target: Place) => `${connection.id}/${target.bucket}/${target.prefix}`;
+
+  const moveFilter = (next: Place | undefined) => {
+    if (place) filters.current.set(filterKey(place), filter);
+    setFilter(next ? (filters.current.get(filterKey(next)) ?? "") : "");
+  };
+
+  const go = (next: Place) => {
+    setHistory((current) => [...current.slice(0, position + 1), next]);
+    setPosition((current) => current + 1);
+    setSelected(new Set());
+    moveFilter(next);
+  };
 
   const step = (delta: number) => {
     setPosition((p) => p + delta);
     setSelected(new Set());
-    setFilter("");
+    moveFilter(history[position + delta]);
   };
 
   const up = () => {
