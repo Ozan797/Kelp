@@ -784,17 +784,4 @@ describe("App", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Some files couldn't be deleted.");
     await waitFor(() => expect(api.listObjects).toHaveBeenCalledTimes(2));
   });
-
-  it("replays the row intro for each folder it opens", async () => {
-    api.listObjects.mockImplementation(async (_id: string, _bucket: string, prefix: string) =>
-      prefix === "" ? page(["docs/"], []) : page([], ["a.txt"]),
-    );
-    render(<App />);
-    await screen.findByText("docs");
-    const user = userEvent.setup();
-    await user.click(screen.getByText("docs"));
-    await user.keyboard("{Enter}");
-    const row = (await screen.findByText("a.txt")).closest(".file-row");
-    expect(row?.classList.contains("intro")).toBe(true);
-  });
 });

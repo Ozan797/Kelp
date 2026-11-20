@@ -1126,11 +1126,6 @@ button {
   .update-indicator.pulse {
     animation: update-pulse 1.2s var(--ease-out) 1;
   }
-
-  .file-row.intro {
-    animation: kelp-row-in var(--dur) var(--ease-out) backwards;
-    animation-delay: calc(var(--i, 0) * 15ms);
-  }
 }
 
 @keyframes update-pulse {
@@ -1149,13 +1144,6 @@ button {
   from {
     opacity: 0;
     scale: 0.98;
-  }
-}
-
-@keyframes kelp-row-in {
-  from {
-    opacity: 0;
-    translate: 0 4px;
   }
 }
 
