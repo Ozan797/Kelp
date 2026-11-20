@@ -21,6 +21,19 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: "0.2.3",
+    date: "2026-11-20",
+    title: "Lists that land at once",
+    summary: "Folders now show every file at the same moment, straight after the loading placeholder.",
+    changes: [
+      {
+        title: "Folders load in one go",
+        body: "Opening a folder no longer shows the bottom of the list before the top: every row appears together once it has loaded.",
+        kind: "fixed",
+      },
+    ],
+  },
+  {
     version: "0.2.2",
     date: "2026-10-17",
     title: "Filters that stay",
