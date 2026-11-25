@@ -21,6 +21,29 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: "0.3.0",
+    date: "2026-11-25",
+    title: "See more before you download",
+    summary: "Quick preview now opens PDFs, audio and more image and code files, so you can check a file without downloading it.",
+    changes: [
+      {
+        title: "Preview PDFs",
+        body: "Press Space on a PDF up to 50 MB to read it right in Kelp.",
+        kind: "new",
+      },
+      {
+        title: "Play audio",
+        body: "MP3, M4A, WAV, AAC, FLAC and AIFF files play in the preview window.",
+        kind: "new",
+      },
+      {
+        title: "More images and code",
+        body: "Preview now covers HEIF, BMP, TIFF and ICO images, plus common code and config files like .ts, .py, .rs and .toml.",
+        kind: "improved",
+      },
+    ],
+  },
+  {
     version: "0.2.3",
     date: "2026-11-20",
     title: "Lists that land at once",
