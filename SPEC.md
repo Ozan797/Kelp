@@ -62,7 +62,7 @@ Path-style vs virtual-host addressing must be a per-connection option, since som
 **M4 – Polish** · done (designs: `docs/superpowers/specs/2026-10-15-kelp-m4-drop-design.md`, `docs/superpowers/specs/2026-10-15-kelp-m4-rest-design.md`)
 - Command palette (⌘K), keyboard navigation, multi-select, context menus.
 - Drag and drop from Finder; drag rows to move within a connection (⌥ to copy) or onto another connection's tile to copy.
-- Quick preview (Space) for images, text, video.
+- Quick preview (Space) for images (including SVG and HEIC), PDF, audio, text, video.
 - Tabs for multiple connections or locations.
 - Dark and light themes: follow the system by default, with a System / Light / Dark override in Settings and ⌘K.
 

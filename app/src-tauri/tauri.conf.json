@@ -29,7 +29,7 @@
     ],
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: kelp-preview:; media-src kelp-preview:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src ipc: http://ipc.localhost kelp-preview:",
+      "csp": "default-src 'self'; img-src 'self' data: blob: kelp-preview:; media-src kelp-preview:; frame-src kelp-preview:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src ipc: http://ipc.localhost kelp-preview:",
       "devCsp": null
     }
   },

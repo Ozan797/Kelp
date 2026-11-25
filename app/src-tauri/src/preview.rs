@@ -16,6 +16,7 @@ use crate::providers::{ObjectInfo, StorageProvider};
 use crate::state::AppState;
 
 const PIECE: u64 = 8 * 1024 * 1024;
+const LARGEST_WHOLE: u64 = 50 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Answer {
@@ -95,7 +96,18 @@ pub fn content_type(key: &str) -> &'static str {
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
         "heic" => "image/heic",
+        "heif" => "image/heif",
         "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "tif" | "tiff" => "image/tiff",
+        "ico" => "image/x-icon",
+        "pdf" => "application/pdf",
+        "mp3" => "audio/mpeg",
+        "m4a" => "audio/mp4",
+        "wav" => "audio/wav",
+        "aac" => "audio/aac",
+        "flac" => "audio/flac",
+        "aif" | "aiff" => "audio/aiff",
         "mp4" | "m4v" => "video/mp4",
         "mov" => "video/quicktime",
         "webm" => "video/webm",
@@ -105,6 +117,14 @@ pub fn content_type(key: &str) -> &'static str {
         }
         _ => "application/octet-stream",
     }
+}
+
+fn streams(content_type: &str) -> bool {
+    content_type.starts_with("video/") || content_type.starts_with("audio/")
+}
+
+fn served_in_pieces(content_type: &str, size: u64) -> bool {
+    size > LARGEST_WHOLE || (size > PIECE && streams(content_type))
 }
 
 pub const BLOCK: u64 = 1024 * 1024;
@@ -282,7 +302,7 @@ impl PreviewCache {
                 body: Vec::new(),
             });
         }
-        let range = range.or((info.size > PIECE).then_some("bytes=0-"));
+        let range = range.or(served_in_pieces(content_type, info.size).then_some("bytes=0-"));
         let Some(header) = range else {
             let body = self.read(object, provider, &info, 0..info.size).await?;
             return Ok(Answer {
@@ -461,6 +481,9 @@ mod tests {
             ("a.txt", "text/plain; charset=utf-8"),
             ("a.md", "text/plain; charset=utf-8"),
             ("a.json", "application/json"),
+            ("a.PDF", "application/pdf"),
+            ("a.mp3", "audio/mpeg"),
+            ("a.heic", "image/heic"),
             ("a.bin", "application/octet-stream"),
         ];
         for (key, kind) in cases {
@@ -667,6 +690,32 @@ mod tests {
             .unwrap();
         assert_eq!(answer.status, 206);
         assert_eq!(answer.body.len(), 8 * 1024 * 1024);
+    }
+
+    #[test]
+    fn only_streamed_or_huge_files_come_in_pieces() {
+        let big = 20 * 1024 * 1024;
+        assert!(served_in_pieces("video/mp4", big));
+        assert!(served_in_pieces("audio/mpeg", big));
+        assert!(!served_in_pieces("application/pdf", big));
+        assert!(!served_in_pieces("image/jpeg", big));
+        assert!(!served_in_pieces("video/mp4", PIECE));
+        assert!(served_in_pieces("application/pdf", LARGEST_WHOLE + 1));
+    }
+
+    #[tokio::test]
+    async fn a_pdf_without_a_range_comes_back_whole() {
+        let bytes: Vec<u8> = (0..20 * 1024 * 1024).map(|n| (n % 251) as u8).collect();
+        let provider = Arc::new(FakeProvider::empty().with_objects(vec![("d.pdf", bytes.clone())]));
+        let answer = Arc::new(PreviewCache::default())
+            .respond(Uuid::nil(), provider, "b", "d.pdf", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            (answer.status, answer.content_type),
+            (200, "application/pdf")
+        );
+        assert_eq!(answer.body, bytes);
     }
 
     #[tokio::test]
