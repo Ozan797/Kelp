@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Row } from "../hooks/useListing";
@@ -26,6 +26,15 @@ describe("Preview", () => {
   it("plays video", () => {
     const { container } = render(<Preview connectionId="c1" bucket="archive" files={files} index={2} onIndex={vi.fn()} onClose={vi.fn()} onDownload={vi.fn()} />);
     expect(container.querySelector("video")?.getAttribute("src")).toBe("kelp-preview://localhost/c1?bucket=archive&key=v%2Fc.mp4");
+  });
+
+  it("shows a PDF in a frame and plays audio", () => {
+    const more = [file("report.pdf", 4_000), file("song.mp3", 4_000)];
+    render(<Preview connectionId="c1" bucket="archive" files={more} index={0} onIndex={vi.fn()} onClose={vi.fn()} onDownload={vi.fn()} />);
+    expect(screen.getByTitle("report.pdf").getAttribute("src")).toBe("kelp-preview://localhost/c1?bucket=archive&key=v%2Freport.pdf");
+    cleanup();
+    render(<Preview connectionId="c1" bucket="archive" files={more} index={1} onIndex={vi.fn()} onClose={vi.fn()} onDownload={vi.fn()} />);
+    expect(document.querySelector("audio")?.getAttribute("src")).toBe("kelp-preview://localhost/c1?bucket=archive&key=v%2Fsong.mp3");
   });
 
   it("shows the first megabyte of text and says so", async () => {

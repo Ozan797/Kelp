@@ -55,7 +55,7 @@ function TextPreview({ url, size }: { url: string; size: number }) {
 
 const COULD_NOT_LOAD = "Kelp couldn't load this preview.";
 
-function MediaPreview({ kind, url, name }: { kind: "image" | "video"; url: string; name: string }) {
+function MediaPreview({ kind, url, name }: { kind: "image" | "video" | "audio"; url: string; name: string }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   if (failed) {
@@ -75,11 +75,9 @@ function MediaPreview({ kind, url, name }: { kind: "image" | "video"; url: strin
       </div>
     );
   }
-  return kind === "image" ? (
-    <img key={attempt} src={url} alt={name} onError={() => setFailed(true)} />
-  ) : (
-    <video key={attempt} src={url} controls onError={() => setFailed(true)} />
-  );
+  if (kind === "image") return <img key={attempt} src={url} alt={name} onError={() => setFailed(true)} />;
+  if (kind === "audio") return <audio key={attempt} src={url} controls aria-label={name} onError={() => setFailed(true)} />;
+  return <video key={attempt} src={url} controls onError={() => setFailed(true)} />;
 }
 
 export function Preview({ connectionId, bucket, files, index, onIndex, onClose, onDownload }: PreviewProps) {
@@ -101,7 +99,7 @@ export function Preview({ connectionId, bucket, files, index, onIndex, onClose, 
         event.preventDefault();
         move(at - 1);
       } else if (event.key === "Tab") {
-        const stops = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled), video") ?? []);
+        const stops = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled), video, audio, iframe") ?? []);
         if (stops.length === 0) return;
         const position = stops.indexOf(document.activeElement as HTMLElement);
         const next = event.shiftKey ? (position <= 0 ? stops.length - 1 : position - 1) : (position + 1) % stops.length;
@@ -146,7 +144,8 @@ export function Preview({ connectionId, bucket, files, index, onIndex, onClose, 
           </button>
         </header>
         <div className="preview-body">
-          {(kind === "image" || kind === "video") && <MediaPreview key={url} kind={kind} url={url} name={file.name} />}
+          {(kind === "image" || kind === "video" || kind === "audio") && <MediaPreview key={url} kind={kind} url={url} name={file.name} />}
+          {kind === "pdf" && <iframe key={url} className="preview-pdf" src={url} title={file.name} />}
           {kind === "text" && <TextPreview key={url} url={url} size={file.size ?? 0} />}
           {kind === "none" && (
             <div className="preview-empty">

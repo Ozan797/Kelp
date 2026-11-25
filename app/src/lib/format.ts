@@ -56,8 +56,8 @@ export type FileKind = "folder" | "video" | "image" | "text" | "other";
 
 const KIND_BY_EXTENSION = new Map<string, FileKind>([
   ...["mp4", "mov", "mkv", "webm", "avi", "m4v"].map((ext) => [ext, "video"] as const),
-  ...["jpg", "jpeg", "png", "gif", "webp", "svg", "heic", "avif"].map((ext) => [ext, "image"] as const),
-  ...["txt", "md", "json", "csv", "log", "yml", "yaml", "xml", "html"].map((ext) => [ext, "text"] as const),
+  ...["jpg", "jpeg", "png", "gif", "webp", "svg", "heic", "heif", "avif", "bmp", "tif", "tiff", "ico"].map((ext) => [ext, "image"] as const),
+  ...["txt", "md", "json", "csv", "tsv", "log", "yml", "yaml", "toml", "ini", "xml", "html", "css", "js", "ts", "tsx", "jsx", "py", "rs", "go", "sh", "sql"].map((ext) => [ext, "text"] as const),
 ]);
 
 export function fileKind(name: string, isFolder: boolean): FileKind {

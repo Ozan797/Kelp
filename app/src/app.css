@@ -1441,6 +1441,17 @@ button {
   border-radius: var(--radius-lg);
 }
 
+.preview-pdf {
+  align-self: stretch;
+  flex: 1;
+  border: 0;
+  border-radius: var(--radius-lg);
+}
+
+.preview-body audio {
+  width: min(480px, 100%);
+}
+
 .preview-text {
   align-self: stretch;
   flex: 1;

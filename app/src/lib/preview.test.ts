@@ -19,4 +19,14 @@ describe("previewKind", () => {
     expect(previewKind(row("notes.md", 5))).toBe("text");
     expect(previewKind(row("a.zip", 5))).toBe("none");
   });
+
+  it("previews PDFs up to 50 MB, audio, and more image types", () => {
+    expect(previewKind(row("report.PDF", 1000))).toBe("pdf");
+    expect(previewKind(row("report.pdf", 60_000_000))).toBe("none");
+    expect(previewKind(row("song.m4a", 9_000_000))).toBe("audio");
+    expect(previewKind(row("IMG_1.HEIC", 3_000_000))).toBe("image");
+    expect(previewKind(row("logo.svg", 3_000))).toBe("image");
+    expect(previewKind(row("main.rs", 3_000))).toBe("text");
+    expect(previewKind(row("pdf", 5))).toBe("none");
+  });
 });
